@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.GroupTourImageMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.sky.entity.GroupTourImage">
+        <id column="id" property="id"/>
+        <result column="group_tour_id" property="groupTourId"/>
+        <result column="image_url" property="imageUrl"/>
+        <result column="thumbnail_url" property="thumbnailUrl"/>
+        <result column="description" property="description"/>
+        <result column="is_primary" property="isPrimary"/>
+        <result column="position" property="position"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+    
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, group_tour_id, image_url, thumbnail_url, description, is_primary, position, created_at, updated_at
+    </sql>
+    
+    <!-- 插入跟团游图片 -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO group_tour_images (group_tour_id, image_url, thumbnail_url, description, is_primary, position, created_at, updated_at)
+        VALUES (#{groupTourId}, #{imageUrl}, #{thumbnailUrl}, #{description}, #{isPrimary}, #{position}, #{createdAt}, #{updatedAt})
+    </insert>
+    
+    <!-- 根据ID查询跟团游图片 -->
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM group_tour_images
+        WHERE id = #{id}
+    </select>
+    
+    <!-- 根据跟团游ID查询图片列表 -->
+    <select id="selectByGroupTourId" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM group_tour_images
+        WHERE group_tour_id = #{groupTourId}
+        ORDER BY is_primary DESC, position ASC, id ASC
+    </select>
+    
+    <!-- 查询跟团游的第一张图片 -->
+    <select id="selectFirstByGroupTourId" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM group_tour_images
+        WHERE group_tour_id = #{groupTourId}
+        ORDER BY position ASC, id ASC
+        LIMIT 1
+    </select>
+    
+    <!-- 删除图片 -->
+    <delete id="deleteById">
+        DELETE FROM group_tour_images
+        WHERE id = #{id}
+    </delete>
+    
+    <!-- 重置跟团游的所有图片为非主图 -->
+    <update id="resetPrimaryImage">
+        UPDATE group_tour_images
+        SET is_primary = 0, updated_at = NOW()
+        WHERE group_tour_id = #{groupTourId}
+    </update>
+    
+    <!-- 设置图片为主图 -->
+    <update id="setPrimaryImage">
+        UPDATE group_tour_images
+        SET is_primary = 1, updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+    
+    <!-- 更新跟团游的主图URL -->
+    <update id="updateGroupTourImageUrl">
+        UPDATE group_tours
+        SET image_url = #{imageUrl}, updated_at = NOW()
+        WHERE group_tour_id = #{groupTourId}
+    </update>
+    
+    <!-- 更新图片位置 -->
+    <update id="updatePosition">
+        UPDATE group_tour_images
+        SET position = #{position}, updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+    
+    <!-- 更新图片描述 -->
+    <update id="updateDescription">
+        UPDATE group_tour_images
+        SET description = #{description}, updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+</mapper> 

@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.GroupTourMapper">
+
+    <!-- 分页查询 -->
+    <select id="pageQuery" resultType="com.sky.dto.GroupTourDTO">
+        SELECT 
+            gt.group_tour_id AS id, 
+            gt.title AS name, 
+            gt.description, 
+            gt.price, 
+            gt.discounted_price AS discountedPrice,
+            gt.duration, 
+            gt.location, 
+            gt.rating,
+            gt.image_url AS coverImage,
+            gt.departure_address AS departureAddress,
+            gt.guide_id AS guideId
+        FROM group_tours gt
+        <where>
+            <if test="title != null and title != ''">
+                AND gt.title LIKE CONCAT('%', #{title}, '%')
+            </if>
+            <if test="location != null and location != ''">
+                AND gt.location LIKE CONCAT('%', #{location}, '%')
+            </if>
+            <if test="category != null and category != ''">
+                AND EXISTS (
+                    SELECT 1 FROM group_tour_theme_relation gtr 
+                    JOIN group_tour_themes gtt ON gtr.theme_id = gtt.theme_id
+                    WHERE gtr.group_tour_id = gt.group_tour_id AND gtt.name = #{category}
+                )
+            </if>
+            <if test="minPrice != null">
+                AND gt.price >= #{minPrice}
+            </if>
+            <if test="maxPrice != null">
+                AND gt.price &lt;= #{maxPrice}
+            </if>
+            <if test="minDays != null">
+                AND gt.days >= #{minDays}
+            </if>
+            <if test="maxDays != null">
+                AND gt.days &lt;= #{maxDays}
+            </if>
+        </where>
+        ORDER BY gt.group_tour_id DESC
+    </select>
+
+    <!-- 查询跟团游可用日期 -->
+    <select id="getAvailableDates" resultType="java.util.Map">
+        SELECT 
+            ad.date_id AS id, 
+            ad.start_date AS startDate,
+            ad.end_date AS endDate,
+            ad.price, 
+            ad.available_slots AS availableSlots
+        FROM available_dates ad
+        WHERE ad.group_tour_id = #{tourId}
+        <if test="startDate != null and startDate != ''">
+            AND ad.start_date >= #{startDate}
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND ad.start_date &lt;= #{endDate}
+        </if>
+        ORDER BY ad.start_date
+    </select>
+    
+    <!-- 更新跟团游信息 -->
+    <update id="update" parameterType="com.sky.dto.GroupTourDTO">
+        UPDATE group_tours
+        <set>
+            <if test="name != null">title = #{name},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="price != null">price = #{price},</if>
+            <if test="duration != null">duration = #{duration},</if>
+            <if test="location != null">location = #{location},</if>
+            <if test="startDate != null">start_date = #{startDate},</if>
+            <if test="endDate != null">end_date = #{endDate},</if>
+            <if test="minPeople != null">min_people = #{minPeople},</if>
+            <if test="maxPeople != null">max_people = #{maxPeople},</if>
+            <if test="coverImage != null">image_url = #{coverImage},</if>
+            <if test="regionId != null">region_id = #{regionId},</if>
+            <if test="departureAddress != null">departure_address = #{departureAddress},</if>
+            <if test="guideId != null">guide_id = #{guideId},</if>
+            <if test="rating != null">rating = #{rating},</if>
+            <if test="discountedPrice != null">discounted_price = #{discountedPrice},</if>
+            updated_at = NOW()
+        </set>
+        WHERE group_tour_id = #{id}
+    </update>
+
+    <!-- 获取热门跟团游 -->
+    <select id="getHotGroupTours" resultType="com.sky.dto.GroupTourDTO">
+        SELECT 
+            gt.group_tour_id AS id, 
+            gt.title AS name, 
+            gt.description, 
+            gt.price, 
+            gt.discounted_price AS discountedPrice,
+            gt.duration, 
+            gt.location, 
+            gt.departure_info AS departureInfo, 
+            gt.rating,
+            gt.image_url AS coverImage, 
+            gt.category
+        FROM group_tours gt
+        LEFT JOIN (
+            SELECT group_tour_id, AVG(rating) as avg_rating, COUNT(*) as review_count
+            FROM reviews
+            WHERE group_tour_id IS NOT NULL
+            GROUP BY group_tour_id
+        ) rv ON gt.group_tour_id = rv.group_tour_id
+        ORDER BY gt.rating DESC, rv.review_count DESC, gt.group_tour_id DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 获取推荐跟团游 -->
+    <select id="getRecommendedGroupTours" resultType="com.sky.dto.GroupTourDTO">
+        SELECT 
+            gt.group_tour_id AS id, 
+            gt.title AS name, 
+            gt.description, 
+            gt.price, 
+            gt.discounted_price AS discountedPrice,
+            gt.duration, 
+            gt.location, 
+            gt.departure_info AS departureInfo, 
+            gt.rating,
+            gt.image_url AS coverImage, 
+            gt.category
+        FROM group_tours gt
+        ORDER BY gt.group_tour_id DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper> 

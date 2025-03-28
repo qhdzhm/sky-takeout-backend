@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.AgentMapper">
+    <!-- 基础结果映射 -->
+    <resultMap id="agentMap" type="com.sky.entity.Agent">
+        <id column="id" property="id"/>
+        <result column="username" property="username"/>
+        <result column="password" property="password"/>
+        <result column="company_name" property="companyName"/>
+        <result column="contact_person" property="contactPerson"/>
+        <result column="email" property="email"/>
+        <result column="phone" property="phone"/>
+        <result column="discount_rate" property="discountRate"/>
+        <result column="status" property="status"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <!-- 根据用户名查询代理商 -->
+    <select id="getByUsername" resultMap="agentMap">
+        select * from agents where username = #{username}
+    </select>
+    
+    <!-- 根据ID查询代理商 -->
+    <select id="getById" resultMap="agentMap">
+        select * from agents where id = #{id}
+    </select>
+    
+    <!-- 查询所有代理商 -->
+    <select id="list" resultMap="agentMap">
+        select * from agents
+        <where>
+            <if test="status != null">
+                status = #{status}
+            </if>
+        </where>
+        order by create_time desc
+    </select>
+    
+    <!-- 插入代理商 -->
+    <insert id="insert" parameterType="com.sky.entity.Agent" useGeneratedKeys="true" keyProperty="id">
+        insert into agents(
+            username, password, company_name, contact_person, 
+            email, phone, discount_rate, status, 
+            create_time, update_time
+        ) values(
+            #{username}, #{password}, #{companyName}, #{contactPerson}, 
+            #{email}, #{phone}, #{discountRate}, #{status}, 
+            #{createTime}, #{updateTime}
+        )
+    </insert>
+    
+    <!-- 更新代理商 -->
+    <update id="update" parameterType="com.sky.entity.Agent">
+        update agents
+        <set>
+            <if test="companyName != null">company_name = #{companyName},</if>
+            <if test="contactPerson != null">contact_person = #{contactPerson},</if>
+            <if test="email != null">email = #{email},</if>
+            <if test="phone != null">phone = #{phone},</if>
+            <if test="discountRate != null">discount_rate = #{discountRate},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="password != null">password = #{password},</if>
+            update_time = #{updateTime}
+        </set>
+        where id = #{id}
+    </update>
+</mapper> 

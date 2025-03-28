@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sky.mapper.VehicleMapper">
+
+    <!-- 分页查询车辆 -->
+    <select id="pageQuery" resultType="com.sky.entity.Vehicle">
+        SELECT v.*, GROUP_CONCAT(e.name) AS driverName
+        FROM vehicles v
+        LEFT JOIN vehicle_driver vd ON v.vehicle_id = vd.vehicle_id
+        LEFT JOIN employees e ON vd.employee_id = e.id
+        <where>
+            <if test="vehicleType != null and vehicleType != ''">
+                AND v.vehicle_type LIKE CONCAT('%', #{vehicleType}, '%')
+            </if>
+            <if test="licensePlate != null and licensePlate != ''">
+                AND v.license_plate LIKE CONCAT('%', #{licensePlate}, '%')
+            </if>
+            <if test="driverName != null and driverName != ''">
+                AND e.name LIKE CONCAT('%', #{driverName}, '%')
+            </if>
+            <if test="location != null and location != ''">
+                AND v.location LIKE CONCAT('%', #{location}, '%')
+            </if>
+            <if test="seatCount != null">
+                AND v.seat_count = #{seatCount}
+            </if>
+            <if test="regoExpiryDate != null">
+                AND v.rego_expiry_date = #{regoExpiryDate}
+            </if>
+            <if test="inspectionDueDate != null">
+                AND v.inspection_due_date = #{inspectionDueDate}
+            </if>
+        </where>
+        GROUP BY v.vehicle_id
+    </select>
+
+</mapper>
