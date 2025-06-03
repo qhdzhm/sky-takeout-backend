@@ -17,7 +17,7 @@ ssh ubuntu@47.86.32.159
 
 ```bash
 # 1. 进入项目目录
-cd /home/ubuntu/happy_tassie_travel
+cd /opt/sky-takeout
 
 # 2. 拉取最新部署脚本
 git fetch origin
@@ -39,12 +39,12 @@ chmod +x deploy_server_update.sh
 sudo systemctl stop sky-takeout
 
 # 2. 备份当前版本
-mkdir -p /home/ubuntu/backups
-cp /home/ubuntu/happy_tassie_travel/sky-server/target/sky-server-1.0-SNAPSHOT.jar \
-   /home/ubuntu/backups/sky-takeout-backup-$(date +%Y%m%d_%H%M%S).jar
+mkdir -p /opt/backups
+cp /opt/sky-takeout/sky-server/target/sky-server-1.0-SNAPSHOT.jar \
+   /opt/backups/sky-takeout-backup-$(date +%Y%m%d_%H%M%S).jar
 
 # 3. 进入项目目录
-cd /home/ubuntu/happy_tassie_travel
+cd /opt/sky-takeout
 
 # 4. 拉取最新代码
 git fetch origin
@@ -104,7 +104,7 @@ sudo journalctl -u sky-takeout --no-pager -l -n 50
 java -version
 
 # 检查环境变量
-cat /home/ubuntu/happy_tassie_travel/production.env
+cat /opt/sky-takeout/production.env
 ```
 
 2. **端口被占用**
@@ -134,8 +134,8 @@ df -h
 sudo systemctl stop sky-takeout
 
 # 2. 恢复备份
-cp /home/ubuntu/backups/sky-takeout-backup-YYYYMMDD_HHMMSS.jar \
-   /home/ubuntu/happy_tassie_travel/sky-server/target/sky-server-1.0-SNAPSHOT.jar
+cp /opt/backups/sky-takeout-backup-YYYYMMDD_HHMMSS.jar \
+   /opt/sky-takeout/sky-server/target/sky-server-1.0-SNAPSHOT.jar
 
 # 3. 重启服务
 sudo systemctl start sky-takeout

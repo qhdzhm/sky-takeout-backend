@@ -31,11 +31,11 @@ log_step() {
 }
 
 # 配置变量
-PROJECT_DIR="/home/ubuntu/happy_tassie_travel"
+PROJECT_DIR="/opt/sky-takeout"
 SERVICE_NAME="sky-takeout"
 JAR_NAME="sky-server-1.0-SNAPSHOT.jar"
-BACKUP_DIR="/home/ubuntu/backups"
-ENV_FILE="/home/ubuntu/happy_tassie_travel/production.env"
+BACKUP_DIR="/opt/backups"
+ENV_FILE="/opt/sky-takeout/production.env"
 
 log_info "开始更新塔斯马尼亚旅游系统后端服务..."
 
