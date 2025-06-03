@@ -82,6 +82,105 @@ public class GroupTourController {
     }
 
     /**
+     * 添加团队游行程安排
+     * @param data 行程数据
+     * @return 操作结果
+     */
+    @PostMapping("/itinerary-add")
+    @ApiOperation("添加团队游行程安排")
+    public Result<String> addItinerary(@RequestBody Map<String, Object> data) {
+        log.info("添加团队游行程安排：{}", data);
+        try {
+            // 确保类型转换正确
+            Object tourIdObj = data.get("groupTourId");
+            Integer groupTourId = null;
+            if (tourIdObj instanceof Long) {
+                groupTourId = ((Long) tourIdObj).intValue();
+            } else if (tourIdObj instanceof Integer) {
+                groupTourId = (Integer) tourIdObj;
+            } else if (tourIdObj != null) {
+                groupTourId = Integer.parseInt(tourIdObj.toString());
+            }
+            
+            Object dayObj = data.get("day");
+            Integer dayNumber = null;
+            if (dayObj instanceof Long) {
+                dayNumber = ((Long) dayObj).intValue();
+            } else if (dayObj instanceof Integer) {
+                dayNumber = (Integer) dayObj;
+            } else if (dayObj != null) {
+                dayNumber = Integer.parseInt(dayObj.toString());
+            }
+            
+            String title = (String) data.get("title");
+            String description = (String) data.get("description");
+            String meals = (String) data.get("meals");
+            String accommodation = (String) data.get("accommodation");
+            
+            // 调用服务添加行程
+            groupTourService.addGroupTourItinerary(
+                groupTourId, 
+                dayNumber, 
+                title, 
+                description, 
+                meals, 
+                accommodation
+            );
+            
+            return Result.success("添加行程成功");
+        } catch (Exception e) {
+            log.error("添加行程失败：", e);
+            return Result.error("添加行程失败：" + e.getMessage());
+        }
+    }
+    
+    /**
+     * 更新团队游行程安排
+     * @param data 行程数据
+     * @return 操作结果
+     */
+    @PostMapping("/itinerary-update")
+    @ApiOperation("更新团队游行程安排")
+    public Result<String> updateItinerary(@RequestBody Map<String, Object> data) {
+        log.info("更新团队游行程安排：{}", data);
+        try {
+            // 将Long类型的id转换为Integer类型
+            Object idObj = data.get("id");
+            Integer itineraryId = null;
+            if (idObj instanceof Long) {
+                itineraryId = ((Long) idObj).intValue();
+            } else if (idObj instanceof Integer) {
+                itineraryId = (Integer) idObj;
+            } else if (idObj != null) {
+                itineraryId = Integer.parseInt(idObj.toString());
+            }
+            
+            Integer groupTourId = (Integer) data.get("groupTourId");
+            Integer dayNumber = (Integer) data.get("day");
+            String title = (String) data.get("title");
+            String description = (String) data.get("description");
+            String meals = (String) data.get("meals");
+            String accommodation = (String) data.get("accommodation");
+            
+            // 调用服务更新行程
+            groupTourService.updateGroupTourItinerary(
+                itineraryId,
+                groupTourId, 
+                dayNumber, 
+                title, 
+                description, 
+                meals, 
+                accommodation
+            );
+            
+            return Result.success("更新行程成功");
+        } catch (Exception e) {
+            log.error("更新行程失败：", e);
+            return Result.error("更新行程失败：" + e.getMessage());
+        }
+    }
+
+    /**
      * 获取团队游可用日期
      * @param tourId 团队游ID
      * @param params 查询参数

@@ -6,7 +6,9 @@ import com.sky.entity.DayTour;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 /**
  * 一日游Mapper
@@ -32,12 +34,12 @@ public interface DayTourMapper {
      * 新增
      * @param dayTour
      */
-    @Insert("insert into day_tours(name, location, description, price, child_price, duration, image_url, " +
-            "category, is_active, created_at, updated_at, region_id, departure_address, guide_fee, guide_id, " +
-            "pickup_info, cancellation_policy) " +
-            "values(#{name}, #{location}, #{description}, #{price}, #{childPrice}, #{duration}, #{imageUrl}, " +
+    @Insert("insert into day_tours(name, location, description, price, duration, image_url, " +
+            "category, is_active, created_at, updated_at, region_id, departure_address, guide_fee, guide_id) " +
+            "values(#{name}, #{location}, #{description}, #{price}, #{duration}, #{imageUrl}, " +
             "#{category}, #{isActive}, #{createdAt}, #{updatedAt}, #{regionId}, #{departureAddress}, #{guideFee}, " +
-            "#{guideId}, #{pickupInfo}, #{cancellationPolicy})")
+            "#{guideId})")
+    @Options(useGeneratedKeys = true, keyProperty = "dayTourId", keyColumn = "day_tour_id")
     void insert(DayTour dayTour);
 
     /**
@@ -58,5 +60,6 @@ public interface DayTourMapper {
      * @param id
      * @param status
      */
+    @Update("update day_tours set is_active = #{status} where day_tour_id = #{id}")
     void updateStatus(Integer id, Integer status);
 } 

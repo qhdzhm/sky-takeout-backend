@@ -1,0 +1,360 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.GuideAssignmentMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="GuideAssignmentVOMap" type="com.sky.vo.GuideAssignmentVO">
+        <id column="id" property="id"/>
+        <result column="assignment_date" property="assignmentDate"/>
+        <result column="location" property="location"/>
+        <result column="total_people" property="totalPeople"/>
+        <result column="start_time" property="startTime"/>
+        <result column="end_time" property="endTime"/>
+        <result column="estimated_duration" property="estimatedDuration"/>
+        <result column="actual_start_time" property="actualStartTime"/>
+        <result column="actual_end_time" property="actualEndTime"/>
+        <result column="assignment_status" property="assignmentStatus"/>
+        <result column="priority" property="priority"/>
+        <result column="weather_conditions" property="weatherConditions"/>
+        <result column="route_notes" property="routeNotes"/>
+        <result column="emergency_contact" property="emergencyContact"/>
+        <result column="cost_estimate" property="costEstimate"/>
+        <result column="remarks" property="remarks"/>
+        <result column="created_time" property="createdTime"/>
+        <result column="updated_time" property="updatedTime"/>
+        
+        <!-- 导游信息 -->
+        <association property="guide" javaType="com.sky.vo.GuideAssignmentVO$GuideInfo">
+            <result column="guide_id" property="guideId"/>
+            <result column="guide_name" property="guideName"/>
+            <result column="guide_languages" property="languages"/>
+            <result column="guide_experience" property="experienceYears"/>
+            <result column="guide_phone" property="phone"/>
+            <result column="guide_email" property="email"/>
+        </association>
+        
+        <!-- 车辆信息 -->
+        <association property="vehicle" javaType="com.sky.vo.GuideAssignmentVO$VehicleInfo">
+            <result column="vehicle_id" property="vehicleId"/>
+            <result column="vehicle_type" property="vehicleType"/>
+            <result column="license_plate" property="licensePlate"/>
+            <result column="seat_count" property="seatCount"/>
+            <result column="vehicle_location" property="location"/>
+            <result column="vehicle_notes" property="notes"/>
+        </association>
+    </resultMap>
+
+    <!-- 分页查询导游分配记录 -->
+    <select id="pageQuery" resultMap="GuideAssignmentVOMap">
+        SELECT 
+            gda.id,
+            gda.assignment_date,
+            gda.location,
+            gda.guide_id,
+            gda.vehicle_id,
+            gda.total_people,
+            gda.start_time,
+            gda.end_time,
+            gda.estimated_duration,
+            gda.actual_start_time,
+            gda.actual_end_time,
+            gda.assignment_status,
+            gda.priority,
+            gda.weather_conditions,
+            gda.route_notes,
+            gda.emergency_contact,
+            gda.cost_estimate,
+            gda.remarks,
+            gda.created_time,
+            gda.updated_time,
+            g.guide_id as guide_id,
+            g.name as guide_name,
+            g.languages as guide_languages,
+            g.experience_years as guide_experience,
+            g.phone as guide_phone,
+            g.email as guide_email,
+            v.vehicle_id as vehicle_id,
+            v.vehicle_type,
+            v.license_plate,
+            v.seat_count,
+            v.current_location as vehicle_location,
+            v.notes as vehicle_notes
+        FROM guide_daily_assignment gda
+        LEFT JOIN guides g ON gda.guide_id = g.guide_id
+        LEFT JOIN vehicles v ON gda.vehicle_id = v.vehicle_id
+        <where>
+            <if test="startDate != null">
+                AND gda.assignment_date >= #{startDate}
+            </if>
+            <if test="endDate != null">
+                AND gda.assignment_date &lt;= #{endDate}
+            </if>
+            <if test="location != null and location != ''">
+                AND gda.location LIKE CONCAT('%', #{location}, '%')
+            </if>
+            <if test="guideId != null">
+                AND gda.guide_id = #{guideId}
+            </if>
+            <if test="vehicleId != null">
+                AND gda.vehicle_id = #{vehicleId}
+            </if>
+            <if test="assignmentStatus != null and assignmentStatus != ''">
+                AND gda.assignment_status = #{assignmentStatus}
+            </if>
+            <if test="guideName != null and guideName != ''">
+                AND g.name LIKE CONCAT('%', #{guideName}, '%')
+            </if>
+            <if test="licensePlate != null and licensePlate != ''">
+                AND v.license_plate LIKE CONCAT('%', #{licensePlate}, '%')
+            </if>
+        </where>
+        ORDER BY gda.assignment_date DESC, gda.created_time DESC
+    </select>
+
+    <!-- 获取可用导游列表 - 使用简化查询 -->
+    <select id="getAvailableGuides" resultType="com.sky.vo.GuideAvailabilityVO">
+        SELECT 
+            g.guide_id as guideId,
+            e.name as guideName,
+            g.languages,
+            g.experience_years as experienceYears,
+            COALESCE(g.phone, e.phone) as phone,
+            COALESCE(g.email, CONCAT(e.username, '@company.com')) as email,
+            g.daily_rate as dailyRate,
+            g.hourly_rate as hourlyRate,
+            '08:00:00' as availableStartTime,
+            '18:00:00' as availableEndTime,
+            2 as maxGroups,
+            0 as currentGroups,
+            2 as remaining_capacity,
+            CASE 
+                WHEN e.status = 1 AND e.work_status = 0 AND g.status = 1 THEN 'available'
+                WHEN e.work_status != 0 THEN 'busy'
+                WHEN e.status = 0 THEN 'off'
+                ELSE 'unavailable'
+            END as status,
+            CONCAT('员工状态:', CASE WHEN e.status = 1 THEN '在职' ELSE '离职' END, 
+                   ', 工作状态:', CASE WHEN e.work_status = 0 THEN '空闲' 
+                                    WHEN e.work_status = 1 THEN '忙碌'
+                                    WHEN e.work_status = 2 THEN '休假'
+                                    WHEN e.work_status = 3 THEN '出团'
+                                    WHEN e.work_status = 4 THEN '待命'
+                                    ELSE '未知' END,
+                   ', 剩余容量:2团') as notes,
+            CASE 
+                WHEN g.experience_years >= 5 THEN TRUE
+                ELSE FALSE
+            END as recommended,
+            CASE 
+                WHEN g.experience_years >= 5 THEN '经验丰富'
+                ELSE '普通导游'
+            END as recommendReason
+        FROM guides g
+        LEFT JOIN employees e ON g.employee_id = e.id
+        WHERE e.status = 1 
+        AND e.work_status = 0
+        AND g.status = 1
+        AND (#{location} IS NULL OR #{location} = '' OR 1=1)
+        ORDER BY 
+            CASE WHEN g.experience_years >= 5 THEN 0 ELSE 1 END,
+            g.experience_years DESC, 
+            g.daily_rate ASC
+    </select>
+
+    <!-- 获取可用车辆列表 - 使用简化查询 -->
+    <select id="getAvailableVehicles" resultType="com.sky.vo.VehicleAvailabilityVO">
+        SELECT 
+            v.vehicle_id as vehicleId,
+            v.vehicle_type as vehicleType,
+            v.license_plate as licensePlate,
+            v.seat_count as seatCount,
+            'Hobart Airport' as currentLocation,
+            '08:00:00' as availableStartTime,
+            '18:00:00' as availableEndTime,
+            80 as fuelLevel,
+            '0' as mileage,
+            CASE 
+                WHEN v.status = 1 AND v.seat_count >= #{peopleCount} THEN 'available'
+                ELSE 'unavailable'
+            END as status,
+            COALESCE(v.notes, '') as notes,
+            '无指定司机' as driverInfo,
+            CASE 
+                WHEN v.seat_count >= #{peopleCount} AND v.seat_count &lt;= (#{peopleCount} + 2) THEN TRUE
+                ELSE FALSE
+            END as recommended,
+            CASE 
+                WHEN v.seat_count >= #{peopleCount} AND v.seat_count &lt;= (#{peopleCount} + 2) THEN '座位数匹配'
+                WHEN v.status = 1 THEN '状态可用'
+                ELSE '基本满足条件'
+            END as recommendReason
+        FROM vehicles v
+        WHERE v.status = 1
+        AND v.seat_count >= #{peopleCount}
+        ORDER BY 
+            CASE WHEN v.seat_count >= #{peopleCount} AND v.seat_count &lt;= (#{peopleCount} + 2) THEN 0 ELSE 1 END,
+            ABS(v.seat_count - #{peopleCount}) ASC,
+            v.seat_count ASC
+    </select>
+
+    <!-- 插入分配记录 -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO guide_daily_assignment (
+            assignment_date, location, guide_id, vehicle_id, total_people,
+            start_time, end_time, estimated_duration, assignment_status,
+            priority, weather_conditions, route_notes, emergency_contact,
+            cost_estimate, remarks, tour_schedule_order_ids, created_time, updated_time
+        ) VALUES (
+            #{assignmentDate}, #{location}, #{guideId}, #{vehicleId}, #{totalPeople},
+            #{startTime}, #{endTime}, #{estimatedDuration}, #{assignmentStatus},
+            #{priority}, #{weatherConditions}, #{routeNotes}, #{emergencyContact},
+            #{costEstimate}, #{remarks}, #{tourScheduleOrderIds}, #{createdTime}, #{updatedTime}
+        )
+    </insert>
+
+    <!-- 更新分配记录 -->
+    <update id="update">
+        UPDATE guide_daily_assignment
+        <set>
+            <if test="assignmentDate != null">assignment_date = #{assignmentDate},</if>
+            <if test="location != null">location = #{location},</if>
+            <if test="guideId != null">guide_id = #{guideId},</if>
+            <if test="vehicleId != null">vehicle_id = #{vehicleId},</if>
+            <if test="totalPeople != null">total_people = #{totalPeople},</if>
+            <if test="startTime != null">start_time = #{startTime},</if>
+            <if test="endTime != null">end_time = #{endTime},</if>
+            <if test="estimatedDuration != null">estimated_duration = #{estimatedDuration},</if>
+            <if test="actualStartTime != null">actual_start_time = #{actualStartTime},</if>
+            <if test="actualEndTime != null">actual_end_time = #{actualEndTime},</if>
+            <if test="assignmentStatus != null">assignment_status = #{assignmentStatus},</if>
+            <if test="priority != null">priority = #{priority},</if>
+            <if test="weatherConditions != null">weather_conditions = #{weatherConditions},</if>
+            <if test="routeNotes != null">route_notes = #{routeNotes},</if>
+            <if test="emergencyContact != null">emergency_contact = #{emergencyContact},</if>
+            <if test="costEstimate != null">cost_estimate = #{costEstimate},</if>
+            <if test="remarks != null">remarks = #{remarks},</if>
+            <if test="tourScheduleOrderIds != null">tour_schedule_order_ids = #{tourScheduleOrderIds},</if>
+            updated_time = #{updatedTime}
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 根据ID查询分配记录 -->
+    <select id="getById" resultMap="GuideAssignmentVOMap">
+        SELECT 
+            gda.id,
+            gda.assignment_date,
+            gda.location,
+            gda.guide_id,
+            gda.vehicle_id,
+            gda.total_people,
+            gda.start_time,
+            gda.end_time,
+            gda.estimated_duration,
+            gda.actual_start_time,
+            gda.actual_end_time,
+            gda.assignment_status,
+            gda.priority,
+            gda.weather_conditions,
+            gda.route_notes,
+            gda.emergency_contact,
+            gda.cost_estimate,
+            gda.remarks,
+            gda.created_time,
+            gda.updated_time,
+            g.guide_id as guide_id,
+            g.name as guide_name,
+            g.languages as guide_languages,
+            g.experience_years as guide_experience,
+            g.phone as guide_phone,
+            g.email as guide_email,
+            v.vehicle_id as vehicle_id,
+            v.vehicle_type,
+            v.license_plate,
+            v.seat_count,
+            v.current_location as vehicle_location,
+            v.notes as vehicle_notes
+        FROM guide_daily_assignment gda
+        LEFT JOIN guides g ON gda.guide_id = g.guide_id
+        LEFT JOIN vehicles v ON gda.vehicle_id = v.vehicle_id
+        WHERE gda.id = #{id}
+    </select>
+
+    <!-- 根据日期查询分配记录 -->
+    <select id="getByDate" resultMap="GuideAssignmentVOMap">
+        SELECT 
+            gda.id,
+            gda.assignment_date,
+            gda.location,
+            gda.guide_id,
+            gda.vehicle_id,
+            gda.total_people,
+            gda.start_time,
+            gda.end_time,
+            gda.estimated_duration,
+            gda.actual_start_time,
+            gda.actual_end_time,
+            gda.assignment_status,
+            gda.priority,
+            gda.weather_conditions,
+            gda.route_notes,
+            gda.emergency_contact,
+            gda.cost_estimate,
+            gda.remarks,
+            gda.created_time,
+            gda.updated_time,
+            g.guide_id as guide_id,
+            g.name as guide_name,
+            g.languages as guide_languages,
+            g.experience_years as guide_experience,
+            g.phone as guide_phone,
+            g.email as guide_email,
+            v.vehicle_id as vehicle_id,
+            v.vehicle_type,
+            v.license_plate,
+            v.seat_count,
+            v.current_location as vehicle_location,
+            v.notes as vehicle_notes
+        FROM guide_daily_assignment gda
+        LEFT JOIN guides g ON gda.guide_id = g.guide_id
+        LEFT JOIN vehicles v ON gda.vehicle_id = v.vehicle_id
+        WHERE gda.assignment_date = #{date}
+        ORDER BY gda.start_time ASC
+    </select>
+
+    <!-- 检查导游可用性 -->
+    <select id="checkGuideAvailability" resultType="java.lang.Boolean">
+        SELECT CASE 
+            WHEN COUNT(*) = 0 THEN TRUE 
+            ELSE FALSE 
+        END
+        FROM guide_daily_assignment 
+        WHERE guide_id = #{guideId}
+        AND assignment_date = #{date}
+        AND assignment_status IN ('confirmed', 'in_progress')
+        AND (
+            (start_time &lt;= #{startTime} AND end_time > #{startTime})
+            OR (start_time &lt; #{endTime} AND end_time >= #{endTime})
+            OR (start_time >= #{startTime} AND end_time &lt;= #{endTime})
+        )
+    </select>
+
+    <!-- 检查车辆可用性 -->
+    <select id="checkVehicleAvailability" resultType="java.lang.Boolean">
+        SELECT CASE 
+            WHEN COUNT(*) = 0 THEN TRUE 
+            ELSE FALSE 
+        END
+        FROM guide_daily_assignment 
+        WHERE vehicle_id = #{vehicleId}
+        AND assignment_date = #{date}
+        AND assignment_status IN ('confirmed', 'in_progress')
+        AND (
+            (start_time &lt;= #{startTime} AND end_time > #{startTime})
+            OR (start_time &lt; #{endTime} AND end_time >= #{endTime})
+            OR (start_time >= #{startTime} AND end_time &lt;= #{endTime})
+        )
+    </select>
+
+</mapper> 

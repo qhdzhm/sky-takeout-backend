@@ -51,7 +51,7 @@ public class GroupTourServiceImpl implements GroupTourService {
         
         // 分页参数
         int page = params.get("page") != null ? Integer.parseInt(params.get("page").toString()) : 1;
-        int pageSize = params.get("pageSize") != null ? Integer.parseInt(params.get("pageSize").toString()) : 10;
+        int pageSize = params.get("pageSize") != null ? Integer.parseInt(params.get("pageSize").toString()) : 50;
         
         // 分页查询
         PageHelper.startPage(page, pageSize);
@@ -305,6 +305,51 @@ public class GroupTourServiceImpl implements GroupTourService {
                     Integer dayNumber = Integer.parseInt(item.get("dayNumber").toString());
                     Boolean isOptional = Boolean.parseBoolean(item.get("isOptional").toString());
                     
+                    // 如果有行程信息，同时更新行程表
+                    if (item.containsKey("itineraryTitle") && item.containsKey("itineraryDescription")) {
+                        // 检查该天是否已有行程
+                        List<Map<String, Object>> existingItineraries = groupTourMapper.getItinerary(groupTourId);
+                        boolean dayExists = false;
+                        Integer existingId = null;
+                        
+                        for (Map<String, Object> existing : existingItineraries) {
+                            Integer existingDay = (Integer) existing.get("day_number");
+                            if (existingDay.equals(dayNumber)) {
+                                dayExists = true;
+                                existingId = (Integer) existing.get("id");
+                                break;
+                            }
+                        }
+                        
+                        String title = (String) item.get("itineraryTitle");
+                        String description = (String) item.get("itineraryDescription");
+                        String meals = item.containsKey("meals") ? (String) item.get("meals") : "早餐";
+                        String accommodation = item.containsKey("accommodation") ? (String) item.get("accommodation") : "酒店";
+                        
+                        if (dayExists && existingId != null) {
+                            // 更新现有行程
+                            groupTourMapper.updateItinerary(
+                                existingId,
+                                groupTourId,
+                                dayNumber,
+                                title,
+                                description,
+                                meals,
+                                accommodation
+                            );
+                        } else {
+                            // 添加新行程
+                            groupTourMapper.insertItinerary(
+                                groupTourId,
+                                dayNumber,
+                                title,
+                                description,
+                                meals,
+                                accommodation
+                            );
+                        }
+                    }
+                    
                     groupTourMapper.saveGroupTourDayTour(
                         groupTourId,
                         dayTourId,
@@ -318,6 +363,108 @@ public class GroupTourServiceImpl implements GroupTourService {
         } catch (Exception e) {
             log.error("保存团队游关联的一日游失败，错误：{}", e.getMessage());
             throw new RuntimeException("保存团队游关联的一日游失败", e);
+        }
+    }
+
+    /**
+     * 添加团队游行程安排
+     */
+    @Override
+    @Transactional
+    public void addGroupTourItinerary(Integer groupTourId, Integer dayNumber, String title, String description, String meals, String accommodation) {
+        log.info("添加团队游行程安排：groupTourId={}, dayNumber={}, title={}", groupTourId, dayNumber, title);
+        
+        try {
+            // 检查是否已存在相同天数的行程
+            List<Map<String, Object>> existingItineraries = groupTourMapper.getItinerary(groupTourId);
+            boolean dayExists = false;
+            
+            for (Map<String, Object> existing : existingItineraries) {
+                Integer existingDay = (Integer) existing.get("day_number");
+                if (existingDay.equals(dayNumber)) {
+                    dayExists = true;
+                    break;
+                }
+            }
+            
+            if (dayExists) {
+                log.warn("第{}天的行程已存在，将覆盖现有行程", dayNumber);
+                // 删除现有行程
+                for (Map<String, Object> existing : existingItineraries) {
+                    Integer existingDay = (Integer) existing.get("day_number");
+                    if (existingDay.equals(dayNumber)) {
+                        Integer itineraryId = (Integer) existing.get("id");
+                        groupTourMapper.deleteItineraryByTourIdAndDay(groupTourId, dayNumber);
+                    }
+                }
+            }
+            
+            // 添加新行程
+            groupTourMapper.insertItinerary(
+                groupTourId,
+                dayNumber,
+                title,
+                description,
+                meals,
+                accommodation
+            );
+            
+            log.info("添加团队游行程安排成功");
+        } catch (Exception e) {
+            log.error("添加团队游行程安排失败：", e);
+            throw new RuntimeException("添加团队游行程安排失败", e);
+        }
+    }
+    
+    /**
+     * 更新团队游行程安排
+     */
+    @Override
+    @Transactional
+    public void updateGroupTourItinerary(Integer itineraryId, Integer groupTourId, Integer dayNumber, String title, String description, String meals, String accommodation) {
+        log.info("更新团队游行程安排：itineraryId={}, groupTourId={}, dayNumber={}", itineraryId, groupTourId, dayNumber);
+        
+        try {
+            // 检查行程是否存在
+            List<Map<String, Object>> existingItineraries = groupTourMapper.getItinerary(groupTourId);
+            boolean itineraryExists = false;
+            
+            for (Map<String, Object> existing : existingItineraries) {
+                Integer existingId = (Integer) existing.get("id");
+                if (existingId.equals(itineraryId)) {
+                    itineraryExists = true;
+                    break;
+                }
+            }
+            
+            if (!itineraryExists) {
+                log.warn("ID为{}的行程不存在，将创建新行程", itineraryId);
+                // 添加新行程
+                groupTourMapper.insertItinerary(
+                    groupTourId,
+                    dayNumber,
+                    title,
+                    description,
+                    meals,
+                    accommodation
+                );
+            } else {
+                // 更新现有行程
+                groupTourMapper.updateItinerary(
+                    itineraryId,
+                    groupTourId,
+                    dayNumber,
+                    title,
+                    description,
+                    meals,
+                    accommodation
+                );
+            }
+            
+            log.info("更新团队游行程安排成功");
+        } catch (Exception e) {
+            log.error("更新团队游行程安排失败：", e);
+            throw new RuntimeException("更新团队游行程安排失败", e);
         }
     }
 

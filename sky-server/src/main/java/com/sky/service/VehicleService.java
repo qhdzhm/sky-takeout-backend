@@ -3,7 +3,6 @@ package com.sky.service;
 import com.sky.dto.VehiclePageQueryDTO;
 import com.sky.entity.Vehicle;
 import com.sky.result.PageResult;
-import com.sky.vo.VehicleWithDriversVO;
 
 import java.util.List;
 
@@ -33,14 +32,4 @@ public interface VehicleService {
      * 删除车辆
      */
     void deleteVehicle(Long id);
-    
-    /**
-     * 获取车辆及其驾驶员信息
-     */
-    VehicleWithDriversVO getVehicleWithDrivers(Long id);
-    
-    /**
-     * 获取所有可分配车辆列表（包含驾驶员数量信息）
-     */
-    List<VehicleWithDriversVO> getAllAvailableVehicles();
 }

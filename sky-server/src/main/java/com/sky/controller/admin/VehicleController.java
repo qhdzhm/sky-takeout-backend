@@ -5,12 +5,9 @@ import com.sky.entity.Vehicle;
 import com.sky.result.PageResult;
 import com.sky.result.Result;
 import com.sky.service.VehicleService;
-import com.sky.vo.VehicleWithDriversVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/admin/vehicle")
@@ -69,25 +66,5 @@ public class VehicleController {
         log.info("删除车辆：id={}", id);
         vehicleService.deleteVehicle(id);
         return Result.success();
-    }
-    
-    /**
-     * 获取车辆详情（包含驾驶员信息）
-     */
-    @GetMapping("/details/{id}")
-    public Result<VehicleWithDriversVO> getVehicleWithDrivers(@PathVariable Long id) {
-        log.info("获取车辆详情（包含驾驶员信息）：id={}", id);
-        VehicleWithDriversVO vo = vehicleService.getVehicleWithDrivers(id);
-        return Result.success(vo);
-    }
-    
-    /**
-     * 获取所有可分配车辆
-     */
-    @GetMapping("/available")
-    public Result<List<VehicleWithDriversVO>> getAllAvailableVehicles() {
-        log.info("获取所有可分配车辆");
-        List<VehicleWithDriversVO> list = vehicleService.getAllAvailableVehicles();
-        return Result.success(list);
     }
 }

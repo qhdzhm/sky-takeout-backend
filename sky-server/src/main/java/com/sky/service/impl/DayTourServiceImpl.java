@@ -86,7 +86,8 @@ public class DayTourServiceImpl implements DayTourService {
      */
     @Override
     @Transactional
-    public void save(DayTourDTO dayTourDTO) {
+    public Integer save(DayTourDTO dayTourDTO) {
+        log.info("开始保存一日游，数据：{}", dayTourDTO);
         DayTour dayTour = new DayTour();
         BeanUtils.copyProperties(dayTourDTO, dayTour);
         
@@ -95,33 +96,64 @@ public class DayTourServiceImpl implements DayTourService {
         dayTour.setUpdatedAt(LocalDateTime.now());
         dayTour.setIsActive(1); // 默认激活
         
+        // 打印要插入的数据
+        log.info("准备插入day_tours表的数据：name={}, location={}, description={}, price={}, duration={}, imageUrl={}",
+                dayTour.getName(), dayTour.getLocation(), dayTour.getDescription(), 
+                dayTour.getPrice(), dayTour.getDuration(), dayTour.getImageUrl());
+        
         // 保存一日游主表信息
-        dayTourMapper.insert(dayTour);
+        try {
+            log.info("执行insert操作前的DayTour对象：{}", dayTour);
+            dayTourMapper.insert(dayTour);
+            log.info("insert操作后，获取到的dayTourId：{}", dayTour.getDayTourId());
+        } catch (Exception e) {
+            log.error("插入day_tours表失败：{}", e.getMessage(), e);
+            throw e;
+        }
         
         // 保存主题关联
         Integer dayTourId = dayTour.getDayTourId();
-        if (dayTourDTO.getThemeIds() != null && dayTourDTO.getThemeIds().length > 0) {
+        if (dayTourId != null && dayTourDTO.getThemeIds() != null && dayTourDTO.getThemeIds().length > 0) {
             List<Integer> themeIds = new ArrayList<>();
             for (Integer themeId : dayTourDTO.getThemeIds()) {
                 themeIds.add(themeId);
             }
-            dayTourThemeMapper.deleteAssociation(dayTourId);
-            for (Integer themeId : themeIds) {
-                dayTourThemeMapper.insertAssociation(dayTourId, themeId);
+            try {
+                dayTourThemeMapper.deleteAssociation(dayTourId);
+                for (Integer themeId : themeIds) {
+                    log.info("关联主题，dayTourId={}，themeId={}", dayTourId, themeId);
+                    dayTourThemeMapper.insertAssociation(dayTourId, themeId);
+                }
+            } catch (Exception e) {
+                log.error("保存主题关联失败：{}", e.getMessage(), e);
+                throw e;
             }
+        } else {
+            log.info("没有主题需要关联，dayTourId={}，themeIds={}", dayTourId, dayTourDTO.getThemeIds());
         }
         
         // 保存适合人群关联
-        if (dayTourDTO.getSuitableIds() != null && dayTourDTO.getSuitableIds().length > 0) {
+        if (dayTourId != null && dayTourDTO.getSuitableIds() != null && dayTourDTO.getSuitableIds().length > 0) {
             List<Integer> suitableIds = new ArrayList<>();
             for (Integer suitableId : dayTourDTO.getSuitableIds()) {
                 suitableIds.add(suitableId);
             }
-            dayTourSuitableMapper.deleteRelationByDayTourId(dayTourId);
-            for (Integer suitableId : suitableIds) {
-                dayTourSuitableMapper.insertAssociation(dayTourId, suitableId);
+            try {
+                dayTourSuitableMapper.deleteRelationByDayTourId(dayTourId);
+                for (Integer suitableId : suitableIds) {
+                    log.info("关联适合人群，dayTourId={}，suitableId={}", dayTourId, suitableId);
+                    dayTourSuitableMapper.insertAssociation(dayTourId, suitableId);
+                }
+            } catch (Exception e) {
+                log.error("保存适合人群关联失败：{}", e.getMessage(), e);
+                throw e;
             }
+        } else {
+            log.info("没有适合人群需要关联，dayTourId={}，suitableIds={}", dayTourId, dayTourDTO.getSuitableIds());
         }
+        
+        log.info("一日游保存完成，dayTourId={}", dayTourId);
+        return dayTourId; // 返回创建的一日游ID
     }
 
     /**
@@ -396,7 +428,7 @@ public class DayTourServiceImpl implements DayTourService {
         
         // 分页参数
         int page = params.get("page") != null ? Integer.parseInt(params.get("page").toString()) : 1;
-        int pageSize = params.get("pageSize") != null ? Integer.parseInt(params.get("pageSize").toString()) : 10;
+        int pageSize = params.get("pageSize") != null ? Integer.parseInt(params.get("pageSize").toString()) : 50;
         
         // 构建查询DTO
         DayTourPageQueryDTO queryDTO = new DayTourPageQueryDTO();
@@ -789,5 +821,33 @@ public class DayTourServiceImpl implements DayTourService {
     public List<DayTourImage> getImagesByDayTourId(Integer dayTourId) {
         log.info("获取一日游图片列表，dayTourId：{}", dayTourId);
         return dayTourImageMapper.selectByDayTourId(dayTourId);
+    }
+
+    /**
+     * 获取一日游行程详情，用于行程安排界面
+     * @param tourId 一日游ID
+     * @return 行程详情列表
+     */
+    @Override
+    public List<Map<String, Object>> getDayTourItinerary(Integer tourId) {
+        // 获取一日游行程
+        List<DayTourItinerary> itineraries = getItinerariesByDayTourId(tourId);
+        
+        // 转换为与团队游行程格式一致的Map格式
+        List<Map<String, Object>> result = new ArrayList<>();
+        if (itineraries != null && !itineraries.isEmpty()) {
+            for (DayTourItinerary itinerary : itineraries) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("id", itinerary.getId());
+                map.put("day_tour_id", tourId);
+                map.put("day_number", 1); // 一日游只有一天
+                map.put("title", itinerary.getActivity()); // 使用activity作为title
+                map.put("description", itinerary.getDescription());
+                map.put("time", itinerary.getTimeSlot()); // 使用timeSlot作为time
+                result.add(map);
+            }
+        }
+        
+        return result;
     }
 } 

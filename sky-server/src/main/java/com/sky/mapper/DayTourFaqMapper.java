@@ -44,4 +44,12 @@ public interface DayTourFaqMapper {
      */
     @Delete("delete from day_tour_faqs where day_tour_id = #{dayTourId}")
     void deleteByDayTourId(Integer dayTourId);
+
+    /**
+     * 查询所有常见问题（用于AI聊天机器人）
+     * @return
+     */
+    @Select("select id, day_tour_id as dayTourId, question, answer, position, created_at as createdAt, updated_at as updatedAt " +
+            "from day_tour_faqs order by position")
+    List<DayTourFaq> findAll();
 } 

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 /**
  * 一日游管理控制器
@@ -57,8 +58,15 @@ public class DayTourController {
     @ApiOperation("新增一日游")
     public Result save(@RequestBody DayTourDTO dayTourDTO) {
         log.info("新增一日游：{}", dayTourDTO);
-        dayTourService.save(dayTourDTO);
-        return Result.success();
+        try {
+            Integer dayTourId = dayTourService.save(dayTourDTO);
+            Map<String, Object> data = new HashMap<>();
+            data.put("id", dayTourId);
+            return Result.success(data);
+        } catch (Exception e) {
+            log.error("新增一日游失败，参数：{}，错误：{}", dayTourDTO, e.getMessage(), e);
+            return Result.error("新增一日游失败：" + e.getMessage());
+        }
     }
 
     /**

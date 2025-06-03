@@ -49,4 +49,13 @@ public class PaymentDTO implements Serializable {
 
     // 更新时间
     private LocalDateTime updateTime;
+
+    // 交易ID（第三方支付平台返回的交易号）
+    private String transactionId;
+
+    // 是否使用信用额度支付
+    private Boolean isCreditPayment;
+
+    // 信用额度交易ID
+    private Integer creditTransactionId;
 } 

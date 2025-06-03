@@ -35,12 +35,21 @@ public class UserLoginVO implements Serializable {
     @ApiModelProperty("用户头像")
     private String avatar;
 
-    @ApiModelProperty("用户类型：regular-普通用户, agent-代理商")
+    @ApiModelProperty("用户类型：regular-普通用户, agent-代理商, agent_operator-代理商操作员")
     private String userType;
 
-    @ApiModelProperty("代理商ID（如果用户是代理商）")
+    @ApiModelProperty("代理商ID（如果用户是代理商或操作员）")
     private Long agentId;
+
+    @ApiModelProperty("操作员ID（如果用户是操作员）")
+    private Long operatorId;
 
     @ApiModelProperty("折扣率")
     private BigDecimal discountRate;
+
+    @ApiModelProperty("是否可以看到折扣信息")
+    private Boolean canSeeDiscount;
+
+    @ApiModelProperty("是否可以看到信用额度信息")
+    private Boolean canSeeCredit;
 }

@@ -311,6 +311,40 @@ public interface GroupTourMapper {
                         @Param("accommodation") String accommodation);
 
     /**
+     * 更新跟团游行程安排
+     * @param id 行程ID
+     * @param tourId 跟团游ID
+     * @param dayNumber 天数
+     * @param title 标题
+     * @param description 描述
+     * @param meals 餐食
+     * @param accommodation 住宿
+     */
+    @Update("UPDATE tour_itinerary SET " +
+            "group_tour_id = #{tourId}, " +
+            "day_number = #{dayNumber}, " +
+            "title = #{title}, " +
+            "description = #{description}, " +
+            "meals = #{meals}, " +
+            "accommodation = #{accommodation} " +
+            "WHERE id = #{id}")
+    void updateItinerary(@Param("id") Integer id,
+                        @Param("tourId") Integer tourId, 
+                        @Param("dayNumber") Integer dayNumber,
+                        @Param("title") String title, 
+                        @Param("description") String description,
+                        @Param("meals") String meals, 
+                        @Param("accommodation") String accommodation);
+
+    /**
+     * 根据团队游ID和天数删除行程安排
+     * @param tourId 团队游ID
+     * @param dayNumber 天数
+     */
+    @Delete("DELETE FROM tour_itinerary WHERE group_tour_id = #{tourId} AND day_number = #{dayNumber}")
+    void deleteItineraryByTourIdAndDay(@Param("tourId") Integer tourId, @Param("dayNumber") Integer dayNumber);
+
+    /**
      * 插入新的团队游基本信息
      * @param groupTourDTO 团队游信息
      * @return 插入后的团队游ID
@@ -343,4 +377,52 @@ public interface GroupTourMapper {
      */
     @Delete("DELETE FROM group_tour_images WHERE group_tour_id = #{tourId}")
     void deleteImages(Integer tourId);
+
+    /**
+     * 根据名称模糊查询跟团游（用于AI聊天机器人）
+     * @param name 产品名称
+     * @return 跟团游信息
+     */
+    @Select("SELECT group_tour_id AS id, title AS name, description, price, discounted_price AS discountedPrice, " +
+            "duration, days, nights, rating, reviews_count AS reviewsCount, tour_code AS tourCode, " +
+            "departure_info AS departureInfo, group_size AS groupSize, language, " +
+            "image_url AS coverImage, is_active AS isActive, location, category, " +
+            "departure_address AS departureAddress, guide_fee AS guideFee, guide_id AS guideId " +
+            "FROM group_tours WHERE title LIKE CONCAT('%', #{name}, '%') AND is_active = 1 LIMIT 1")
+    GroupTourDTO findByNameLike(String name);
+
+    /**
+     * 根据关键词智能搜索跟团游产品
+     * @param keywords 关键词（用空格分隔）
+     * @return 跟团游列表
+     */
+    @Select("<script>" +
+            "SELECT group_tour_id AS id, title AS name, description, price, discounted_price AS discountedPrice, " +
+            "duration, days, nights, rating, reviews_count AS reviewsCount, tour_code AS tourCode, " +
+            "departure_info AS departureInfo, group_size AS groupSize, language, " +
+            "image_url AS coverImage, is_active AS isActive, location, category, " +
+            "departure_address AS departureAddress, guide_fee AS guideFee, guide_id AS guideId " +
+            "FROM group_tours WHERE is_active = 1 " +
+            "<foreach collection='keywords' item='keyword' separator=' '>" +
+            "AND title LIKE CONCAT('%', #{keyword}, '%')" +
+            "</foreach>" +
+            "ORDER BY " +
+            "<foreach collection='keywords' item='keyword' separator=' + '>" +
+            "(CASE WHEN title LIKE CONCAT('%', #{keyword}, '%') THEN 1 ELSE 0 END)" +
+            "</foreach> DESC " +
+            "LIMIT 5" +
+            "</script>")
+    List<GroupTourDTO> findByKeywords(@Param("keywords") String[] keywords);
+
+    /**
+     * 获取所有活跃的跟团游产品（用于模糊匹配）
+     * @return 跟团游列表
+     */
+    @Select("SELECT group_tour_id AS id, title AS name, description, price, discounted_price AS discountedPrice, " +
+            "duration, days, nights, rating, reviews_count AS reviewsCount, tour_code AS tourCode, " +
+            "departure_info AS departureInfo, group_size AS groupSize, language, " +
+            "image_url AS coverImage, is_active AS isActive, location, category, " +
+            "departure_address AS departureAddress, guide_fee AS guideFee, guide_id AS guideId " +
+            "FROM group_tours WHERE is_active = 1 ORDER BY id LIMIT 10")
+    List<GroupTourDTO> findAllActive();
 } 

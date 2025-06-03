@@ -41,7 +41,7 @@ public class TourServiceImpl implements TourService {
         
         // 分页参数
         int page = params.get("page") != null ? Integer.parseInt(params.get("page").toString()) : 1;
-        int pageSize = params.get("pageSize") != null ? Integer.parseInt(params.get("pageSize").toString()) : 10;
+        int pageSize = params.get("pageSize") != null ? Integer.parseInt(params.get("pageSize").toString()) : 50;
         
         // 分页查询
         PageHelper.startPage(page, pageSize);

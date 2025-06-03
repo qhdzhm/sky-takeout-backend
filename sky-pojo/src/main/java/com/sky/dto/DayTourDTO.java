@@ -47,10 +47,10 @@ public class DayTourDTO implements Serializable {
     private List<String> suitableFor;
     
     // 其他字段
-    private BigDecimal childPrice;
+    // private BigDecimal childPrice; // 暂时注释，数据库中没有此字段
     private String category;
-    private String pickupInfo;
-    private String cancellationPolicy;
+    // private String pickupInfo; // 暂时注释，数据库中没有此字段
+    // private String cancellationPolicy; // 暂时注释，数据库中没有此字段
     private BigDecimal guideFee;
     private Integer[] themeIds;
     private Integer[] suitableIds;

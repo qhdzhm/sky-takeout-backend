@@ -58,7 +58,7 @@ public class EmployeeController {
     }
 
     /**
-     * 分页查询（包含车辆信息）
+     * 分页查询
      */
     @GetMapping("/page")
     public Result<PageResult> page(EmployeePageQueryDTO employeePageQueryDTO) {
@@ -67,17 +67,6 @@ public class EmployeeController {
         return Result.success(pageResult);
     }
 
-    /**
-     * 启用/禁用员工
-     */
-    @PutMapping("/status/{id}")
-    public Result updateStatus(
-            @PathVariable Long id,
-            @RequestParam Integer status // 接收状态值
-    ) {
-        employeeService.status(id, status);
-        return Result.success();
-    }
     /**
      * 新增员工
      */
@@ -89,7 +78,7 @@ public class EmployeeController {
     }
 
     /**
-     * 根据ID查询员工（包含车辆信息）
+     * 根据ID查询员工
      */
     @GetMapping("/{id}")
     public Result<Employee> getEmpById(@PathVariable Integer id) {
@@ -107,7 +96,6 @@ public class EmployeeController {
         employeeService.updateEmp(employeeDTO);
         return Result.success();
     }
-
 
     /**
      * 退出

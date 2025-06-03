@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.OrderMapper">
+
+    <!-- 订单查询结果映射 -->
+    <resultMap id="orderVoMap" type="com.sky.vo.OrderVO">
+        <id column="booking_id" property="bookingId"/>
+        <result column="order_number" property="orderNumber"/>
+        <result column="tour_id" property="tourId"/>
+        <result column="tour_type" property="tourType"/>
+        <result column="user_id" property="userId"/>
+        <result column="agent_id" property="agentId"/>
+        <result column="operator_id" property="operatorId"/>
+        <result column="booking_date" property="bookingDate"/>
+        <result column="flight_number" property="flightNumber"/>
+        <result column="return_flight_number" property="returnFlightNumber"/>
+        <result column="tour_start_date" property="tourStartDate"/>
+        <result column="tour_end_date" property="tourEndDate"/>
+        <result column="pickup_date" property="pickupDate"/>
+        <result column="dropoff_date" property="dropoffDate"/>
+        <result column="pickup_location" property="pickupLocation"/>
+        <result column="dropoff_location" property="dropoffLocation"/>
+        <result column="service_type" property="serviceType"/>
+        <result column="group_size" property="groupSize"/>
+        <result column="adult_count" property="adultCount"/>
+        <result column="child_count" property="childCount"/>
+        <result column="luggage_count" property="luggageCount"/>
+        <result column="passenger_contact" property="passengerContact"/>
+        <result column="contact_person" property="contactPerson"/>
+        <result column="contact_phone" property="contactPhone"/>
+        <result column="hotel_level" property="hotelLevel"/>
+        <result column="room_type" property="roomType"/>
+        <result column="hotel_room_count" property="hotelRoomCount"/>
+        <result column="room_details" property="roomDetails"/>
+        <result column="special_requests" property="specialRequests"/>
+        <result column="itinerary_details" property="itineraryDetails"/>
+        <result column="status" property="status"/>
+        <result column="payment_status" property="paymentStatus"/>
+        <result column="total_price" property="totalPrice"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+        <!-- 附加信息 -->
+        <result column="tour_name" property="tourName"/>
+        <result column="tour_location" property="tourLocation"/>
+        <result column="tour_image" property="tourImage"/>
+        <!-- 用户和代理商信息 -->
+        <result column="user_name" property="userName"/>
+        <result column="agent_name" property="agentName"/>
+        <result column="operator_name" property="operatorName"/>
+        <!-- 乘客信息集合 -->
+        <collection property="passengers" ofType="com.sky.vo.PassengerVO" select="getPassengersByBookingId" column="booking_id"/>
+    </resultMap>
+
+    <!-- 基本订单查询SQL -->
+    <sql id="baseOrderSelect">
+        SELECT tb.booking_id, tb.order_number, tb.tour_id, tb.tour_type, tb.user_id, tb.agent_id, tb.operator_id,
+            tb.booking_date, tb.flight_number, tb.return_flight_number, tb.tour_start_date, 
+            tb.tour_end_date, tb.pickup_date, tb.dropoff_date, tb.pickup_location, tb.dropoff_location,
+            tb.service_type, tb.group_size, tb.adult_count, tb.child_count, tb.luggage_count, tb.passenger_contact, tb.contact_person,
+            tb.contact_phone, tb.hotel_level, tb.room_type, tb.hotel_room_count, tb.room_details,
+            tb.special_requests, tb.itinerary_details, tb.status, tb.payment_status, tb.total_price,
+            tb.created_at, tb.updated_at,
+            CASE 
+                WHEN tb.tour_type = 'day_tour' THEN dt.name
+                WHEN tb.tour_type = 'group_tour' THEN gt.title
+                ELSE 'Unknown Tour'
+            END AS tour_name,
+            CASE 
+                WHEN tb.tour_type = 'day_tour' THEN dt.location
+                WHEN tb.tour_type = 'group_tour' THEN gt.location
+                ELSE 'Unknown Location'
+            END AS tour_location,
+            CASE 
+                WHEN tb.tour_type = 'day_tour' THEN dt.image_url
+                WHEN tb.tour_type = 'group_tour' THEN gt.image_url
+                ELSE NULL
+            END AS tour_image,
+            CONCAT(u.first_name, ' ', u.last_name) AS user_name,
+            a.company_name AS agent_name,
+            ao.name AS operator_name
+        FROM tour_bookings tb
+        LEFT JOIN day_tours dt ON tb.tour_type = 'day_tour' AND tb.tour_id = dt.day_tour_id
+        LEFT JOIN group_tours gt ON tb.tour_type = 'group_tour' AND tb.tour_id = gt.group_tour_id
+        LEFT JOIN users u ON tb.user_id = u.user_id
+        LEFT JOIN agents a ON tb.agent_id = a.id
+        LEFT JOIN agent_operators ao ON tb.operator_id = ao.id
+    </sql>
+    
+    <!-- 查询预订关联的乘客 -->
+    <select id="getPassengersByBookingId" resultType="com.sky.vo.PassengerVO">
+        /* OrderMapper.getPassengersByBookingId: 正在查询订单ID ${bookingId} 的所有乘客信息 */
+        SELECT 
+            p.passenger_id, 
+            p.full_name, 
+            p.gender, 
+            p.date_of_birth, 
+            p.is_child as isChild, 
+            p.child_age as childAge, 
+            p.passport_number as passportNumber, 
+            p.passport_expiry as passportExpiry, 
+            p.nationality, 
+            p.phone, /* 乘客电话号码 */
+            p.wechat_id as wechatId, /* 乘客微信ID */
+            p.email,
+            p.emergency_contact_name as emergencyContactName,
+            p.emergency_contact_phone as emergencyContactPhone,
+            p.dietary_requirements as dietaryRequirements,
+            p.medical_conditions as medicalConditions,
+            p.luggage_count as luggageCount,
+            p.special_requests as specialRequests,
+            bpr.is_primary as isPrimary,
+            bpr.ticket_number as ticketNumber,
+            bpr.seat_number as seatNumber,
+            bpr.luggage_tags as luggageTags,
+            bpr.check_in_status as checkInStatus
+        FROM 
+            booking_passenger_relation bpr
+        JOIN 
+            passengers p ON bpr.passenger_id = p.passenger_id
+        WHERE 
+            bpr.booking_id = #{bookingId}
+        ORDER BY 
+            bpr.is_primary DESC, p.full_name ASC
+    </select>
+
+    <!-- 分页查询订单 -->
+    <select id="pageQuery" resultMap="orderVoMap" parameterType="com.sky.dto.OrderPageQueryDTO">
+        <include refid="baseOrderSelect"/>
+        <where>
+            <if test="userId != null">
+                AND tb.user_id = #{userId}
+            </if>
+            <if test="agentId != null">
+                AND tb.agent_id = #{agentId}
+            </if>
+            <if test="operatorId != null">
+                AND tb.operator_id = #{operatorId}
+            </if>
+            <if test="orderNumber != null and orderNumber != ''">
+                AND tb.order_number LIKE CONCAT('%', #{orderNumber}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND tb.status = #{status}
+            </if>
+            <if test="paymentStatus != null and paymentStatus != ''">
+                AND tb.payment_status = #{paymentStatus}
+            </if>
+            <if test="tourType != null and tourType != ''">
+                AND tb.tour_type = #{tourType}
+            </if>
+            <if test="startDate != null">
+                AND tb.tour_start_date >= #{startDate}
+            </if>
+            <if test="endDate != null">
+                AND tb.tour_end_date &lt;= #{endDate}
+            </if>
+            <if test="contactPerson != null and contactPerson != ''">
+                AND tb.contact_person LIKE CONCAT('%', #{contactPerson}, '%')
+            </if>
+            <if test="contactPhone != null and contactPhone != ''">
+                AND tb.contact_phone LIKE CONCAT('%', #{contactPhone}, '%')
+            </if>
+        </where>
+        ORDER BY tb.created_at DESC
+    </select>
+    
+    <!-- 根据ID查询订单详情 -->
+    <select id="getById" resultMap="orderVoMap">
+        <include refid="baseOrderSelect"/>
+        WHERE tb.booking_id = #{bookingId}
+    </select>
+    
+    <!-- 根据订单号查询订单 -->
+    <select id="getByOrderNumber" resultType="com.sky.entity.TourBooking">
+        SELECT * FROM tour_bookings
+        WHERE order_number = #{orderNumber}
+    </select>
+    
+    <!-- 插入订单 -->
+    <insert id="insert" parameterType="com.sky.entity.TourBooking" useGeneratedKeys="true" keyProperty="bookingId">
+        INSERT INTO tour_bookings(
+            order_number, tour_id, tour_type, user_id, agent_id, operator_id, booking_date, flight_number, 
+            return_flight_number, tour_start_date, tour_end_date, pickup_date, dropoff_date, 
+            pickup_location, dropoff_location, service_type, group_size, adult_count, child_count, luggage_count, 
+            passenger_contact, contact_person, contact_phone, hotel_level, room_type, 
+            hotel_room_count, room_details, special_requests, itinerary_details, status, 
+            payment_status, total_price, created_at, updated_at
+        ) VALUES (
+            #{orderNumber}, #{tourId}, #{tourType}, #{userId}, #{agentId}, #{operatorId}, #{bookingDate}, #{flightNumber}, 
+            #{returnFlightNumber}, #{tourStartDate}, #{tourEndDate}, #{pickupDate}, #{dropoffDate}, 
+            #{pickupLocation}, #{dropoffLocation}, #{serviceType}, #{groupSize}, #{adultCount}, #{childCount}, #{luggageCount}, 
+            #{passengerContact}, #{contactPerson}, #{contactPhone}, #{hotelLevel}, #{roomType}, 
+            #{hotelRoomCount}, #{roomDetails}, #{specialRequests}, #{itineraryDetails}, #{status}, 
+            #{paymentStatus}, #{totalPrice}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+    
+    <!-- 更新订单 -->
+    <update id="update" parameterType="com.sky.entity.TourBooking">
+        UPDATE tour_bookings
+        <set>
+            <if test="orderNumber != null">order_number = #{orderNumber},</if>
+            <if test="tourId != null">tour_id = #{tourId},</if>
+            <if test="tourType != null">tour_type = #{tourType},</if>
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="agentId != null">agent_id = #{agentId},</if>
+            <if test="operatorId != null">operator_id = #{operatorId},</if>
+            <if test="bookingDate != null">booking_date = #{bookingDate},</if>
+            <if test="flightNumber != null">flight_number = #{flightNumber},</if>
+            <if test="returnFlightNumber != null">return_flight_number = #{returnFlightNumber},</if>
+            <if test="tourStartDate != null">tour_start_date = #{tourStartDate},</if>
+            <if test="tourEndDate != null">tour_end_date = #{tourEndDate},</if>
+            <if test="pickupDate != null">pickup_date = #{pickupDate},</if>
+            <if test="dropoffDate != null">dropoff_date = #{dropoffDate},</if>
+            <if test="pickupLocation != null">pickup_location = #{pickupLocation},</if>
+            <if test="dropoffLocation != null">dropoff_location = #{dropoffLocation},</if>
+            <if test="serviceType != null">service_type = #{serviceType},</if>
+            <if test="groupSize != null">group_size = #{groupSize},</if>
+            <if test="adultCount != null">adult_count = #{adultCount},</if>
+            <if test="childCount != null">child_count = #{childCount},</if>
+            <if test="luggageCount != null">luggage_count = #{luggageCount},</if>
+            <if test="passengerContact != null">passenger_contact = #{passengerContact},</if>
+            <if test="contactPerson != null">contact_person = #{contactPerson},</if>
+            <if test="contactPhone != null">contact_phone = #{contactPhone},</if>
+            <if test="hotelLevel != null">hotel_level = #{hotelLevel},</if>
+            <if test="roomType != null">room_type = #{roomType},</if>
+            <if test="hotelRoomCount != null">hotel_room_count = #{hotelRoomCount},</if>
+            <if test="roomDetails != null">room_details = #{roomDetails},</if>
+            <if test="specialRequests != null">special_requests = #{specialRequests},</if>
+            <if test="itineraryDetails != null">itinerary_details = #{itineraryDetails},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="paymentStatus != null">payment_status = #{paymentStatus},</if>
+            <if test="totalPrice != null">total_price = #{totalPrice},</if>
+            updated_at = NOW()
+        </set>
+        WHERE booking_id = #{bookingId}
+    </update>
+    
+    <!-- 更新订单状态 -->
+    <update id="updateStatus">
+        UPDATE tour_bookings
+        SET status = #{status}, updated_at = NOW()
+        WHERE booking_id = #{bookingId}
+    </update>
+    
+    <!-- 更新支付状态 -->
+    <update id="updatePaymentStatus">
+        UPDATE tour_bookings
+        SET payment_status = #{paymentStatus}, updated_at = NOW()
+        WHERE booking_id = #{bookingId}
+    </update>
+    
+</mapper> 

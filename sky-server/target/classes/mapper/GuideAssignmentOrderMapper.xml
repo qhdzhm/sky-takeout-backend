@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.GuideAssignmentOrderMapper">
+
+    <!-- 批量插入订单分配记录 -->
+    <insert id="batchInsert">
+        INSERT INTO guide_assignment_orders (
+            assignment_id, booking_id, tour_schedule_order_id, order_number,
+            customer_names, people_count, contact_phone, pickup_time, dropoff_time,
+            pickup_info, dropoff_info, special_requirements, luggage_details,
+            dietary_restrictions, mobility_assistance, language_preference,
+            order_status, next_destination, remarks, created_time, updated_time
+        ) VALUES
+        <foreach collection="orders" item="order" separator=",">
+            (
+                #{order.assignmentId}, #{order.bookingId}, #{order.tourScheduleOrderId}, #{order.orderNumber},
+                #{order.customerNames}, #{order.peopleCount}, #{order.contactPhone}, #{order.pickupTime}, #{order.dropoffTime},
+                #{order.pickupInfo}, #{order.dropoffInfo}, #{order.specialRequirements}, #{order.luggageDetails},
+                #{order.dietaryRestrictions}, #{order.mobilityAssistance}, #{order.languagePreference},
+                #{order.orderStatus}, #{order.nextDestination}, #{order.remarks}, #{order.createdTime}, #{order.updatedTime}
+            )
+        </foreach>
+    </insert>
+
+    <!-- 根据分配ID查询订单列表 -->
+    <select id="getByAssignmentId" resultType="com.sky.entity.GuideAssignmentOrder">
+        SELECT 
+            id, assignment_id, booking_id, tour_schedule_order_id, order_number,
+            customer_names, people_count, contact_phone, pickup_time, dropoff_time,
+            pickup_info, dropoff_info, special_requirements, luggage_details,
+            dietary_restrictions, mobility_assistance, language_preference,
+            order_status, next_destination, remarks, created_time, updated_time
+        FROM guide_assignment_orders
+        WHERE assignment_id = #{assignmentId}
+        ORDER BY pickup_time ASC
+    </select>
+
+    <!-- 根据分配ID删除订单记录 -->
+    <delete id="deleteByAssignmentId">
+        DELETE FROM guide_assignment_orders
+        WHERE assignment_id = #{assignmentId}
+    </delete>
+
+    <!-- 更新订单状态 -->
+    <update id="updateOrderStatus">
+        UPDATE guide_assignment_orders
+        SET order_status = #{status}, updated_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+</mapper> 

@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.AgentCreditMapper">
+
+    <resultMap id="AgentCreditMap" type="com.sky.entity.AgentCredit">
+        <id column="id" property="id"/>
+        <result column="agent_id" property="agentId"/>
+        <result column="total_credit" property="totalCredit"/>
+        <result column="used_credit" property="usedCredit"/>
+        <result column="available_credit" property="availableCredit"/>
+        <result column="deposit_balance" property="depositBalance"/>
+        <result column="credit_rating" property="creditRating"/>
+        <result column="interest_rate" property="interestRate"/>
+        <result column="billing_cycle_day" property="billingCycleDay"/>
+        <result column="last_settlement_date" property="lastSettlementDate"/>
+        <result column="overdraft_count" property="overdraftCount"/>
+        <result column="is_frozen" property="isFrozen"/>
+        <result column="last_updated" property="lastUpdated"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="AgentCredit_Column_List">
+        id, agent_id, total_credit, used_credit, available_credit, deposit_balance,
+        credit_rating, interest_rate, billing_cycle_day, last_settlement_date,
+        overdraft_count, is_frozen, last_updated, created_at
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into agent_credit
+        (agent_id, total_credit, used_credit, available_credit, deposit_balance,
+         credit_rating, interest_rate, billing_cycle_day, last_settlement_date,
+         overdraft_count, is_frozen, last_updated, created_at)
+        values
+        (#{agentId}, #{totalCredit}, #{usedCredit}, #{availableCredit}, #{depositBalance},
+         #{creditRating}, #{interestRate}, #{billingCycleDay}, #{lastSettlementDate},
+         #{overdraftCount}, #{isFrozen}, #{lastUpdated}, #{createdAt})
+    </insert>
+
+    <update id="update">
+        update agent_credit
+        <set>
+            <if test="totalCredit != null">
+                total_credit = #{totalCredit},
+            </if>
+            <if test="usedCredit != null">
+                used_credit = #{usedCredit},
+            </if>
+            <if test="availableCredit != null">
+                available_credit = #{availableCredit},
+            </if>
+            <if test="depositBalance != null">
+                deposit_balance = #{depositBalance},
+            </if>
+            <if test="creditRating != null">
+                credit_rating = #{creditRating},
+            </if>
+            <if test="interestRate != null">
+                interest_rate = #{interestRate},
+            </if>
+            <if test="billingCycleDay != null">
+                billing_cycle_day = #{billingCycleDay},
+            </if>
+            <if test="lastSettlementDate != null">
+                last_settlement_date = #{lastSettlementDate},
+            </if>
+            <if test="overdraftCount != null">
+                overdraft_count = #{overdraftCount},
+            </if>
+            <if test="isFrozen != null">
+                is_frozen = #{isFrozen},
+            </if>
+            <if test="lastUpdated != null">
+                last_updated = #{lastUpdated},
+            </if>
+            <if test="createdAt != null">
+                created_at = #{createdAt},
+            </if>
+        </set>
+        where id = #{id}
+    </update>
+
+    <update id="updateTotalCredit">
+        update agent_credit
+        set total_credit = total_credit + #{amount},
+            available_credit = total_credit - used_credit + deposit_balance,
+            last_updated = now()
+        where agent_id = #{agentId}
+    </update>
+
+    <select id="getAll" resultMap="AgentCreditMap">
+        select a.* 
+        from agent_credit a
+        left join agents b on a.agent_id = b.id
+        <where>
+            <if test="agentId != null">
+                and a.agent_id = #{agentId}
+            </if>
+            <if test="agentName != null and agentName != ''">
+                and b.company_name like concat('%', #{agentName}, '%')
+            </if>
+        </where>
+        order by a.last_updated desc
+        limit #{offset}, #{limit}
+    </select>
+
+    <select id="countAll" resultType="java.lang.Integer">
+        select count(1) 
+        from agent_credit a
+        left join agents b on a.agent_id = b.id
+        <where>
+            <if test="agentId != null">
+                and a.agent_id = #{agentId}
+            </if>
+            <if test="agentName != null and agentName != ''">
+                and b.company_name like concat('%', #{agentName}, '%')
+            </if>
+        </where>
+    </select>
+
+    <insert id="createCreditRecord">
+        insert into agent_credit
+        (agent_id, total_credit, used_credit, available_credit, deposit_balance, 
+         credit_rating, interest_rate, billing_cycle_day, overdraft_count, is_frozen,
+         last_updated, created_at)
+        values
+        (#{agentId}, #{initialCredit}, 0, #{initialCredit}, 0, 
+         'B', 0, 1, 0, false,
+         now(), now())
+    </insert>
+</mapper> 

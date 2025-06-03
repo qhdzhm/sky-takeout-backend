@@ -1,0 +1,85 @@
+### Sky Takeout 手动部署命令（在阿里云控制台远程连接中执行）
+
+## 1. 更新系统和安装基础软件
+apt update && apt upgrade -y
+apt install -y openjdk-8-jdk mysql-server redis-server wget curl
+
+## 2. 配置Java环境
+echo 'export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64' >> /etc/profile
+echo 'export PATH=$PATH:$JAVA_HOME/bin' >> /etc/profile
+source /etc/profile
+
+## 3. 安装Maven
+cd /opt
+wget https://downloads.apache.org/maven/maven-3/3.8.6/binaries/apache-maven-3.8.6-bin.tar.gz
+tar -xzf apache-maven-3.8.6-bin.tar.gz
+mv apache-maven-3.8.6 maven
+echo 'export MAVEN_HOME=/opt/maven' >> /etc/profile
+echo 'export PATH=$PATH:$MAVEN_HOME/bin' >> /etc/profile
+source /etc/profile
+
+## 4. 创建目录
+mkdir -p /opt/sky-takeout
+mkdir -p /opt/sky-takeout/logs
+mkdir -p /opt/scripts
+mkdir -p /opt/backups
+
+## 5. 启动MySQL和Redis
+systemctl start mysql
+systemctl enable mysql
+systemctl start redis
+systemctl enable redis
+
+## 6. 配置MySQL（设置root密码为：maomi1314Q）
+mysql_secure_installation
+
+## 7. 创建数据库和用户
+mysql -u root -p << 'EOF'
+CREATE DATABASE happy_tassie_travel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'skyapp'@'%' IDENTIFIED BY 'Sky2024@Strong!';
+CREATE USER 'skyapp'@'localhost' IDENTIFIED BY 'Sky2024@Strong!';
+GRANT ALL PRIVILEGES ON happy_tassie_travel.* TO 'skyapp'@'%';
+GRANT ALL PRIVILEGES ON happy_tassie_travel.* TO 'skyapp'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+EOF
+
+## 8. 配置防火墙
+ufw allow 8080/tcp
+ufw allow 22/tcp
+ufw allow 3306/tcp
+echo "y" | ufw enable
+
+## 9. 创建systemd服务
+cat > /etc/systemd/system/sky-takeout.service << 'EOF'
+[Unit]
+Description=Sky Takeout Application
+After=mysql.service
+Requires=mysql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/sky-takeout/sky-take-out
+ExecStart=/usr/bin/java -Xms512m -Xmx1024m -Dspring.profiles.active=prod -jar sky-server/target/sky-server-1.0-SNAPSHOT.jar
+Restart=always
+RestartSec=10
+Environment=JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+
+## 10. 在本地上传文件（在Windows PowerShell中执行）
+# scp -r C:\1\sky-take-out\* root@47.88.35.159:/opt/sky-takeout/
+
+## 11. 启动应用（上传完成后在服务器执行）
+cd /opt/sky-takeout/sky-take-out
+systemctl start sky-takeout
+systemctl enable sky-takeout
+
+## 12. 查看状态
+systemctl status sky-takeout
+journalctl -u sky-takeout -f 

@@ -10,7 +10,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * 旅游代理商实体类
+ * 代理商实体类
  */
 @Data
 @Builder
@@ -22,32 +22,29 @@ public class Agent implements Serializable {
 
     // 代理商ID
     private Long id;
-
-    // 登录用户名
+    
+    // 用户名
     private String username;
-
-    // 登录密码
+    
+    // 密码
     private String password;
-
+    
     // 公司名称
     private String companyName;
     
     // 联系人姓名
     private String contactPerson;
-
+    
     // 联系电话
     private String phone;
-
+    
     // 电子邮箱
     private String email;
     
-    // 公司地址
-    private String address;
-    
-    // 折扣比例，1.00表示无折扣，0.90表示9折
+    // 折扣率
     private BigDecimal discountRate;
     
-    // 状态：1-活跃，0-禁用
+    // 账号状态：1-活跃，0-禁用
     private Integer status;
     
     // 创建时间

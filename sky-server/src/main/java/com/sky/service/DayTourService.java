@@ -30,9 +30,9 @@ public interface DayTourService {
     /**
      * 新增一日游
      * @param dayTourDTO
-     * @return
+     * @return 创建的一日游ID
      */
-    void save(DayTourDTO dayTourDTO);
+    Integer save(DayTourDTO dayTourDTO);
 
     /**
      * 修改一日游
@@ -227,4 +227,11 @@ public interface DayTourService {
      * @return 图片列表
      */
     List<DayTourImage> getImagesByDayTourId(Integer dayTourId);
+    
+    /**
+     * 获取一日游行程详情，用于行程安排界面
+     * @param tourId 一日游ID
+     * @return 行程详情列表
+     */
+    List<Map<String, Object>> getDayTourItinerary(Integer tourId);
 } 

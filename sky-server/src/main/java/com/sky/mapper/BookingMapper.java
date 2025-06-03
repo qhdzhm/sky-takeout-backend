@@ -1,6 +1,8 @@
 package com.sky.mapper;
 
+import com.github.pagehelper.Page;
 import com.sky.dto.BookingDTO;
+import com.sky.entity.TourBooking;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
@@ -39,10 +41,10 @@ public interface BookingMapper {
     /**
      * 根据ID查询预订
      * @param id 预订ID
-     * @return 预订信息
+     * @return 预订实体
      */
-    @Select("SELECT * FROM bookings WHERE booking_id = #{id}")
-    BookingDTO getById(Integer id);
+    @Select("SELECT * FROM tour_bookings WHERE booking_id = #{id}")
+    TourBooking getById(Integer id);
 
     /**
      * 取消预订
@@ -89,4 +91,13 @@ public interface BookingMapper {
      */
     @Update("UPDATE available_dates SET available_slots = available_slots - #{count} WHERE group_tour_id = #{tourId} AND start_date = #{startDate} AND available_slots >= #{count}")
     int updateGroupTourAvailability(@Param("tourId") Integer tourId, @Param("startDate") LocalDate startDate, @Param("count") Integer count);
+
+    /**
+     * 更新预订状态
+     * @param bookingId 预订ID
+     * @param status 状态
+     * @return 影响行数
+     */
+    @Update("UPDATE tour_bookings SET status = #{status} WHERE booking_id = #{bookingId}")
+    int updateStatus(@Param("bookingId") Integer bookingId, @Param("status") String status);
 } 

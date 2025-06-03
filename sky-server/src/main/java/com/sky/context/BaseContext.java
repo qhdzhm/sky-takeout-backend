@@ -9,6 +9,7 @@ public class BaseContext {
     private static ThreadLocal<String> usernameThreadLocal = new ThreadLocal<>();
     private static ThreadLocal<String> userTypeThreadLocal = new ThreadLocal<>();
     private static ThreadLocal<Long> agentIdThreadLocal = new ThreadLocal<>();
+    private static ThreadLocal<Long> operatorIdThreadLocal = new ThreadLocal<>();
 
     /**
      * 设置当前用户id
@@ -73,6 +74,22 @@ public class BaseContext {
     public static Long getCurrentAgentId() {
         return agentIdThreadLocal.get();
     }
+
+    /**
+     * 设置当前操作员ID
+     * @param operatorId
+     */
+    public static void setCurrentOperatorId(Long operatorId) {
+        operatorIdThreadLocal.set(operatorId);
+    }
+
+    /**
+     * 获取当前操作员ID
+     * @return
+     */
+    public static Long getCurrentOperatorId() {
+        return operatorIdThreadLocal.get();
+    }
     
     /**
      * 移除当前线程的所有信息
@@ -82,5 +99,6 @@ public class BaseContext {
         usernameThreadLocal.remove();
         userTypeThreadLocal.remove();
         agentIdThreadLocal.remove();
+        operatorIdThreadLocal.remove();
     }
 } 

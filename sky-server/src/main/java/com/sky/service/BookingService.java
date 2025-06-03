@@ -1,6 +1,7 @@
 package com.sky.service;
 
 import com.sky.dto.BookingDTO;
+import com.sky.entity.TourBooking;
 
 import java.util.List;
 import java.util.Map;
@@ -28,7 +29,7 @@ public interface BookingService {
      * @param id 预订ID
      * @return 预订详情
      */
-    BookingDTO getBookingById(Integer id);
+    TourBooking getBookingById(Integer id);
 
     /**
      * 取消预订

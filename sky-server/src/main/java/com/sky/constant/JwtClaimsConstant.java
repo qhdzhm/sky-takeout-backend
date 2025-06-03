@@ -12,4 +12,5 @@ public class JwtClaimsConstant {
     public static final String NAME = "name";
     public static final String USER_TYPE = "userType";
     public static final String AGENT_ID = "agentId";
+    public static final String OPERATOR_ID = "operatorId";
 } 

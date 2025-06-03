@@ -114,6 +114,29 @@ public interface GroupTourService {
      * @param dayTours 关联的一日游数据
      */
     void saveGroupTourDayTours(Integer groupTourId, List<Map<String, Object>> dayTours);
+
+    /**
+     * 添加团队游行程安排
+     * @param groupTourId 团队游ID
+     * @param dayNumber 天数
+     * @param title 标题
+     * @param description 描述
+     * @param meals 餐食
+     * @param accommodation 住宿
+     */
+    void addGroupTourItinerary(Integer groupTourId, Integer dayNumber, String title, String description, String meals, String accommodation);
+    
+    /**
+     * 更新团队游行程安排
+     * @param itineraryId 行程ID
+     * @param groupTourId 团队游ID
+     * @param dayNumber 天数
+     * @param title 标题
+     * @param description 描述
+     * @param meals 餐食
+     * @param accommodation 住宿
+     */
+    void updateGroupTourItinerary(Integer itineraryId, Integer groupTourId, Integer dayNumber, String title, String description, String meals, String accommodation);
     
     /**
      * 获取所有可用的一日游

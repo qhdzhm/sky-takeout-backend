@@ -2,6 +2,7 @@ package com.sky.service.impl;
 
 import com.sky.context.BaseContext;
 import com.sky.dto.BookingDTO;
+import com.sky.entity.TourBooking;
 import com.sky.exception.CustomException;
 import com.sky.mapper.BookingMapper;
 import com.sky.service.BookingService;
@@ -72,8 +73,11 @@ public class BookingServiceImpl implements BookingService {
      * @return 预订详情
      */
     @Override
-    public BookingDTO getBookingById(Integer id) {
-        return bookingMapper.getById(id);
+    public TourBooking getBookingById(Integer id) {
+        log.info("开始获取预订详情, 预订ID: {}", id);
+        TourBooking booking = bookingMapper.getById(id);
+        log.info("获取到预订详情: {}", booking);
+        return booking;
     }
 
     /**
@@ -84,14 +88,14 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public void cancelBooking(Integer id) {
         // 检查预订是否存在
-        BookingDTO booking = bookingMapper.getById(id);
+        TourBooking booking = bookingMapper.getById(id);
         if (booking == null) {
             throw new CustomException("预订不存在");
         }
         
         // 检查预订是否属于当前用户
         Long currentId = BaseContext.getCurrentId();
-        if (!booking.getUserId().equals(currentId.intValue())) {
+        if (!booking.getUserId().equals(currentId)) {
             throw new CustomException("无权操作此预订");
         }
         

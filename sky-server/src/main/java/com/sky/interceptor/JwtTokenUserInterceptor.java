@@ -51,6 +51,7 @@ public class JwtTokenUserInterceptor implements HandlerInterceptor {
         if(requestURI.contains("/user/login") || 
            requestURI.contains("/user/register") || 
            requestURI.contains("/user/shop/status") ||
+           requestURI.contains("/user/wechat/qrcode-url") ||
            requestURI.contains("/user/day-tours") ||
            requestURI.contains("/user/group-tours") ||
            requestURI.contains("/user/tours/") ||
@@ -107,7 +108,22 @@ public class JwtTokenUserInterceptor implements HandlerInterceptor {
 
         //2、校验令牌
         try {
-            Claims claims = JwtUtil.parseJWT(jwtProperties.getUserSecretKey(), token);
+            Claims claims = null;
+            try {
+                // 首先尝试用户密钥解析
+                claims = JwtUtil.parseJWT(jwtProperties.getUserSecretKey(), token);
+            } catch (Exception e) {
+                // 如果用户密钥解析失败，尝试代理商密钥
+                try {
+                    claims = JwtUtil.parseJWT(jwtProperties.getAgentSecretKey(), token);
+                    log.info("使用代理商密钥解析JWT成功");
+                } catch (Exception ex) {
+                    log.debug("JWT解析失败: {}", ex.getMessage());
+                    response.setStatus(401);
+                    return false;
+                }
+            }
+            
             Long userId = Long.valueOf(claims.get(JwtClaimsConstant.USER_ID).toString());
             log.info("用户ID:{}", userId);
             BaseContext.setCurrentId(userId);
@@ -136,10 +152,23 @@ public class JwtTokenUserInterceptor implements HandlerInterceptor {
                 log.info("代理商ID: {}", agentId);
             }
             
+            // 从JWT中获取操作员ID并存入BaseContext（如果存在）
+            if (claims.get(JwtClaimsConstant.OPERATOR_ID) != null) {
+                Long operatorId = Long.valueOf(claims.get(JwtClaimsConstant.OPERATOR_ID).toString());
+                BaseContext.setCurrentOperatorId(operatorId);
+                log.info("操作员ID: {}", operatorId);
+            }
+            
+            // 允许代理商访问tour-bookings相关接口
+            if (requestURI.contains("/user/tour-bookings") && "agent".equals(userType)) {
+                log.info("允许代理商访问旅游订单接口: {}", requestURI);
+                return true;
+            }
+            
             // 检查请求路径是否限制仅代理商访问
             if ((requestURI.startsWith("/agent/") && !requestURI.equals("/agent/login")) 
-                    && !"agent".equals(userType)) {
-                log.warn("非代理商用户访问代理商接口: {}", requestURI);
+                    && !"agent".equals(userType) && !"agent_operator".equals(userType)) {
+                log.warn("非代理商用户访问代理商接口: {}, 用户类型: {}", requestURI, userType);
                 response.setStatus(403); // 权限不足
                 return false;
             }

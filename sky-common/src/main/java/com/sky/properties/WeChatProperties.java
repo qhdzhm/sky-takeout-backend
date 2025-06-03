@@ -10,8 +10,16 @@ import org.springframework.stereotype.Component;
 @Data
 public class WeChatProperties {
 
-    private String appid; //小程序的appid
-    private String secret; //小程序的秘钥
+    /**
+     * 微信小程序appid
+     */
+    private String appid;
+
+    /**
+     * 微信小程序密钥
+     */
+    private String secret;
+
     private String mchid; //商户号
     private String mchSerialNo; //商户API证书的证书序列号
     private String privateKeyFilePath; //商户私钥文件

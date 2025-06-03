@@ -21,6 +21,9 @@ import springfox.documentation.builders.RequestHandlerSelectors;
 import springfox.documentation.service.ApiInfo;
 import springfox.documentation.spi.DocumentationType;
 import springfox.documentation.spring.web.plugins.Docket;
+import org.springframework.format.FormatterRegistry;
+import org.springframework.format.datetime.standard.DateTimeFormatterRegistrar;
+import java.time.format.DateTimeFormatter;
 
 import java.util.List;
 
@@ -56,9 +59,13 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
         // 普通用户接口拦截器
         registry.addInterceptor(jwtTokenUserInterceptor)
                 .addPathPatterns("/user/**")
+                .addPathPatterns("/orders/**")  // 添加统一的订单API路径
+                .addPathPatterns("/agent/credit/**")  // 添加代理商信用额度接口，使用用户拦截器处理
                 .excludePathPatterns("/user/login")
                 .excludePathPatterns("/user/register")
                 .excludePathPatterns("/user/shop/status")
+                // 微信登录相关接口
+                .excludePathPatterns("/user/wechat/qrcode-url")
                 // 旅游相关API不需要身份验证
                 .excludePathPatterns("/user/day-tours")
                 .excludePathPatterns("/user/day-tours/*")
@@ -75,6 +82,9 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
                 .excludePathPatterns("/user/group-tours/themes")
                 .excludePathPatterns("/user/tours/suitable-for-options")
                 .excludePathPatterns("/regions")
+                // 酒店价格和价格计算API也不需要身份验证
+                .excludePathPatterns("/user/bookings/hotel-prices")
+                //.excludePathPatterns("/user/bookings/tour/calculate-price")  // 注释掉这行，让JWT拦截器处理价格计算API
                 // 静态资源和Swagger文档
                 .excludePathPatterns("/")
                 .excludePathPatterns("/error")
@@ -88,7 +98,8 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
                 .addPathPatterns("/agent/**")
                 .excludePathPatterns("/agent/login")
                 .excludePathPatterns("/agent/discount-rate")
-                .excludePathPatterns("/agent/calculate-tour-discount");
+                .excludePathPatterns("/agent/calculate-tour-discount")
+                .excludePathPatterns("/agent/credit/**");  // 排除credit接口，让用户拦截器处理
     }
     
     /**
@@ -122,7 +133,9 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
                 .select()
                 .apis(RequestHandlerSelectors.basePackage("com.sky.controller"))
                 .paths(PathSelectors.any())
-                .build();
+                .build()
+                .useDefaultResponseMessages(false) // 禁用默认响应消息
+                .enableUrlTemplating(false); // 禁用URL模板
         return docket;
     }
 
@@ -172,5 +185,18 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
         
         // 返回corsFilter实例
         return new CorsFilter(configurationSource);
+    }
+
+    /**
+     * 添加格式化器和转换器
+     * @param registry
+     */
+    @Override
+    public void addFormatters(FormatterRegistry registry) {
+        // 配置日期时间格式化
+        DateTimeFormatterRegistrar registrar = new DateTimeFormatterRegistrar();
+        registrar.setDateFormatter(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        registrar.setDateTimeFormatter(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        registrar.registerFormatters(registry);
     }
 }
