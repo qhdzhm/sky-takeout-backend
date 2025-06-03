@@ -1,0 +1,120 @@
+sky:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    host: localhost
+    port: 3306
+    database: happy_tassie_travel
+    username: skyapp
+    password: Sky2024@Strong!
+  alioss:
+    endpoint: ${SKY_ALIOSS_ENDPOINT:}
+    bucket-name: ${SKY_ALIOSS_BUCKET:}
+    access-key-id: ${SKY_ALIOSS_ACCESS_KEY:}
+    access-key-secret: ${SKY_ALIOSS_ACCESS_SECRET:}
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+  wechat:
+    appid: ${SKY_WECHAT_APPID:}
+    secret: ${SKY_WECHAT_SECRET:}
+  jwt:
+    admin-secret-key: ${SKY_JWT_ADMIN_SECRET:itcast-prod}
+    admin-ttl: 7200000
+    admin-token-name: token
+    user-secret-key: ${SKY_JWT_USER_SECRET:itheima-prod}
+    user-ttl: 7200000
+    user-token-name: authentication
+    agent-secret-key: ${SKY_JWT_AGENT_SECRET:tasmania-prod}
+    agent-ttl: 7200000
+    agent-token-name: agent-token
+
+# 积分推荐配置
+credit:
+  referral:
+    direct-rate: ${CREDIT_DIRECT_RATE:0.05}
+    indirect-rate: ${CREDIT_INDIRECT_RATE:0.02}
+
+# OpenAI配置 - 生产环境使用环境变量
+openai:
+  api:
+    key: ${OPENAI_API_KEY:}  # 必须通过环境变量设置
+    model: ${OPENAI_MODEL:gpt-3.5-turbo}
+    timeout: ${OPENAI_TIMEOUT:30000}
+    max-tokens: ${OPENAI_MAX_TOKENS:150}
+    temperature: ${OPENAI_TEMPERATURE:0.7}
+
+# 聊天机器人配置
+chatbot:
+  rate-limit:
+    requests-per-minute: ${CHATBOT_RATE_LIMIT:10}
+    daily-limit: ${CHATBOT_DAILY_LIMIT:100}
+  message:
+    max-length: ${CHATBOT_MAX_LENGTH:1000}
+  context:
+    history-size: ${CHATBOT_HISTORY_SIZE:5}
+
+# 产品知识服务配置
+tour-knowledge:
+  cache:
+    enabled: ${TOUR_KNOWLEDGE_CACHE_ENABLED:true}
+    ttl: ${TOUR_KNOWLEDGE_CACHE_TTL:3600}
+  recommendation:
+    max-results: ${TOUR_KNOWLEDGE_MAX_RESULTS:8}
+    fallback-enabled: ${TOUR_KNOWLEDGE_FALLBACK:true}
+  query:
+    min-keywords: ${TOUR_KNOWLEDGE_MIN_KEYWORDS:1}
+    similarity-threshold: ${TOUR_KNOWLEDGE_SIMILARITY:0.6}
+
+# OpenWeatherMap 天气API配置 - 生产环境默认禁用
+weather:
+  openweathermap:
+    api-key: ${WEATHER_API_KEY:}
+    base-url: ${WEATHER_BASE_URL:http://api.openweathermap.org/data/2.5}
+    enabled: ${WEATHER_API_ENABLED:false}
+    cache-duration: ${WEATHER_CACHE_DURATION:600}
+
+# 航班查询API配置 - 生产环境默认禁用
+flight:
+  api:
+    aviationstack:
+      api-key: ${FLIGHT_API_KEY:}
+      base-url: ${FLIGHT_BASE_URL:http://api.aviationstack.com/v1}
+      enabled: ${FLIGHT_API_ENABLED:false}
+
+# 生产环境日志配置
+logging:
+  level:
+    com:
+      sky:
+        mapper: info
+        service: info
+        controller: info
+    root: info
+  file:
+    name: /opt/sky-takeout/logs/sky-takeout.log
+    max-size: 100MB
+    max-history: 30
+  pattern:
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# 服务器配置
+server:
+  port: 8080
+  servlet:
+    context-path: /
+  tomcat:
+    max-threads: 200
+    min-spare-threads: 10
+
+# Spring配置
+spring:
+  servlet:
+    multipart:
+      max-file-size: ${UPLOAD_MAX_FILE_SIZE:10MB}
+      max-request-size: ${UPLOAD_MAX_REQUEST_SIZE:10MB}
+
+# MyBatis配置
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true 

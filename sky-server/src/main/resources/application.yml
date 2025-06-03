@@ -81,41 +81,45 @@ credit:
     direct-rate: 0.05
     indirect-rate: 0.02
 
-# OpenAI配置
-openai:
+# DeepSeek AI配置
+deepseek:
   api:
-    key: YOUR_OPENAI_API_KEY_HERE  # 请在服务器上配置实际的API Key
-  model: gpt-3.5-turbo
-  timeout: 30000
-  max-tokens: 150
-  temperature: 0.7
+    key: sk-c4895d982ec94eca8c1e7298616d28de  # DeepSeek API Key
+    base-url: https://api.deepseek.com  # DeepSeek API 基础地址
+  model: deepseek-chat  # 使用deepseek-chat模型（适合聊天场景）
+  timeout: 50000  # 超时时间 30秒
+  max-tokens: 2000  # 增加token数以确保JSON响应完整
+  temperature: 0.7  # 创造性参数
 
 # 聊天机器人配置
 chatbot:
   rate-limit:
-    requests-per-minute: 10
-    daily-limit: 100
+    requests-per-minute: 10  # 每分钟最大请求数
+    daily-limit: 100  # 每日最大对话数
   message:
-    max-length: 1000
+    max-length: 1000  # 消息最大长度
   context:
-    history-size: 5
+    history-size: 5  # 保留的历史对话数量
 
 # 产品知识服务配置
 tour-knowledge:
   cache:
-    enabled: true
-    ttl: 3600
+    enabled: true  # 是否启用缓存
+    ttl: 3600  # 缓存过期时间（秒）
   recommendation:
-    max-results: 8
-    fallback-enabled: true
+    max-results: 8  # 最大推荐产品数量
+    fallback-enabled: true  # 是否启用降级方案
   query:
-    min-keywords: 1
-    similarity-threshold: 0.6
+    min-keywords: 1  # 最少关键词数量
+    similarity-threshold: 0.6  # 相似度阈值
 
 # 航班查询API配置
 flight:
   api:
     aviationstack:
-      api-key: YOUR_AVIATIONSTACK_API_KEY_HERE  # 请在服务器上配置实际的API Key
+      # AviationStack免费API配置
+      # 注册地址: https://aviationstack.com/
+      # 免费额度: 100次/月
+      api-key: 1779d870374fb097423fff552925cedb  # 您的免费API Key
       base-url: http://api.aviationstack.com/v1
-      enabled: true
+      enabled: true  # 已启用真实API调用

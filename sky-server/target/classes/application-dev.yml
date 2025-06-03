@@ -8,21 +8,21 @@ sky:
     password: abc123
   alioss:
     endpoint: oss-cn-beijing.aliyuncs.com
-    bucket-name: your-bucket-name
-    access-key-id: YOUR_ACCESS_KEY_ID
-    access-key-secret: YOUR_ACCESS_KEY_SECRET
+    bucket-name: hmlead22
+    access-key-id: LTAI5tGP1rQXTQvbNSNRU5un
+    access-key-secret: 6HF0pIVdu9ADn1lCRWIjlFjsgX2qxI
   redis:
     host: localhost
     port: 6379
     database: 7
   wechat:
-    appid: YOUR_WECHAT_APPID
-    secret: YOUR_WECHAT_SECRET
+    appid: wx6a4d9f9390fa4e49
+    secret: fd706c40e9a471ff19bd9cf947321398
 
 # OpenWeatherMap 天气API配置
 weather:
   openweathermap:
-    api-key: YOUR_OPENWEATHER_API_KEY
+    api-key: ec19e77fd31ded1dd1880d1f64f49c91  # Active状态的API Key
     base-url: http://api.openweathermap.org/data/2.5
-    enabled: true
-    cache-duration: 600
+    enabled: true  # 启用天气功能
+    cache-duration: 600  # 缓存10分钟（API建议不超过10分钟请求一次）

@@ -1158,20 +1158,33 @@ public class TourBookingServiceImpl implements TourBookingService {
      * @return 房间价格
      */
     private BigDecimal getRoomPriceByType(String hotelLevel, String roomType) {
-        // 默认使用标准单人房价格
+        // 默认使用标准双人房价格
         BigDecimal roomPrice = hotelPriceService.getHotelRoomPriceByLevel(hotelLevel);
         
         // 根据房型选择不同的价格
         if (roomType != null) {
-            if (roomType.contains("双床") || roomType.equalsIgnoreCase("twin") || roomType.equalsIgnoreCase("double")) {
+            // 双人间相关的房型
+            if (roomType.contains("双人间") || roomType.contains("双床") || roomType.contains("标准双") || 
+                roomType.equalsIgnoreCase("twin") || roomType.equalsIgnoreCase("double")) {
                 roomPrice = hotelPriceService.getHotelRoomPriceByLevel(hotelLevel);
-                log.info("使用双床房价格: {}", roomPrice);
-            } else if (roomType.contains("三床") || roomType.contains("家庭") || roomType.equalsIgnoreCase("triple") || roomType.equalsIgnoreCase("family")) {
+                log.info("使用双人间房价格: {} (房型: {})", roomPrice, roomType);
+            } 
+            // 三人间相关的房型 - 新增对"三人间"的识别
+            else if (roomType.contains("三人间") || roomType.contains("三床") || roomType.contains("家庭") || 
+                     roomType.equalsIgnoreCase("triple") || roomType.equalsIgnoreCase("family")) {
                 roomPrice = hotelPriceService.getTripleBedRoomPriceByLevel(hotelLevel);
-                log.info("使用三床房价格: {}", roomPrice);
+                log.info("使用三人间房价格: {} (房型: {})", roomPrice, roomType);
+            } 
+            // 单人间相关的房型
+            else if (roomType.contains("单人间") || roomType.contains("单床") || 
+                     roomType.equalsIgnoreCase("single")) {
+                roomPrice = hotelPriceService.getHotelRoomPriceByLevel(hotelLevel);
+                log.info("使用单人间房价格: {} (房型: {})", roomPrice, roomType);
             } else {
-                log.info("使用标准房价格: {}", roomPrice);
+                log.info("使用标准房价格: {} (未识别房型: {})", roomPrice, roomType);
             }
+        } else {
+            log.info("使用标准房价格: {} (房型为空)", roomPrice);
         }
         
         return roomPrice;

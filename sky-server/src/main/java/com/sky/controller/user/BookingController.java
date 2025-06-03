@@ -154,7 +154,8 @@ public class BookingController {
             @RequestParam(required = false, defaultValue = "4星") String hotelLevel,
             @RequestParam(required = false, defaultValue = "1") Integer roomCount,
             @RequestParam(required = false) Long userId,
-            @RequestParam(required = false) String childrenAges) {
+            @RequestParam(required = false) String childrenAges,
+            @RequestParam(required = false) String roomType) {
         
         // 自动从BaseContext获取代理商ID，如果有的话
         Long currentAgentId = BaseContext.getCurrentAgentId();
@@ -178,8 +179,8 @@ public class BookingController {
             }
         }
         
-        log.info("计算旅游订单价格，tourId: {}, tourType: {}, adultCount: {}, childCount: {}, hotelLevel: {}, roomCount: {}, userId: {}, childrenAges: {}, agentId: {}", 
-                tourId, tourType, adultCount, childCount, hotelLevel, roomCount, userId, childrenAges, agentId);
+        log.info("计算旅游订单价格，tourId: {}, tourType: {}, adultCount: {}, childCount: {}, hotelLevel: {}, roomCount: {}, userId: {}, childrenAges: {}, agentId: {}, roomType: {}", 
+                tourId, tourType, adultCount, childCount, hotelLevel, roomCount, userId, childrenAges, agentId, roomType);
         
         try {
             // 获取原始价格（从产品获取）
@@ -229,8 +230,8 @@ public class BookingController {
             // 计算折扣价
             BigDecimal discountedPrice = originalPrice.multiply(discountRate).setScale(2, RoundingMode.HALF_UP);
 
-            // 获取价格详情
-            log.info("正在调用价格计算详情方法，使用agentId={}, discountRate={}", agentId, discountRate);
+            // 获取价格详情 - 关键修改：调用带房型参数的方法
+            log.info("正在调用价格计算详情方法，使用agentId={}, discountRate={}, roomType={}", agentId, discountRate, roomType);
             
             // 确保agentId的类型正确
             if (agentId != null) {
@@ -248,8 +249,9 @@ public class BookingController {
                 }
             }
             
+            // 🔧 关键修改：调用带房型参数的价格计算方法
             PriceDetailVO priceDetail = tourBookingService.calculatePriceDetail(
-                    tourId, tourType, agentId, adultCount, childCount, hotelLevel, roomCount, userId);
+                    tourId, tourType, agentId, adultCount, childCount, hotelLevel, roomCount, userId, roomType);
             
             // 提取总价，基础价格和额外房费
             BigDecimal totalPrice = priceDetail.getTotalPrice();
@@ -266,8 +268,15 @@ public class BookingController {
             // 获取酒店单房差
             BigDecimal singleRoomSupplement = hotelPriceService.getDailySingleRoomSupplementByLevel(hotelLevel);
             
-            // 获取酒店房间价格
-            BigDecimal hotelRoomPrice = hotelPriceService.getHotelRoomPriceByLevel(hotelLevel);
+            // 根据房型获取相应的房间价格
+            BigDecimal hotelRoomPrice;
+            if (roomType != null && (roomType.contains("三人间") || roomType.contains("三床") || roomType.contains("家庭") || roomType.equalsIgnoreCase("triple") || roomType.equalsIgnoreCase("family"))) {
+                hotelRoomPrice = hotelPriceService.getTripleBedRoomPriceByLevel(hotelLevel);
+                log.info("使用三人间房价: {}", hotelRoomPrice);
+            } else {
+                hotelRoomPrice = hotelPriceService.getHotelRoomPriceByLevel(hotelLevel);
+                log.info("使用标准房价: {}", hotelRoomPrice);
+            }
             
             // 判断是否需要单房差
             int totalPeople = adultCount + childCount;
@@ -347,15 +356,14 @@ public class BookingController {
                         childPrice = BigDecimal.ZERO;
                     }
                 } else {
-                    // 大于7岁成人价
+                    // 8岁及以上成人价
                     childPrice = discountedPrice;
                     priceType = "成人价";
                 }
                 
-                // 计入总价
                 childrenTotalPrice = childrenTotalPrice.add(childPrice);
                 
-                // 添加到儿童价格详情列表
+                // 添加到儿童价格列表
                 Map<String, Object> childPriceInfo = new HashMap<>();
                 childPriceInfo.put("age", age);
                 childPriceInfo.put("price", childPrice);
@@ -363,46 +371,36 @@ public class BookingController {
                 childPrices.add(childPriceInfo);
             }
             
-            // 重新计算总价（成人价 + 各年龄段儿童价）
-            BigDecimal adultTotalPrice = discountedPrice.multiply(BigDecimal.valueOf(adultCount));
-            BigDecimal recalculatedTotalPrice = adultTotalPrice.add(childrenTotalPrice).add(extraRoomFee);
-            
-            // 计算儿童单价（显示用，实际价格按年龄分别计算）
-            BigDecimal childDiscount = new BigDecimal("50"); // 默认儿童价格减少50（仅用于显示）
-            BigDecimal defaultChildUnitPrice = discountedPrice.subtract(childDiscount);
-            if (defaultChildUnitPrice.compareTo(BigDecimal.ZERO) < 0) {
-                defaultChildUnitPrice = BigDecimal.ZERO;
-            }
-            
+            // 构建返回数据
             Map<String, Object> data = new HashMap<>();
-            data.put("totalPrice", recalculatedTotalPrice.setScale(2, RoundingMode.HALF_UP));
+            data.put("totalPrice", totalPrice);
             data.put("basePrice", basePrice);
             data.put("extraRoomFee", extraRoomFee);
-            data.put("nonAgentPrice", nonAgentPrice); // 添加非代理商价格
+            data.put("nonAgentPrice", nonAgentPrice);
             data.put("originalPrice", originalPrice);
-            data.put("discountRate", discountRate);
             data.put("discountedPrice", discountedPrice);
+            data.put("discountRate", discountRate);
+            data.put("adultCount", adultCount);
+            data.put("childCount", childCount);
+            data.put("adultTotalPrice", discountedPrice.multiply(BigDecimal.valueOf(adultCount)));
+            data.put("childrenTotalPrice", childrenTotalPrice);
+            data.put("childPrices", childPrices);
+            data.put("childrenAges", validChildrenAges);
             data.put("baseHotelLevel", baseHotelLevel);
             data.put("hotelPriceDifference", hotelPriceDiff);
             data.put("dailySingleRoomSupplement", singleRoomSupplement);
             data.put("hotelRoomPrice", hotelRoomPrice);
             data.put("roomCount", roomCount);
-            data.put("adultCount", adultCount);
-            data.put("childCount", childCount);
-            data.put("childUnitPrice", defaultChildUnitPrice); // 默认儿童单价（显示用）
-            data.put("childrenTotalPrice", childrenTotalPrice.setScale(2, RoundingMode.HALF_UP)); // 添加儿童总价
-            data.put("adultTotalPrice", adultTotalPrice.setScale(2, RoundingMode.HALF_UP)); // 添加成人总价
-            data.put("nights", nights);
-            data.put("needsSingleRoomSupplement", needsSingleRoomSupplement);
+            data.put("roomType", roomType); // 添加房型信息
+            data.put("hotelNights", nights);
             data.put("theoreticalRoomCount", theoreticalRoomCount);
             data.put("extraRooms", extraRooms);
-            data.put("childrenAges", validChildrenAges); // 添加儿童年龄数组
-            data.put("childPrices", childPrices); // 添加儿童价格明细
+            data.put("needsSingleRoomSupplement", needsSingleRoomSupplement);
             
             return Result.success(data);
         } catch (Exception e) {
             log.error("计算价格失败: {}", e.getMessage(), e);
-            return Result.error("价格计算失败: " + e.getMessage());
+            return Result.error("计算价格失败: " + e.getMessage());
         }
     }
     

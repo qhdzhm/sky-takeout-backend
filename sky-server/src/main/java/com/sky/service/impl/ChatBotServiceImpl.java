@@ -1,6 +1,8 @@
 package com.sky.service.impl;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
 import com.sky.dto.ChatRequest;
 import com.sky.dto.GroupTourDTO;
 import com.sky.dto.OrderInfo;
@@ -16,10 +18,8 @@ import com.sky.service.ChatBotService;
 import com.sky.service.TourKnowledgeService;
 import com.sky.vo.ChatResponse;
 import com.sky.vo.TourRecommendationResponse;
-import com.theokanning.openai.completion.chat.ChatCompletionRequest;
-import com.theokanning.openai.completion.chat.ChatCompletionResult;
-import com.theokanning.openai.service.OpenAiService;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -27,10 +27,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
+import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -41,11 +43,23 @@ import java.util.regex.Pattern;
 @Slf4j
 public class ChatBotServiceImpl implements ChatBotService {
     
-    @Value("${openai.api.key:}")
-    private String openaiApiKey;
+    @Value("${deepseek.api.key:}")
+    private String deepseekApiKey;
     
-    @Value("${openai.model:gpt-3.5-turbo}")
-    private String openaiModel;
+    @Value("${deepseek.api.base-url:https://api.deepseek.com}")
+    private String deepseekBaseUrl;
+    
+    @Value("${deepseek.model:deepseek-chat}")
+    private String deepseekModel;
+    
+    @Value("${deepseek.timeout:30000}")
+    private int deepseekTimeout;
+    
+    @Value("${deepseek.max-tokens:150}")
+    private int deepseekMaxTokens;
+    
+    @Value("${deepseek.temperature:0.7}")
+    private double deepseekTemperature;
     
     @Value("${flight.api.aviationstack.api-key:}")
     private String aviationStackApiKey;
@@ -89,15 +103,21 @@ public class ChatBotServiceImpl implements ChatBotService {
     @Autowired
     private TourKnowledgeService tourKnowledgeService;
     
-    private OpenAiService openAiService;
+    private OkHttpClient httpClient;
     
     @PostConstruct
     public void init() {
-        if (openaiApiKey != null && !openaiApiKey.isEmpty()) {
-            this.openAiService = new OpenAiService(openaiApiKey);
-            log.info("OpenAI服务初始化成功");
+        // 初始化HTTP客户端
+        this.httpClient = new OkHttpClient.Builder()
+                .connectTimeout(deepseekTimeout, TimeUnit.MILLISECONDS)
+                .readTimeout(deepseekTimeout, TimeUnit.MILLISECONDS)
+                .writeTimeout(deepseekTimeout, TimeUnit.MILLISECONDS)
+                .build();
+                
+        if (deepseekApiKey != null && !deepseekApiKey.isEmpty()) {
+            log.info("DeepSeek AI服务初始化成功，模型: {}", deepseekModel);
         } else {
-            log.warn("OpenAI API Key未配置，聊天功能将受限");
+            log.warn("DeepSeek API Key未配置，聊天功能将受限");
         }
     }
     
@@ -154,11 +174,75 @@ public class ChatBotServiceImpl implements ChatBotService {
     }
     
     /**
+     * 调用DeepSeek AI服务
+     */
+    private String callDeepSeekAI(String prompt) {
+        if (deepseekApiKey == null || deepseekApiKey.isEmpty()) {
+            throw new RuntimeException("DeepSeek API Key未配置");
+        }
+        
+        try {
+            JSONObject requestBody = new JSONObject();
+            requestBody.put("model", deepseekModel);
+            
+            JSONArray messages = new JSONArray();
+            JSONObject message = new JSONObject();
+            message.put("role", "user");
+            message.put("content", prompt);
+            messages.add(message);
+            
+            requestBody.put("messages", messages);
+            requestBody.put("max_tokens", deepseekMaxTokens);
+            requestBody.put("temperature", deepseekTemperature);
+
+            RequestBody body = RequestBody.create(
+                requestBody.toString(), 
+                MediaType.get("application/json; charset=utf-8")
+            );
+
+            Request request = new Request.Builder()
+                .url(deepseekBaseUrl + "/chat/completions")
+                .addHeader("Authorization", "Bearer " + deepseekApiKey)
+                .addHeader("Content-Type", "application/json")
+                .post(body)
+                .build();
+
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    throw new RuntimeException("DeepSeek API调用失败: " + response.code() + " " + response.message());
+                }
+
+                String responseBody = response.body().string();
+                JSONObject jsonResponse = JSON.parseObject(responseBody);
+                
+                String content = jsonResponse.getJSONArray("choices")
+                    .getJSONObject(0)
+                    .getJSONObject("message")
+                    .getString("content");
+                
+                // 清理DeepSeek响应中的markdown代码块标记
+                if (content.startsWith("```json")) {
+                    content = content.substring(7); // 移除 "```json"
+                }
+                if (content.endsWith("```")) {
+                    content = content.substring(0, content.length() - 3); // 移除结尾的 "```"
+                }
+                content = content.trim(); // 去除首尾空白
+                
+                return content;
+            }
+        } catch (IOException e) {
+            log.error("DeepSeek API调用异常", e);
+            throw new RuntimeException("DeepSeek AI调用失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * 使用AI智能识别结构化订单数据（增强版）
      */
     private boolean isStructuredOrderDataWithAI(String message) {
-        // 如果OpenAI未配置，回退到传统方法
-        if (openAiService == null) {
+        // 如果DeepSeek未配置，回退到传统方法
+        if (deepseekApiKey == null || deepseekApiKey.isEmpty()) {
             return isStructuredOrderDataTraditional(message);
         }
         
@@ -199,86 +283,38 @@ public class ChatBotServiceImpl implements ChatBotService {
                     "}\n\n" +
                     "分析文本：\n" + message;
             
-            List<com.theokanning.openai.completion.chat.ChatMessage> messages = new ArrayList<>();
-            messages.add(new com.theokanning.openai.completion.chat.ChatMessage("system", 
-                    "你是一个专业的旅游订单数据识别专家。你能识别各种格式的旅游订单信息，包括结构化、自然语言、表格、列表和对话格式。" +
-                    "你特别擅长识别塔斯马尼亚旅游相关的订单信息。请准确判断并提供置信度和详细理由。"));
-            messages.add(new com.theokanning.openai.completion.chat.ChatMessage("user", aiPrompt));
-            
-            ChatCompletionRequest completionRequest = ChatCompletionRequest.builder()
-                    .model(openaiModel)
-                    .messages(messages)
-                    .maxTokens(500)
-                    .temperature(0.1) // 低温度确保稳定输出
-                    .build();
-            
-            ChatCompletionResult result = openAiService.createChatCompletion(completionRequest);
-            String aiResponse = result.getChoices().get(0).getMessage().getContent();
+            String aiResponse = callDeepSeekAI(aiPrompt);
             
             log.info("AI智能识别响应: {}", aiResponse);
             
-            // 解析AI响应
             try {
-                com.alibaba.fastjson.JSONObject jsonResponse = com.alibaba.fastjson.JSON.parseObject(aiResponse);
-                boolean isOrderData = jsonResponse.getBooleanValue("isOrderData");
-                double confidence = jsonResponse.getDoubleValue("confidence");
-                String formatType = jsonResponse.getString("format_type");
-                String reasoning = jsonResponse.getString("reasoning");
-                com.alibaba.fastjson.JSONArray keyIndicators = jsonResponse.getJSONArray("key_indicators");
+                JSONObject result = JSON.parseObject(aiResponse);
+                boolean isOrderData = result.getBooleanValue("isOrderData");
+                double confidence = result.getDoubleValue("confidence");
                 
-                log.info("AI判断结果: isOrderData={}, confidence={}, format={}, reasoning={}, indicators={}", 
-                    isOrderData, confidence, formatType, reasoning, keyIndicators);
+                // 置信度阈值设为0.6，避免误判
+                boolean finalResult = isOrderData && confidence >= 0.6;
                 
-                // 动态调整置信度阈值
-                double confidenceThreshold = 0.6; // 默认阈值
-                if (formatType != null) {
-                    switch (formatType) {
-                        case "structured":
-                            confidenceThreshold = 0.5; // 结构化格式更容易识别
-                            break;
-                        case "natural":
-                            confidenceThreshold = 0.65; // 自然语言需要更高置信度
-                            break;
-                        case "table":
-                        case "list":
-                            confidenceThreshold = 0.55; // 表格和列表格式相对容易
-                            break;
-                        case "conversation":
-                            confidenceThreshold = 0.7; // 对话格式需要更高置信度
-                            break;
-                        case "mixed":
-                            confidenceThreshold = 0.6; // 混合格式使用默认阈值
-                            break;
-                    }
-                }
+                log.info("AI智能识别结果: isOrderData={}, confidence={}, finalResult={}", 
+                    isOrderData, confidence, finalResult);
                 
-                if (isOrderData && confidence > confidenceThreshold) {
-                    log.info("AI智能识别：确认为订单数据，格式类型={}, 确信度={}, 阈值={}", formatType, confidence, confidenceThreshold);
-                    return true;
-                }
+                // 记录识别的元素和格式类型，用于优化
+                JSONArray detectedElements = result.getJSONArray("detected_elements");
+                String formatType = result.getString("format_type");
+                String reasoning = result.getString("reasoning");
                 
-                // 如果确信度较低，回退到传统方法进行二次验证
-                if (confidence < 0.4) {
-                    log.info("AI确信度较低({}), 回退到传统识别方法进行二次验证", confidence);
-                    return isStructuredOrderDataTraditional(message);
-                }
+                log.debug("AI识别详情 - 检测到的元素: {}, 格式类型: {}, 推理: {}", 
+                    detectedElements, formatType, reasoning);
                 
-                // 中等置信度时，结合传统方法判断
-                if (confidence >= 0.4 && confidence <= confidenceThreshold) {
-                    boolean traditionalResult = isStructuredOrderDataTraditional(message);
-                    log.info("AI中等置信度({}), 传统方法结果={}, 最终采用传统方法结果", confidence, traditionalResult);
-                    return traditionalResult;
-                }
+                return finalResult;
                 
-                return isOrderData;
-                
-            } catch (Exception e) {
-                log.warn("解析AI识别响应失败，回退到传统方法: {}", e.getMessage());
+            } catch (Exception parseEx) {
+                log.warn("解析AI响应JSON失败，回退到传统方法: {}", parseEx.getMessage());
                 return isStructuredOrderDataTraditional(message);
             }
             
         } catch (Exception e) {
-            log.warn("AI智能识别失败，回退到传统方法: {}", e.getMessage());
+            log.error("AI智能识别失败，回退到传统方法: {}", e.getMessage());
             return isStructuredOrderDataTraditional(message);
         }
     }
@@ -553,24 +589,16 @@ public class ChatBotServiceImpl implements ChatBotService {
                 return ChatResponse.success(faqAnswer);
             }
             
-            // 如果OpenAI服务不可用，返回默认回复
-            if (openAiService == null) {
+            // 如果DeepSeek服务不可用，返回默认回复
+            if (deepseekApiKey == null || deepseekApiKey.isEmpty()) {
                 return ChatResponse.success(getDefaultResponse(message));
             }
             
             // 构建对话上下文
-            List<com.theokanning.openai.completion.chat.ChatMessage> messages = buildConversationContext(request);
+            String conversationContext = buildConversationContextForDeepSeek(request);
             
-            // 调用OpenAI API
-            ChatCompletionRequest completionRequest = ChatCompletionRequest.builder()
-                    .model(openaiModel)
-                    .messages(messages)
-                    .maxTokens(500)
-                    .temperature(0.7)
-                    .build();
-            
-            ChatCompletionResult result = openAiService.createChatCompletion(completionRequest);
-            String response = result.getChoices().get(0).getMessage().getContent();
+            // 调用DeepSeek API
+            String response = callDeepSeekAI(conversationContext);
             
             // 保存对话记录
             saveChatMessage(request, response, 2, null);
@@ -698,30 +726,40 @@ public class ChatBotServiceImpl implements ChatBotService {
     }
     
     /**
-     * 构建对话上下文
+     * 构建DeepSeek对话上下文
      */
-    private List<com.theokanning.openai.completion.chat.ChatMessage> buildConversationContext(ChatRequest request) {
-        List<com.theokanning.openai.completion.chat.ChatMessage> messages = new ArrayList<>();
+    private String buildConversationContextForDeepSeek(ChatRequest request) {
+        StringBuilder context = new StringBuilder();
         
         // 系统提示 - 专业的塔斯马尼亚旅游AI助手
         String systemPrompt = buildTasmanianTravelSystemPrompt();
-        messages.add(new com.theokanning.openai.completion.chat.ChatMessage("system", systemPrompt));
+        context.append("系统指令：").append(systemPrompt).append("\n\n");
         
         // 获取最近的对话历史
         List<ChatMessage> history = chatMessageMapper.selectRecentByUserId(request.getUserId(), 5);
         for (ChatMessage msg : history) {
             if (msg.getUserMessage() != null) {
-                messages.add(new com.theokanning.openai.completion.chat.ChatMessage("user", msg.getUserMessage()));
+                context.append("用户：").append(msg.getUserMessage()).append("\n");
             }
             if (msg.getBotResponse() != null) {
-                messages.add(new com.theokanning.openai.completion.chat.ChatMessage("assistant", msg.getBotResponse()));
+                context.append("助手：").append(msg.getBotResponse()).append("\n");
             }
         }
         
         // 当前用户消息
-        messages.add(new com.theokanning.openai.completion.chat.ChatMessage("user", request.getMessage()));
+        context.append("用户：").append(request.getMessage()).append("\n");
+        context.append("助手：");
         
-        return messages;
+        return context.toString();
+    }
+    
+    /**
+     * 构建对话上下文 (已废弃，保留兼容性)
+     */
+    @Deprecated
+    private List<String> buildConversationContext(ChatRequest request) {
+        // 保留空方法，避免编译错误
+        return new ArrayList<>();
     }
     
     /**
@@ -928,34 +966,31 @@ public class ChatBotServiceImpl implements ChatBotService {
      * 使用AI智能解析订单信息（优化版）
      */
     private OrderInfo parseOrderInfoWithAI(String message) {
-        // 如果OpenAI未配置，回退到传统方法
-        if (openAiService == null) {
+        // 如果DeepSeek未配置，回退到传统方法
+        if (deepseekApiKey == null || deepseekApiKey.isEmpty()) {
             return parseOrderInfoTraditional(message);
         }
         
         try {
-            // 构建更强大的AI提示，能解析多种格式
-            String aiPrompt = "请从以下旅游订单文本中提取信息，并返回JSON格式。\n\n" +
-                    "## 智能提取规则：\n" +
-                    "1. **同义词识别**：\n" +
-                    "   - 服务类型：'跟团游'='团队游'='group tour'，'一日游'='day tour'，'包车'='charter'\n" +
-                    "   - 客户信息：'乘客信息'='客户信息'='旅客信息'='passenger info'\n" +
-                    "   - 日期：'参团日期'='出行日期'='旅行日期'='departure date'\n" +
-                    "   - 房型：'三人房'='triple room'，'双人房'='double room'，'单人房'='single room'\n\n" +
-                    "2. **日期格式处理**：\n" +
-                    "   - 优先识别中文格式：'5月29日'、'6月1日'\n" +
-                    "   - 支持英文格式：'May 29'、'June 1'\n" +
-                    "   - 支持数字格式：'2024-05-29'、'29/05/2024'\n" +
-                    "   - 支持相对日期：'明天'、'下周一'\n\n" +
-                    "3. **客户信息智能提取**：\n" +
-                    "   - 姓名：中文姓名（2-4个汉字）、英文姓名（First Last格式）\n" +
-                    "   - 电话：中国手机号（1开头11位）、澳洲号码（04开头或+61）\n" +
+            // 构建专业的订单解析提示
+            String aiPrompt = "你是一个专业的旅游订单数据提取专家。请从以下文本中提取旅游订单信息。\n\n" +
+                    "## 提取任务：\n" +
+                    "1. **服务类型识别**：准确识别旅游产品类型\n" +
+                    "   - 跟团游：'X日游'、'环岛游'、'跟团'等\n" +
+                    "   - 一日游：'一日游'、'Day Tour'等\n" +
+                    "   - 包车服务：'包车'、'接送'等\n\n" +
+                    "2. **日期提取**：识别各种日期格式\n" +
+                    "   - '5月29日'、'2024年5月29日'、'05/29'、'5-29'\n" +
+                    "   - '参团日期'、'出行日期'、'开始日期'\n\n" +
+                    "3. **客户信息提取**：\n" +
+                    "   - 姓名：中英文姓名（如：张三、John Smith）\n" +
+                    "   - 电话：手机号码各种格式\n" +
                     "   - 护照：字母+数字组合，通常8-9位\n\n" +
                     "4. **航班信息识别**：\n" +
                     "   - 航班号：JQ719、VA123、QF456等格式\n" +
                     "   - 时间：24小时制或12小时制（AM/PM）\n\n" +
                     "5. **住宿信息提取**：\n" +
-                    "   - 星级：'3星'、'4星'、'5星'、'三星'、'四星'、'五星'\n" +
+                    "   - 星级：'3星'、'3.5星'、'4星'、'4.5星'、'5星'、'三星'、'四星'、'五星'等（保持原始格式）\n" +
                     "   - 房型：从文本中智能识别房间类型\n\n" +
                     "6. **人数信息**：\n" +
                     "   - 从'3个人'、'2位客人'、'成人2儿童1'等格式中提取\n" +
@@ -971,7 +1006,7 @@ public class ChatBotServiceImpl implements ChatBotService {
                     "  \"childCount\": 儿童数(数字),\n" +
                     "  \"luggage\": 行李数(数字),\n" +
                     "  \"roomType\": \"房间类型（标准化：单人房/双人房/三人房）\",\n" +
-                    "  \"hotelLevel\": \"酒店星级（标准化：3星/4星/5星）\",\n" +
+                    "  \"hotelLevel\": \"酒店星级（保持原始格式：3星/3.5星/4星/4.5星/5星等）\",\n" +
                     "  \"arrivalFlight\": \"抵达航班号\",\n" +
                     "  \"departureFlight\": \"返程航班号\",\n" +
                     "  \"arrivalTime\": \"抵达时间（24小时制：HH:MM）\",\n" +
@@ -1003,22 +1038,7 @@ public class ChatBotServiceImpl implements ChatBotService {
                     "## 订单文本：\n" + message + "\n\n" +
                     "请仔细分析并提取所有可用信息：";
             
-            List<com.theokanning.openai.completion.chat.ChatMessage> messages = new ArrayList<>();
-            messages.add(new com.theokanning.openai.completion.chat.ChatMessage("system", 
-                    "你是一个专业的旅游订单数据提取专家。你擅长从各种格式的文本中准确提取订单信息，" +
-                    "包括识别同义词、处理不同的日期格式、智能提取客户信息、标准化数据格式等。" +
-                    "你特别了解塔斯马尼亚旅游业务和中澳两国的文化差异。请确保提取的信息准确、完整、标准化。"));
-            messages.add(new com.theokanning.openai.completion.chat.ChatMessage("user", aiPrompt));
-            
-            ChatCompletionRequest completionRequest = ChatCompletionRequest.builder()
-                    .model(openaiModel)
-                    .messages(messages)
-                    .maxTokens(1000)
-                    .temperature(0.1)
-                    .build();
-            
-            ChatCompletionResult result = openAiService.createChatCompletion(completionRequest);
-            String aiResponse = result.getChoices().get(0).getMessage().getContent();
+            String aiResponse = callDeepSeekAI(aiPrompt);
             
             log.info("AI订单解析响应: {}", aiResponse);
             
@@ -1067,7 +1087,13 @@ public class ChatBotServiceImpl implements ChatBotService {
                 }
                 if (jsonResponse.containsKey("hotelLevel") && jsonResponse.getString("hotelLevel") != null && 
                     !jsonResponse.getString("hotelLevel").trim().isEmpty()) {
-                    builder.hotelLevel(jsonResponse.getString("hotelLevel").trim());
+                    String hotelLevel = jsonResponse.getString("hotelLevel").trim();
+                    // 特殊处理：3.5星标准化为3星
+                    if ("3.5星".equals(hotelLevel)) {
+                        hotelLevel = "3星";
+                        log.info("将酒店星级3.5星标准化为3星");
+                    }
+                    builder.hotelLevel(hotelLevel);
                 }
                 if (jsonResponse.containsKey("arrivalFlight") && jsonResponse.getString("arrivalFlight") != null && 
                     !jsonResponse.getString("arrivalFlight").trim().isEmpty()) {
@@ -1137,7 +1163,7 @@ public class ChatBotServiceImpl implements ChatBotService {
                     com.alibaba.fastjson.JSONArray missingFields = extractionDetails.getJSONArray("missingFields");
                     
                     log.info("AI订单解析完成: 服务类型={}, 开始日期={}, 客户数量={}, 提取质量={}, 置信度={}, 提取字段={}, 缺失字段={}", 
-                        orderInfo.getServiceType(), orderInfo.getStartDate(), 
+                    orderInfo.getServiceType(), orderInfo.getStartDate(), 
                         orderInfo.getCustomers() != null ? orderInfo.getCustomers().size() : 0,
                         extractionQuality, confidence, extractedFields, missingFields);
                 } else {
@@ -1209,7 +1235,7 @@ public class ChatBotServiceImpl implements ChatBotService {
         log.info("AI和传统方法结果合并完成");
         return mergedResult;
     }
-    
+
     /**
      * 传统方式解析订单信息（重命名原方法）
      */
@@ -1311,9 +1337,11 @@ public class ChatBotServiceImpl implements ChatBotService {
         }
         
         // 解析抵达航班（支持多种格式）
-        // 格式1: "抵达航班: VA1528 09:15AM抵达"
-        // 格式2: "抵达航班: VA1528"
-        Pattern arrivalFlightPattern = Pattern.compile("抵达航班\\s*:(.+?)(?=\\n|离开航班|出发地点|$)");
+        // 支持的格式：
+        // - "抵达航班: VA1528 09:15AM抵达"
+        // - "到达航班:JQ719   08:35"
+        // - "抵达航班: VA1528"
+        Pattern arrivalFlightPattern = Pattern.compile("(?:抵达航班|到达航班)\\s*[：:](.+?)(?=\\n|离开航班|回程航班|出发地点|$)");
         Matcher arrivalFlightMatcher = arrivalFlightPattern.matcher(message);
         if (arrivalFlightMatcher.find()) {
             String flightInfo = arrivalFlightMatcher.group(1).trim();
@@ -1327,8 +1355,10 @@ public class ChatBotServiceImpl implements ChatBotService {
                 builder.arrivalFlight(flightNumber);
                 log.info("解析到抵达航班号: {}", flightNumber);
                 
-                // 提取时间信息（如果有的话）
-                Pattern timePattern = Pattern.compile("(\\d{1,2}:\\d{2}\\s*[AP]M)");
+                // 提取时间信息（支持多种时间格式）
+                // 格式1: 09:15AM
+                // 格式2: 08:35
+                Pattern timePattern = Pattern.compile("(\\d{1,2}:\\d{2}\\s*(?:[AP]M)?|\\d{1,2}:\\d{2})");
                 Matcher timeMatcher = timePattern.matcher(flightInfo);
                 if (timeMatcher.find()) {
                     String timeInfo = timeMatcher.group(1);
@@ -1362,8 +1392,12 @@ public class ChatBotServiceImpl implements ChatBotService {
             }
         }
         
-        // 解析离开航班
-        Pattern departureFlightPattern = Pattern.compile("离开航班\\s*:(.+?)(?=\\n|出发地点|服务车型|$)");
+        // 解析离开/回程航班（支持多种格式）
+        // 支持的格式：
+        // - "离开航班: XX123"
+        // - "回程航班：JQ712  21:00"
+        // - "返程航班: XX456"
+        Pattern departureFlightPattern = Pattern.compile("(?:离开航班|回程航班|返程航班)\\s*[：:](.+?)(?=\\n|出发地点|服务车型|$)");
         Matcher departureFlightMatcher = departureFlightPattern.matcher(message);
         if (departureFlightMatcher.find()) {
             String departureInfo = departureFlightMatcher.group(1).trim();
@@ -1378,6 +1412,15 @@ public class ChatBotServiceImpl implements ChatBotService {
                     String flightNumber = flightNumberMatcher.group(1);
                     builder.departureFlight(flightNumber);
                     log.info("解析到离开航班号: {}", flightNumber);
+                    
+                    // 提取回程航班时间
+                    Pattern timePattern = Pattern.compile("(\\d{1,2}:\\d{2}\\s*(?:[AP]M)?|\\d{1,2}:\\d{2})");
+                    Matcher timeMatcher = timePattern.matcher(departureInfo);
+                    if (timeMatcher.find()) {
+                        String timeInfo = timeMatcher.group(1);
+                        // 可以设置离开时间字段（如果OrderInfo有这个字段的话）
+                        log.info("从回程航班信息中解析到时间: {}", timeInfo);
+                    }
                     
                     // 尝试自动查询离开航班时间
                     try {
@@ -1400,31 +1443,151 @@ public class ChatBotServiceImpl implements ChatBotService {
     private List<OrderInfo.CustomerInfo> parseCustomerInfo(String message) {
         List<OrderInfo.CustomerInfo> customers = new ArrayList<>();
         
-        // 提取客户信息部分 - 支持多种格式
-        // 匹配"客户信息："、"乘客信息:"、"乘客信息："等格式
-        Pattern customerPattern = Pattern.compile("(?:客户信息|乘客信息)\\s*[:：]\\s*(.+?)(?=\\n行李数：|\\n房型：|\\n酒店级别：|\\n行程安排：|\\n备注|$)", Pattern.DOTALL);
-        Matcher customerMatcher = customerPattern.matcher(message);
-        if (customerMatcher.find()) {
-            String customerInfo = customerMatcher.group(1).trim();
-            log.info("原始客户信息: {}", customerInfo);
+        try {
+            // 提取乘客信息部分
+            Pattern passengerSectionPattern = Pattern.compile("乘客信息[：:]([\\s\\S]*?)(?=房型[：:]|酒店|行程|备注|$)", Pattern.CASE_INSENSITIVE);
+            Matcher sectionMatcher = passengerSectionPattern.matcher(message);
             
-            // 处理多行客户信息
-            String[] lines = customerInfo.split("\\n");
+            String passengerSection = "";
+            if (sectionMatcher.find()) {
+                passengerSection = sectionMatcher.group(1).trim();
+                log.info("原始客户信息: {}", passengerSection);
+            } else {
+                log.warn("未找到乘客信息部分");
+                return customers;
+            }
+            
+            // 尝试键值对格式解析
+            List<OrderInfo.CustomerInfo> keyValueCustomers = parseKeyValueCustomerInfo(passengerSection);
+            if (!keyValueCustomers.isEmpty()) {
+                log.info("键值对格式解析成功，客户数量: {}", keyValueCustomers.size());
+                return keyValueCustomers;
+            }
+            
+            // 按姓名分割客户信息
+            String[] customerBlocks = passengerSection.split("姓名[：:]");
+            
+            for (String block : customerBlocks) {
+                if (block.trim().isEmpty()) continue;
+                
+                // 为每个块添加回"姓名："前缀（除了第一个空块）
+                String customerLine = "姓名：" + block.trim();
+                log.info("正在解析客户信息行: {}", customerLine);
+                
+                parseCustomerLine(customerLine, customers);
+            }
+            
+            log.info("解析出的客户信息: {}", customers);
+            
+        } catch (Exception e) {
+            log.error("解析客户信息失败: {}", e.getMessage(), e);
+        }
+        
+        return customers;
+    }
+    
+    /**
+     * 解析键值对格式的客户信息
+     * 支持格式：
+     * 姓名：张三
+     * 护照号：ED1234567
+     * 电话：1234567890
+     * [空行]
+     * 姓名：李四
+     * ...
+     */
+    private List<OrderInfo.CustomerInfo> parseKeyValueCustomerInfo(String customerInfo) {
+        List<OrderInfo.CustomerInfo> customers = new ArrayList<>();
+        
+        // 按空行分割不同的客户
+        String[] customerBlocks = customerInfo.split("\\n\\s*\\n");
+        
+        for (String block : customerBlocks) {
+            if (block.trim().isEmpty()) continue;
+            
+            String name = null;
+            String passport = null;
+            String phone = null;
+            String domesticPhone = null;
+            String internationalPhone = null;
+            
+            String[] lines = block.split("\\n");
             for (String line : lines) {
                 line = line.trim();
                 if (line.isEmpty()) continue;
                 
-                // 解析单行客户信息
-                parseCustomerLine(line, customers);
+                log.info("正在解析客户信息行: {}", line);
+                
+                // 匹配各种字段格式 - 修复正则表达式
+                if (line.contains("姓名")) {
+                    // 提取姓名：支持 "姓名：xxx" 或 "姓名: xxx" 格式
+                    String[] parts = line.split("[:：]", 2);
+                    if (parts.length >= 2) {
+                        name = parts[1].trim();
+                        log.info("提取到姓名: {}", name);
+                    }
+                } else if (line.contains("护照号")) {
+                    // 提取护照号：支持 "护照号：xxx" 或 "护照号: xxx" 格式
+                    String[] parts = line.split("[:：]", 2);
+                    if (parts.length >= 2) {
+                        passport = parts[1].trim();
+                        log.info("提取到护照号: {}", passport);
+                    }
+                } else if (line.contains("国内电话")) {
+                    // 提取国内电话
+                    String[] parts = line.split("[:：]", 2);
+                    if (parts.length >= 2) {
+                        domesticPhone = parts[1].trim().replaceAll("[\\s-]", "");
+                        log.info("提取到国内电话: {}", domesticPhone);
+                    }
+                } else if (line.contains("澳洲电话")) {
+                    // 提取澳洲电话
+                    String[] parts = line.split("[:：]", 2);
+                    if (parts.length >= 2) {
+                        internationalPhone = parts[1].trim().replaceAll("[\\s-]", "");
+                        log.info("提取到澳洲电话: {}", internationalPhone);
+                    }
+                } else if (line.matches(".*(?:电话|联系电话|手机).*[:：].*")) {
+                    // 通用电话字段
+                    String[] parts = line.split("[:：]", 2);
+                    if (parts.length >= 2) {
+                        phone = parts[1].trim().replaceAll("[\\s-]", "");
+                        log.info("提取到电话: {}", phone);
+                    }
+                }
             }
             
-            // 如果多行解析没有结果，尝试按空格分割单行
-            if (customers.isEmpty() && !customerInfo.contains("\n")) {
-                parseCustomerLine(customerInfo, customers);
+            // 电话号码优先级：专门的电话字段 > 国内电话 > 澳洲电话
+            if (phone == null) {
+                if (domesticPhone != null) {
+                    phone = domesticPhone;
+                } else if (internationalPhone != null) {
+                    phone = internationalPhone;
+                }
+            }
+            
+            // 验证并创建客户信息
+            if (name != null && (passport != null || phone != null)) {
+                OrderInfo.CustomerInfo.CustomerInfoBuilder builder = OrderInfo.CustomerInfo.builder()
+                        .name(name);
+                
+                if (passport != null && !passport.isEmpty()) {
+                    builder.passport(passport);
+                }
+                
+                if (phone != null && !phone.isEmpty() && isValidPhone(phone)) {
+                    builder.phone(phone);
+                }
+                
+                OrderInfo.CustomerInfo customer = builder.build();
+                customers.add(customer);
+                
+                log.info("键值对格式解析出客户: 姓名={}, 护照={}, 电话={}", name, passport, phone);
+            } else {
+                log.warn("客户信息不完整，跳过: 姓名={}, 护照={}, 电话={}", name, passport, phone);
             }
         }
         
-        log.info("解析出的客户信息: {}", customers);
         return customers;
     }
     
@@ -1602,13 +1765,13 @@ public class ChatBotServiceImpl implements ChatBotService {
         StringBuilder params = new StringBuilder();
         
         try {
-            // 添加产品ID（最重要的参数）
-            if (product != null && product.getId() != null) {
-                params.append("productId=").append(product.getId()).append("&");
-                params.append("productType=group&"); // 标识为跟团游
-                log.info("添加产品参数: productId={}, productType=group", product.getId());
-            }
-            
+        // 添加产品ID（最重要的参数）
+        if (product != null && product.getId() != null) {
+            params.append("productId=").append(product.getId()).append("&");
+            params.append("productType=group&"); // 标识为跟团游
+            log.info("添加产品参数: productId={}, productType=group", product.getId());
+        }
+        
             // 基本订单信息
             if (orderInfo.getServiceType() != null && !orderInfo.getServiceType().trim().isEmpty()) {
                 try {
@@ -1673,20 +1836,20 @@ public class ChatBotServiceImpl implements ChatBotService {
             }
             
             // 航班信息
-            if (orderInfo.getArrivalFlight() != null && !orderInfo.getArrivalFlight().trim().isEmpty()) {
-                params.append("arrivalFlight=").append(orderInfo.getArrivalFlight().trim()).append("&");
-                log.info("添加抵达航班参数: {}", orderInfo.getArrivalFlight());
-            }
-            
-            if (orderInfo.getDepartureFlight() != null && !orderInfo.getDepartureFlight().trim().isEmpty()) {
-                params.append("departureFlight=").append(orderInfo.getDepartureFlight().trim()).append("&");
-                log.info("添加离开航班参数: {}", orderInfo.getDepartureFlight());
-            }
-            
-            if (orderInfo.getArrivalTime() != null && !orderInfo.getArrivalTime().trim().isEmpty()) {
+        if (orderInfo.getArrivalFlight() != null && !orderInfo.getArrivalFlight().trim().isEmpty()) {
+            params.append("arrivalFlight=").append(orderInfo.getArrivalFlight().trim()).append("&");
+            log.info("添加抵达航班参数: {}", orderInfo.getArrivalFlight());
+        }
+        
+        if (orderInfo.getDepartureFlight() != null && !orderInfo.getDepartureFlight().trim().isEmpty()) {
+            params.append("departureFlight=").append(orderInfo.getDepartureFlight().trim()).append("&");
+            log.info("添加离开航班参数: {}", orderInfo.getDepartureFlight());
+        }
+        
+        if (orderInfo.getArrivalTime() != null && !orderInfo.getArrivalTime().trim().isEmpty()) {
                 try {
                     params.append("arrivalTime=").append(java.net.URLEncoder.encode(orderInfo.getArrivalTime().trim(), "UTF-8")).append("&");
-                    log.info("添加抵达时间参数: {}", orderInfo.getArrivalTime());
+            log.info("添加抵达时间参数: {}", orderInfo.getArrivalTime());
                 } catch (java.io.UnsupportedEncodingException e) {
                     params.append("arrivalTime=").append(orderInfo.getArrivalTime().trim()).append("&");
                 }
@@ -1723,73 +1886,77 @@ public class ChatBotServiceImpl implements ChatBotService {
             }
             
             // 航班详细时间信息（如果通过API查询获得）
-            if (orderInfo.getArrivalFlight() != null) {
-                try {
-                    OrderInfo.FlightInfo flightInfo = queryFlightInfo(orderInfo.getArrivalFlight());
-                    if (flightInfo != null) {
-                        if (flightInfo.getDepartureTime() != null) {
+        if (orderInfo.getArrivalFlight() != null) {
+            try {
+                OrderInfo.FlightInfo flightInfo = queryFlightInfo(orderInfo.getArrivalFlight());
+                if (flightInfo != null) {
+                    if (flightInfo.getDepartureTime() != null) {
                             try {
                                 params.append("arrivalFlightDepartureTime=")
                                       .append(java.net.URLEncoder.encode(flightInfo.getDepartureTime(), "UTF-8")).append("&");
-                                log.info("添加抵达航班起飞时间参数: {}", flightInfo.getDepartureTime());
+                        log.info("添加抵达航班起飞时间参数: {}", flightInfo.getDepartureTime());
                             } catch (java.io.UnsupportedEncodingException e) {
                                 params.append("arrivalFlightDepartureTime=").append(flightInfo.getDepartureTime()).append("&");
                             }
-                        }
-                        if (flightInfo.getArrivalTime() != null) {
+                    }
+                    if (flightInfo.getArrivalTime() != null) {
                             try {
                                 params.append("arrivalFlightLandingTime=")
                                       .append(java.net.URLEncoder.encode(flightInfo.getArrivalTime(), "UTF-8")).append("&");
-                                log.info("添加抵达航班降落时间参数: {}", flightInfo.getArrivalTime());
+                        log.info("添加抵达航班降落时间参数: {}", flightInfo.getArrivalTime());
                             } catch (java.io.UnsupportedEncodingException e) {
                                 params.append("arrivalFlightLandingTime=").append(flightInfo.getArrivalTime()).append("&");
                             }
-                        }
                     }
-                } catch (Exception e) {
-                    log.warn("查询抵达航班{}详细信息失败: {}", orderInfo.getArrivalFlight(), e.getMessage());
+                } else {
+                    log.info("航班{}详细信息查询失败，跳过航班时间参数", orderInfo.getArrivalFlight());
                 }
+            } catch (Exception e) {
+                log.warn("查询抵达航班{}详细信息失败: {}", orderInfo.getArrivalFlight(), e.getMessage());
             }
-            
-            // 查询返程航班详细信息
-            if (orderInfo.getDepartureFlight() != null) {
-                try {
-                    OrderInfo.FlightInfo flightInfo = queryFlightInfo(orderInfo.getDepartureFlight());
-                    if (flightInfo != null) {
-                        if (flightInfo.getDepartureTime() != null) {
+        }
+        
+        // 查询返程航班详细信息
+        if (orderInfo.getDepartureFlight() != null) {
+            try {
+                OrderInfo.FlightInfo flightInfo = queryFlightInfo(orderInfo.getDepartureFlight());
+                if (flightInfo != null) {
+                    if (flightInfo.getDepartureTime() != null) {
                             try {
                                 params.append("departureFlightDepartureTime=")
                                       .append(java.net.URLEncoder.encode(flightInfo.getDepartureTime(), "UTF-8")).append("&");
-                                log.info("添加返程航班起飞时间参数: {}", flightInfo.getDepartureTime());
+                        log.info("添加返程航班起飞时间参数: {}", flightInfo.getDepartureTime());
                             } catch (java.io.UnsupportedEncodingException e) {
                                 params.append("departureFlightDepartureTime=").append(flightInfo.getDepartureTime()).append("&");
                             }
-                        }
-                        if (flightInfo.getArrivalTime() != null) {
+                    }
+                    if (flightInfo.getArrivalTime() != null) {
                             try {
                                 params.append("departureFlightLandingTime=")
                                       .append(java.net.URLEncoder.encode(flightInfo.getArrivalTime(), "UTF-8")).append("&");
-                                log.info("添加返程航班降落时间参数: {}", flightInfo.getArrivalTime());
+                        log.info("添加返程航班降落时间参数: {}", flightInfo.getArrivalTime());
                             } catch (java.io.UnsupportedEncodingException e) {
                                 params.append("departureFlightLandingTime=").append(flightInfo.getArrivalTime()).append("&");
                             }
-                        }
                     }
-                } catch (Exception e) {
-                    log.warn("查询返程航班{}详细信息失败: {}", orderInfo.getDepartureFlight(), e.getMessage());
+                } else {
+                    log.info("航班{}详细信息查询失败，跳过航班时间参数", orderInfo.getDepartureFlight());
                 }
+            } catch (Exception e) {
+                log.warn("查询返程航班{}详细信息失败: {}", orderInfo.getDepartureFlight(), e.getMessage());
             }
-            
+        }
+        
             // 特殊要求/备注参数
-            if (orderInfo.getNotes() != null && !orderInfo.getNotes().trim().isEmpty()) {
-                try {
-                    params.append("specialRequests=").append(java.net.URLEncoder.encode(orderInfo.getNotes().trim(), "UTF-8")).append("&");
-                    log.info("添加特殊要求参数: {}", orderInfo.getNotes());
-                } catch (java.io.UnsupportedEncodingException e) {
-                    log.warn("URL编码失败，跳过特殊要求参数: {}", e.getMessage());
-                }
+        if (orderInfo.getNotes() != null && !orderInfo.getNotes().trim().isEmpty()) {
+            try {
+                params.append("specialRequests=").append(java.net.URLEncoder.encode(orderInfo.getNotes().trim(), "UTF-8")).append("&");
+                log.info("添加特殊要求参数: {}", orderInfo.getNotes());
+            } catch (java.io.UnsupportedEncodingException e) {
+                log.warn("URL编码失败，跳过特殊要求参数: {}", e.getMessage());
             }
-            
+        }
+        
             // 行程信息
             if (orderInfo.getItinerary() != null && !orderInfo.getItinerary().trim().isEmpty()) {
                 try {
@@ -1815,17 +1982,17 @@ public class ChatBotServiceImpl implements ChatBotService {
             
             // 添加处理时间戳，用于调试和跟踪
             params.append("aiProcessedTime=").append(System.currentTimeMillis()).append("&");
-            
-            // 移除最后的&
+        
+        // 移除最后的&
             if (params.length() > 0 && params.charAt(params.length() - 1) == '&') {
-                params.setLength(params.length() - 1);
-            }
-            
-            String finalParams = params.toString();
-            log.info("生成的完整URL参数: {}", finalParams);
-            log.info("完整跳转URL: /booking?{}", finalParams);
-            
-            return finalParams;
+            params.setLength(params.length() - 1);
+        }
+        
+        String finalParams = params.toString();
+        log.info("生成的完整URL参数: {}", finalParams);
+        log.info("完整跳转URL: /booking?{}", finalParams);
+        
+        return finalParams;
             
         } catch (Exception e) {
             log.error("生成订单URL参数时发生错误: {}", e.getMessage(), e);
@@ -1882,15 +2049,8 @@ public class ChatBotServiceImpl implements ChatBotService {
                 return realFlightInfo;
             }
             
-            // 如果真实API失败，使用模拟数据作为备用方案
-            log.info("真实API查询失败，使用模拟数据作为备用方案");
-            OrderInfo.FlightInfo flightInfo = simulateFlightQuery(flightNumber);
-            
-            if (flightInfo != null) {
-                log.info("模拟查询成功获取到航班{}信息: 起飞时间={}, 抵达时间={}", 
-                    flightNumber, flightInfo.getDepartureTime(), flightInfo.getArrivalTime());
-                return flightInfo;
-            }
+            // 如果真实API失败，不使用模拟数据，直接返回null
+            log.info("真实API查询失败，不填入航班详细信息");
             
         } catch (Exception e) {
             log.error("查询航班{}信息时出错: {}", flightNumber, e.getMessage(), e);
