@@ -53,10 +53,32 @@ git reset --hard origin/main
 # 5. 重新构建项目
 mvn clean package -DskipTests=true
 
-# 6. 启动服务
+# 6. 配置环境变量
+# 确保在项目根目录
+cd /opt/sky-takeout
+
+# 从Git获取最新的环境变量模板
+git checkout origin/main -- production.env
+
+# 检查环境变量文件
+cat /opt/sky-takeout/production.env
+
+# 重要：配置DeepSeek API密钥
+# 您需要将 DEEPSEEK_API_KEY 替换为您的真实API密钥
+sudo sed -i 's/sk-your-deepseek-api-key-here/您的真实DeepSeek-API密钥/' /opt/sky-takeout/production.env
+
+# 设置文件权限
+sudo chmod 644 /opt/sky-takeout/production.env
+sudo chown ubuntu:ubuntu /opt/sky-takeout/production.env
+
+# 验证环境变量文件内容
+echo "环境变量配置："
+grep -E "^export (DEEPSEEK|SKY_|WEATHER|FLIGHT)" /opt/sky-takeout/production.env
+
+# 7. 启动服务
 sudo systemctl start sky-takeout
 
-# 7. 检查服务状态
+# 8. 检查服务状态
 sudo systemctl status sky-takeout
 ```
 
@@ -203,3 +225,66 @@ tail -f /var/log/sky-takeout.log
 4. **权限设置**：确保ubuntu用户有相应权限
 
 **紧急回滚**：如果新版本有严重问题，请立即使用备份文件回滚到上一个稳定版本。 
+
+### 第8步：检查系统服务配置
+```bash
+# 检查systemd服务文件是否存在
+sudo systemctl cat sky-takeout
+
+# 如果不存在，需要创建服务文件
+sudo tee /etc/systemd/system/sky-takeout.service > /dev/null <<EOF
+[Unit]
+Description=Sky Takeout Application
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/sky-takeout
+ExecStart=/usr/bin/java -jar /opt/sky-takeout/sky-server/target/sky-server-1.0-SNAPSHOT.jar
+EnvironmentFile=/opt/sky-takeout/production.env
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 重新加载systemd配置
+sudo systemctl daemon-reload
+
+# 启用服务（开机自启）
+sudo systemctl enable sky-takeout
+```
+
+### 第9步：启动服务
+```bash
+# 启动服务
+sudo systemctl start sky-takeout
+
+# 等待几秒让服务启动
+sleep 10
+
+# 检查服务状态
+sudo systemctl status sky-takeout
+```
+
+### 第10步：验证部署
+```bash
+# 检查服务是否运行
+sudo systemctl is-active sky-takeout
+
+# 检查端口监听
+netstat -tuln | grep 8080
+
+# 查看实时日志
+sudo journalctl -u sky-takeout -f --no-pager -n 20
+
+# 健康检查（新开一个终端窗口执行）
+curl -f http://localhost:8080/actuator/health || curl -f http://localhost:8080/
+```
+
+### 第11步：外网访问测试
+
+# 从外网访问测试
+curl -f http://47.86.32.159:8080/ 
