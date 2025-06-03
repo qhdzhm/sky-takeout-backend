@@ -84,41 +84,38 @@ credit:
 # OpenAI配置
 openai:
   api:
-    key: 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  # 你的API Key
-  model: gpt-3.5-turbo  # 使用最便宜的模型
-  timeout: 30000  # 超时时间 30秒
-  max-tokens: 150  # 最大token数
-  temperature: 0.7  # 创造性参数
+    key: YOUR_OPENAI_API_KEY_HERE  # 请在服务器上配置实际的API Key
+  model: gpt-3.5-turbo
+  timeout: 30000
+  max-tokens: 150
+  temperature: 0.7
 
 # 聊天机器人配置
 chatbot:
   rate-limit:
-    requests-per-minute: 10  # 每分钟最大请求数
-    daily-limit: 100  # 每日最大对话数
+    requests-per-minute: 10
+    daily-limit: 100
   message:
-    max-length: 1000  # 消息最大长度
+    max-length: 1000
   context:
-    history-size: 5  # 保留的历史对话数量
+    history-size: 5
 
 # 产品知识服务配置
 tour-knowledge:
   cache:
-    enabled: true  # 是否启用缓存
-    ttl: 3600  # 缓存过期时间（秒）
+    enabled: true
+    ttl: 3600
   recommendation:
-    max-results: 8  # 最大推荐产品数量
-    fallback-enabled: true  # 是否启用降级方案
+    max-results: 8
+    fallback-enabled: true
   query:
-    min-keywords: 1  # 最少关键词数量
-    similarity-threshold: 0.6  # 相似度阈值
+    min-keywords: 1
+    similarity-threshold: 0.6
 
 # 航班查询API配置
 flight:
   api:
     aviationstack:
-      # AviationStack免费API配置
-      # 注册地址: https://aviationstack.com/
-      # 免费额度: 100次/月
-      api-key: 1779d870374fb097423fff552925cedb  # 您的免费API Key
+      api-key: YOUR_AVIATIONSTACK_API_KEY_HERE  # 请在服务器上配置实际的API Key
       base-url: http://api.aviationstack.com/v1
-      enabled: true  # 已启用真实API调用
+      enabled: true
