@@ -224,7 +224,7 @@ public class ChatBotServiceImpl implements ChatBotService {
     }
     
     @Override
-    public boolean checkRateLimit(String sessionId, Long userId) {
+    public boolean checkRateLimit(String sessionId, String userId) {
         try {
             String key = "chatbot:rate:" + (userId != null ? userId : sessionId);
             String count = redisTemplate.opsForValue().get(key);
@@ -887,8 +887,8 @@ public class ChatBotServiceImpl implements ChatBotService {
         }
         prompt.append("当前页面: ").append(request.getCurrentPage() != null ? request.getCurrentPage() : "未知").append("\n\n");
         
-        prompt.append("=== 智能分析指令 ===\n");
-        prompt.append("请根据对话上下文和用户当前问题，智能判断用户意图：\n\n");
+        prompt.append("=== 智能助手指令 ===\n");
+        prompt.append("请直接回答用户问题，不要显示分析过程或意图判断。如果是天气查询，直接查询并返回实时天气信息。\n\n");
         
         prompt.append("🔍 **客户信息查询（必须使用数据库查询）**\n");
         prompt.append("1. 如果用户询问具体客户的任何信息（如航班号、订单状态、价格等），回复：\n");
@@ -1036,7 +1036,7 @@ public class ChatBotServiceImpl implements ChatBotService {
             
             // 权限过滤
             List<TourBooking> authorizedBookings = new ArrayList<>();
-            Long currentUserId = request.getUserId();
+            String currentUserId = request.getUserId();
             Integer userType = request.getUserType();
             
             for (TourBooking booking : bookings) {
@@ -1191,7 +1191,7 @@ public class ChatBotServiceImpl implements ChatBotService {
     /**
      * 检查用户是否有权限查看订单
      */
-    private boolean hasPermissionToViewBooking(TourBooking booking, Long currentUserId, Integer userType) {
+    private boolean hasPermissionToViewBooking(TourBooking booking, String currentUserId, Integer userType) {
         if (currentUserId == null || userType == null || booking == null) {
             return false;
         }
@@ -1204,7 +1204,19 @@ public class ChatBotServiceImpl implements ChatBotService {
             
             if (userType == 1) {
                 // 普通用户：只能查询自己的订单
-                boolean hasPermission = booking.getUserId() != null && booking.getUserId().equals(currentUserId.intValue());
+                // 对于guest用户，直接比较字符串；对于数字用户ID，需要转换比较
+                boolean hasPermission = false;
+                if (currentUserId.startsWith("guest_")) {
+                    // guest用户暂时不能查看订单（如需要可以调整逻辑）
+                    hasPermission = false;
+                } else {
+                    try {
+                        Long userIdLong = Long.parseLong(currentUserId);
+                        hasPermission = booking.getUserId() != null && booking.getUserId().equals(userIdLong.intValue());
+                    } catch (NumberFormatException e) {
+                        hasPermission = false;
+                    }
+                }
                 log.info(hasPermission ? "✅ 普通用户权限验证通过" : "❌ 普通用户权限验证失败：userId {} NOT equals currentUserId {}", booking.getUserId(), currentUserId);
                 return hasPermission;
                 
@@ -1212,15 +1224,21 @@ public class ChatBotServiceImpl implements ChatBotService {
                 // userType=2 可能是操作员或者代理商主号，需要进一步判断
                 
                 // 首先检查是否是代理商主号 - 如果订单的agentId等于当前userId，说明是代理商主号
-                if (booking.getAgentId() != null && booking.getAgentId().equals(currentUserId.intValue())) {
-                    log.info("✅ 代理商主号权限验证通过：订单agentId {} equals currentUserId {}", booking.getAgentId(), currentUserId);
-                    return true;
-                }
-                
-                // 然后检查是否是操作员 - 如果订单的operatorId等于当前userId，说明是操作员
-                if (booking.getOperatorId() != null && booking.getOperatorId().equals(currentUserId)) {
-                    log.info("✅ 操作员权限验证通过：订单operatorId {} equals currentUserId {}", booking.getOperatorId(), currentUserId);
-                    return true;
+                try {
+                    Long currentUserIdLong = Long.parseLong(currentUserId);
+                    if (booking.getAgentId() != null && booking.getAgentId().equals(currentUserIdLong.intValue())) {
+                        log.info("✅ 代理商主号权限验证通过：订单agentId {} equals currentUserId {}", booking.getAgentId(), currentUserId);
+                        return true;
+                    }
+                    
+                    // 然后检查是否是操作员 - 如果订单的operatorId等于当前userId，说明是操作员
+                    if (booking.getOperatorId() != null && booking.getOperatorId().equals(currentUserIdLong)) {
+                        log.info("✅ 操作员权限验证通过：订单operatorId {} equals currentUserId {}", booking.getOperatorId(), currentUserId);
+                        return true;
+                    }
+                } catch (NumberFormatException e) {
+                    // guest用户等非数字ID无法转换，不具备代理商或操作员权限
+                    log.info("⚠️ 非数字userId无法验证代理商或操作员权限: {}", currentUserId);
                 }
                 
                 log.info("❌ userType=2 权限验证失败：既不是代理商主号（订单agentId={}, 当前userId={}），也不是操作员（订单operatorId={}, 当前userId={})", 
@@ -1724,7 +1742,7 @@ public class ChatBotServiceImpl implements ChatBotService {
         context.append("用户类型：").append(request.getUserType() == 2 ? "代理商操作员" : "普通客户").append("\n\n");
         
         // 获取最近的对话历史
-        List<ChatMessage> history = chatMessageMapper.selectRecentByUserId(request.getUserId(), 3);
+        List<ChatMessage> history = getRecentChatHistoryByUserId(request.getUserId(), 3);
         if (history != null && !history.isEmpty()) {
             context.append("最近对话历史：\n");
             for (ChatMessage msg : history) {
@@ -2010,8 +2028,8 @@ public class ChatBotServiceImpl implements ChatBotService {
                     "- **参团日期**: 开始和结束日期（**严格保持原始格式**：如6月22日、2024-06-22、Jun 22等，不要自动添加年份）\n" +
                     "- **跟团人数**: 参与旅游的总人数\n\n" +
                     "### ✈️ 航班信息\n" +
-                    "- **出发航班**: 去程航班号和时间\n" +
-                    "- **返程航班**: 回程航班号和时间\n" +
+                    "- **抵达航班**: 到达塔斯马尼亚的航班号（对应去程/到达）\n" +
+                    "- **返程航班**: 离开塔斯马尼亚的航班号（对应回程/离开）\n" +
                     "- **抵达时间**: 到达当地的具体时间\n" +
                     "- **出发地点**: 接机或集合地点\n\n" +
                     "### 👥 客户信息\n" +
@@ -2062,11 +2080,10 @@ public class ChatBotServiceImpl implements ChatBotService {
                     "    ]\n" +
                     "  },\n" +
                     "  \"flightInfo\": {\n" +
-                    "    \"departureFlightNumber\": \"出发航班号(大写)\",\n" +
-                    "    \"departureTime\": \"出发时间(原格式)\",\n" +
-                    "    \"returnFlightNumber\": \"返程航班号(大写)\",\n" +
-                    "    \"returnTime\": \"返程时间(原格式)\",\n" +
+                    "    \"arrivalFlightNumber\": \"抵达航班号(到达塔斯马尼亚的航班,大写)\",\n" +
                     "    \"arrivalTime\": \"抵达时间(原格式)\",\n" +
+                    "    \"departureFlightNumber\": \"返程航班号(离开塔斯马尼亚的航班,大写)\",\n" +
+                    "    \"departureTime\": \"返程时间(原格式)\",\n" +
                     "    \"departureLocation\": \"出发地点(原文描述)\"\n" +
                     "  },\n" +
                     "  \"hotelInfo\": {\n" +
@@ -2210,9 +2227,33 @@ public class ChatBotServiceImpl implements ChatBotService {
                 if (result.containsKey("flightInfo")) {
                     JSONObject flightInfo = result.getJSONObject("flightInfo");
                     
-                    if (flightInfo.containsKey("returnFlightNumber") && flightInfo.getString("returnFlightNumber") != null) {
-                        builder.departureFlight(flightInfo.getString("returnFlightNumber").trim().toUpperCase());
+                    // 处理新字段名格式
+                    if (flightInfo.containsKey("arrivalFlightNumber") && flightInfo.getString("arrivalFlightNumber") != null) {
+                        builder.arrivalFlight(flightInfo.getString("arrivalFlightNumber").trim().toUpperCase());
+                        log.info("提取抵达航班（新格式）: {}", flightInfo.getString("arrivalFlightNumber"));
                     }
+                    if (flightInfo.containsKey("departureFlightNumber") && flightInfo.getString("departureFlightNumber") != null 
+                        && flightInfo.containsKey("arrivalFlightNumber")) {
+                        // 新格式：departureFlightNumber = 返程航班
+                        builder.departureFlight(flightInfo.getString("departureFlightNumber").trim().toUpperCase());
+                        log.info("提取返程航班（新格式）: {}", flightInfo.getString("departureFlightNumber"));
+                    }
+                    
+                    // 处理旧字段名格式：需要修正AI的错误映射
+                    if (!flightInfo.containsKey("arrivalFlightNumber")) {
+                        // AI在旧格式中的映射有错误，需要修正
+                        if (flightInfo.containsKey("returnFlightNumber") && flightInfo.getString("returnFlightNumber") != null) {
+                            // returnFlightNumber 在AI中对应抵达航班（正确）
+                            builder.arrivalFlight(flightInfo.getString("returnFlightNumber").trim().toUpperCase());
+                            log.info("提取抵达航班（旧格式修正）: {}", flightInfo.getString("returnFlightNumber"));
+                        }
+                        if (flightInfo.containsKey("departureFlightNumber") && flightInfo.getString("departureFlightNumber") != null) {
+                            // departureFlightNumber 在AI中对应返程航班（正确）
+                            builder.departureFlight(flightInfo.getString("departureFlightNumber").trim().toUpperCase());
+                            log.info("提取返程航班（旧格式修正）: {}", flightInfo.getString("departureFlightNumber"));
+                        }
+                    }
+                    
                     if (flightInfo.containsKey("arrivalTime") && flightInfo.getString("arrivalTime") != null) {
                         builder.arrivalTime(flightInfo.getString("arrivalTime").trim());
                     }
@@ -3441,11 +3482,28 @@ public class ChatBotServiceImpl implements ChatBotService {
             log.info("处理订单查询请求: {}", message);
             
             // 获取当前用户信息进行权限控制
-            Long currentUserId = request.getUserId();
+            String currentUserIdStr = request.getUserId();
             Integer userType = request.getUserType();
             
-            if (currentUserId == null) {
+            if (currentUserIdStr == null) {
                 String response = "请先登录后再查询订单信息。";
+                saveChatMessage(request, response, 2, null);
+                return ChatResponse.success(response);
+            }
+            
+            // 对于guest用户，不允许查询订单
+            if (currentUserIdStr.startsWith("guest_")) {
+                String response = "游客用户无法查询订单信息，请先注册登录。";
+                saveChatMessage(request, response, 2, null);
+                return ChatResponse.success(response);
+            }
+            
+            // 转换用户ID为Long类型
+            Long currentUserId;
+            try {
+                currentUserId = Long.parseLong(currentUserIdStr);
+            } catch (NumberFormatException e) {
+                String response = "用户ID格式错误，请重新登录。";
                 saveChatMessage(request, response, 2, null);
                 return ChatResponse.success(response);
             }
@@ -4460,7 +4518,12 @@ public class ChatBotServiceImpl implements ChatBotService {
             // 获取代理商ID（只有中介主号才能享受代理商价格）
             Long agentId = null;
             if (request.getUserType() != null && request.getUserType() == 3) {
-                agentId = request.getUserId();
+                try {
+                    agentId = Long.parseLong(request.getUserId());
+                } catch (NumberFormatException e) {
+                    log.warn("无法解析代理商ID: {}", request.getUserId());
+                    agentId = null;
+                }
             }
             
             // 调用产品知识服务获取推荐
@@ -4721,6 +4784,35 @@ public class ChatBotServiceImpl implements ChatBotService {
             return recent;
         } catch (Exception e) {
             log.error("获取聊天历史失败", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * 获取最近的聊天历史记录（按用户ID）
+     */
+    private List<ChatMessage> getRecentChatHistoryByUserId(String userId, int limit) {
+        try {
+            if (userId == null) {
+                return new ArrayList<>();
+            }
+            
+            // 对于guest用户，无法查询历史记录，返回空列表
+            if (userId.startsWith("guest_")) {
+                return new ArrayList<>();
+            }
+            
+            // 对于数字用户ID，转换后查询
+            try {
+                Long userIdLong = Long.parseLong(userId);
+                List<ChatMessage> history = chatMessageMapper.selectRecentByUserId(userIdLong, limit);
+                return history != null ? history : new ArrayList<>();
+            } catch (NumberFormatException e) {
+                log.warn("无法解析用户ID为数字: {}", userId);
+                return new ArrayList<>();
+            }
+        } catch (Exception e) {
+            log.error("获取用户聊天历史失败: {}", e.getMessage(), e);
             return new ArrayList<>();
         }
     }

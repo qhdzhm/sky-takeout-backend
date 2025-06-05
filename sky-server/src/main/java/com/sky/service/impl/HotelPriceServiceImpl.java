@@ -20,6 +20,17 @@ public class HotelPriceServiceImpl implements HotelPriceService {
     @Autowired
     private HotelPriceDifferenceMapper hotelPriceDifferenceMapper;
     
+    /**
+     * 处理特殊星级映射，3.5星使用3星配置
+     */
+    private String mapHotelLevel(String hotelLevel) {
+        if ("3.5星".equals(hotelLevel)) {
+            log.info("3.5星酒店使用3星价格配置");
+            return "3星";
+        }
+        return hotelLevel;
+    }
+    
     @Override
     public List<HotelPriceDifference> getAllPriceDifferences() {
         return hotelPriceDifferenceMapper.selectAll();
@@ -32,10 +43,12 @@ public class HotelPriceServiceImpl implements HotelPriceService {
             return BigDecimal.ZERO;
         }
         
-        HotelPriceDifference priceDiff = hotelPriceDifferenceMapper.selectByLevel(hotelLevel);
+        // 处理3.5星映射为3星
+        String mappedLevel = mapHotelLevel(hotelLevel);
+        HotelPriceDifference priceDiff = hotelPriceDifferenceMapper.selectByLevel(mappedLevel);
         
         if (priceDiff == null) {
-            log.warn("未找到酒店等级{}的价格差异信息，使用基准价格", hotelLevel);
+            log.warn("未找到酒店等级{}的价格差异信息，使用基准价格", mappedLevel);
             return BigDecimal.ZERO;
         }
         
@@ -55,10 +68,12 @@ public class HotelPriceServiceImpl implements HotelPriceService {
             return BigDecimal.ZERO;
         }
         
-        HotelPriceDifference hotelPrice = hotelPriceDifferenceMapper.selectByLevel(hotelLevel);
+        // 处理3.5星映射为3星
+        String mappedLevel = mapHotelLevel(hotelLevel);
+        HotelPriceDifference hotelPrice = hotelPriceDifferenceMapper.selectByLevel(mappedLevel);
         
         if (hotelPrice == null) {
-            log.warn("未找到酒店等级{}的单房差信息，使用默认值0", hotelLevel);
+            log.warn("未找到酒店等级{}的单房差信息，使用默认值0", mappedLevel);
             return BigDecimal.ZERO;
         }
         
@@ -73,10 +88,12 @@ public class HotelPriceServiceImpl implements HotelPriceService {
             return BigDecimal.ZERO;
         }
         
-        HotelPriceDifference hotelPrice = hotelPriceDifferenceMapper.selectByLevel(hotelLevel);
+        // 处理3.5星映射为3星
+        String mappedLevel = mapHotelLevel(hotelLevel);
+        HotelPriceDifference hotelPrice = hotelPriceDifferenceMapper.selectByLevel(mappedLevel);
         
         if (hotelPrice == null) {
-            log.warn("未找到酒店等级{}的房间价格信息，使用默认值0", hotelLevel);
+            log.warn("未找到酒店等级{}的房间价格信息，使用默认值0", mappedLevel);
             return BigDecimal.ZERO;
         }
         
@@ -91,14 +108,47 @@ public class HotelPriceServiceImpl implements HotelPriceService {
             return BigDecimal.ZERO;
         }
         
-        HotelPriceDifference hotelPrice = hotelPriceDifferenceMapper.selectByLevel(hotelLevel);
+        // 处理3.5星映射为3星
+        String mappedLevel = mapHotelLevel(hotelLevel);
+        HotelPriceDifference hotelPrice = hotelPriceDifferenceMapper.selectByLevel(mappedLevel);
         
         if (hotelPrice == null) {
-            log.warn("未找到酒店等级{}的三床房价格信息，使用默认值0", hotelLevel);
+            log.warn("未找到酒店等级{}的三床房价格信息，使用默认值0", mappedLevel);
             return BigDecimal.ZERO;
         }
         
         return hotelPrice.getTripleBedRoomPrice() != null ? 
                hotelPrice.getTripleBedRoomPrice() : BigDecimal.ZERO;
+    }
+    
+    @Override
+    public BigDecimal getTripleBedRoomPriceDifferenceByLevel(String hotelLevel) {
+        if (hotelLevel == null || hotelLevel.trim().isEmpty()) {
+            // 如果未提供酒店等级，返回默认差价0
+            return BigDecimal.ZERO;
+        }
+        
+        // 处理3.5星映射为3星
+        String mappedLevel = mapHotelLevel(hotelLevel);
+        HotelPriceDifference hotelPrice = hotelPriceDifferenceMapper.selectByLevel(mappedLevel);
+        
+        if (hotelPrice == null) {
+            log.warn("未找到酒店等级{}的价格信息，三人房差价使用默认值0", mappedLevel);
+            return BigDecimal.ZERO;
+        }
+        
+        // 获取三人房价格和双床房价格
+        BigDecimal tripleBedPrice = hotelPrice.getTripleBedRoomPrice() != null ? 
+                                    hotelPrice.getTripleBedRoomPrice() : BigDecimal.ZERO;
+        BigDecimal doubleBedPrice = hotelPrice.getHotelRoomPrice() != null ? 
+                                    hotelPrice.getHotelRoomPrice() : BigDecimal.ZERO;
+        
+        // 计算差价
+        BigDecimal difference = tripleBedPrice.subtract(doubleBedPrice);
+        
+        log.info("酒店等级{}三人房差价计算: 三人房价格{}（元/晚） - 双床房价格{}（元/晚） = {}（元/晚）", 
+                 mappedLevel, tripleBedPrice, doubleBedPrice, difference);
+        
+        return difference;
     }
 } 

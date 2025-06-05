@@ -24,9 +24,9 @@ public class ChatMessage {
     private String sessionId;
     
     /**
-     * 用户ID
+     * 用户ID - 支持数字ID和字符串ID（如guest用户）
      */
-    private Long userId;
+    private String userId;
     
     /**
      * 用户消息

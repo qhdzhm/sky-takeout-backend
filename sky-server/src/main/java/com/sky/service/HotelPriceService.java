@@ -48,4 +48,11 @@ public interface HotelPriceService {
      * @return 三床房价格（每间每晚）
      */
     BigDecimal getTripleBedRoomPriceByLevel(String hotelLevel);
+    
+    /**
+     * 根据酒店星级获取三人房差价（三人房价格 - 双床房价格）
+     * @param hotelLevel 酒店星级
+     * @return 三人房差价
+     */
+    BigDecimal getTripleBedRoomPriceDifferenceByLevel(String hotelLevel);
 } 

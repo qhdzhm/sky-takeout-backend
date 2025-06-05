@@ -813,6 +813,21 @@ public class TourBookingServiceImpl implements TourBookingService {
             // 从数据库获取房间价格，根据房型选择不同的价格
             BigDecimal roomPrice = getRoomPriceByType(hotelLevel, roomType);
             
+            // 计算三人房差价费用（如果选择了三人房）
+            if (roomType != null && (roomType.contains("三人间") || roomType.contains("三床") || roomType.contains("家庭") || 
+                roomType.equalsIgnoreCase("triple") || roomType.equalsIgnoreCase("family"))) {
+                // 获取三人房差价
+                BigDecimal tripleDifference = hotelPriceService.getTripleBedRoomPriceDifferenceByLevel(hotelLevel);
+                // 计算三人房差价费用 = 三人房差价 * 住宿晚数 * 房间数
+                BigDecimal tripleRoomFee = tripleDifference.multiply(BigDecimal.valueOf(nights)).multiply(BigDecimal.valueOf(roomCount));
+                
+                totalPrice = totalPrice.add(tripleRoomFee);
+                extraRoomFee = extraRoomFee.add(tripleRoomFee);
+                
+                log.info("三人房差价费用: 每晚差价={}, 住宿晚数={}, 房间数={}, 总差价费用={}",
+                        tripleDifference, nights, roomCount, tripleRoomFee);
+            }
+            
             // 计算总房间数（可能有小数部分）
             double totalRooms = totalPeople / 2.0;
             
@@ -1169,11 +1184,14 @@ public class TourBookingServiceImpl implements TourBookingService {
                 roomPrice = hotelPriceService.getHotelRoomPriceByLevel(hotelLevel);
                 log.info("使用双人间房价格: {} (房型: {})", roomPrice, roomType);
             } 
-            // 三人间相关的房型 - 新增对"三人间"的识别
+            // 三人间相关的房型 - 使用基础价格加上三人房差价
             else if (roomType.contains("三人间") || roomType.contains("三床") || roomType.contains("家庭") || 
                      roomType.equalsIgnoreCase("triple") || roomType.equalsIgnoreCase("family")) {
-                roomPrice = hotelPriceService.getTripleBedRoomPriceByLevel(hotelLevel);
-                log.info("使用三人间房价格: {} (房型: {})", roomPrice, roomType);
+                BigDecimal basePrice = hotelPriceService.getHotelRoomPriceByLevel(hotelLevel);
+                BigDecimal tripleDifference = hotelPriceService.getTripleBedRoomPriceDifferenceByLevel(hotelLevel);
+                roomPrice = basePrice.add(tripleDifference);
+                log.info("使用三人间房价格: {} = 基础价格{} + 三人房差价{} (房型: {})", 
+                         roomPrice, basePrice, tripleDifference, roomType);
             } 
             // 单人间相关的房型
             else if (roomType.contains("单人间") || roomType.contains("单床") || 

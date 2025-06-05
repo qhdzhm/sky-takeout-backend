@@ -30,9 +30,9 @@ public class ChatRequest {
     private Integer userType;
     
     /**
-     * 用户ID (可选)
+     * 用户ID (可选) - 支持数字ID和字符串ID（如guest用户）
      */
-    private Long userId;
+    private String userId;
     
     /**
      * 当前页面路径 (可选)

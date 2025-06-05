@@ -24,5 +24,5 @@ public interface ChatBotService {
     /**
      * 检查用户是否被限流
      */
-    boolean checkRateLimit(String sessionId, Long userId);
+    boolean checkRateLimit(String sessionId, String userId);
 } 

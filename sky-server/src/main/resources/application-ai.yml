@@ -23,9 +23,9 @@ ai:
 # 天气API配置
 weather:
   openweathermap:
-    api-key: ${WEATHER_API_KEY:}
+    api-key: d1845658f92b31c64bd94f06f7188c9c
     base-url: http://api.openweathermap.org/data/2.5
-    enabled: false
+    enabled: true
     cache-duration: 600
 
 # 汇率API配置

@@ -270,9 +270,12 @@ public class BookingController {
             
             // 根据房型获取相应的房间价格
             BigDecimal hotelRoomPrice;
+            BigDecimal tripleDifference = BigDecimal.ZERO;
             if (roomType != null && (roomType.contains("三人间") || roomType.contains("三床") || roomType.contains("家庭") || roomType.equalsIgnoreCase("triple") || roomType.equalsIgnoreCase("family"))) {
-                hotelRoomPrice = hotelPriceService.getTripleBedRoomPriceByLevel(hotelLevel);
-                log.info("使用三人间房价: {}", hotelRoomPrice);
+                BigDecimal roomBasePrice = hotelPriceService.getHotelRoomPriceByLevel(hotelLevel);
+                tripleDifference = hotelPriceService.getTripleBedRoomPriceDifferenceByLevel(hotelLevel);
+                hotelRoomPrice = roomBasePrice.add(tripleDifference);
+                log.info("使用三人间房价: {} = 基础价格{} + 三人房差价{}", hotelRoomPrice, roomBasePrice, tripleDifference);
             } else {
                 hotelRoomPrice = hotelPriceService.getHotelRoomPriceByLevel(hotelLevel);
                 log.info("使用标准房价: {}", hotelRoomPrice);
@@ -396,6 +399,7 @@ public class BookingController {
             data.put("theoreticalRoomCount", theoreticalRoomCount);
             data.put("extraRooms", extraRooms);
             data.put("needsSingleRoomSupplement", needsSingleRoomSupplement);
+            data.put("tripleBedRoomPriceDifference", tripleDifference); // 添加三人房差价信息
             
             return Result.success(data);
         } catch (Exception e) {
@@ -659,7 +663,9 @@ public class BookingController {
             if (roomType != null && (roomType.contains("双床") || roomType.equalsIgnoreCase("twin") || roomType.equalsIgnoreCase("double"))) {
                 hotelRoomPrice = hotelPriceService.getHotelRoomPriceByLevel(hotelLevel);
             } else if (roomType != null && (roomType.contains("三床") || roomType.contains("家庭") || roomType.equalsIgnoreCase("triple") || roomType.equalsIgnoreCase("family"))) {
-                hotelRoomPrice = hotelPriceService.getTripleBedRoomPriceByLevel(hotelLevel);
+                BigDecimal roomBasePrice2 = hotelPriceService.getHotelRoomPriceByLevel(hotelLevel);
+                BigDecimal tripleDifference2 = hotelPriceService.getTripleBedRoomPriceDifferenceByLevel(hotelLevel);
+                hotelRoomPrice = roomBasePrice2.add(tripleDifference2);
             } else {
                 hotelRoomPrice = hotelPriceService.getHotelRoomPriceByLevel(hotelLevel);
             }
