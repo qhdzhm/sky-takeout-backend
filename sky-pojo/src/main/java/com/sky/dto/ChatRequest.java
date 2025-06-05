@@ -33,4 +33,14 @@ public class ChatRequest {
      * 用户ID (可选)
      */
     private Long userId;
+    
+    /**
+     * 当前页面路径 (可选)
+     */
+    private String currentPage;
+    
+    /**
+     * 当前完整URL (可选)
+     */
+    private String currentUrl;
 } 

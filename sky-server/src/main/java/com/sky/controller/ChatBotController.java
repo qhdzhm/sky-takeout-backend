@@ -31,9 +31,15 @@ public class ChatBotController {
      */
     @PostMapping("/message")
     @ApiOperation("发送消息")
-    public Result<ChatResponse> sendMessage(@Valid @RequestBody ChatRequest request) {
-        log.info("收到聊天消息: sessionId={}, userType={}, message={}", 
-                request.getSessionId(), request.getUserType(), request.getMessage());
+    public Result<ChatResponse> sendMessage(@Valid @RequestBody ChatRequest request,
+                                          @RequestHeader(value = "X-Current-Page", required = false) String currentPage,
+                                          @RequestHeader(value = "X-Current-URL", required = false) String currentUrl) {
+        log.info("收到聊天消息: sessionId={}, userType={}, message={}, currentPage={}", 
+                request.getSessionId(), request.getUserType(), request.getMessage(), currentPage);
+        
+        // 设置当前页面信息到请求中
+        request.setCurrentPage(currentPage);
+        request.setCurrentUrl(currentUrl);
         
         ChatResponse response = chatBotService.processMessage(request);
         return Result.success(response);

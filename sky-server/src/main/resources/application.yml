@@ -4,6 +4,7 @@ server:
 spring:
   profiles:
     active: prod
+    include: ai
   main:
     allow-circular-references: true
   datasource:
@@ -81,14 +82,14 @@ credit:
     direct-rate: 0.05
     indirect-rate: 0.02
 
-# DeepSeek AI配置
-deepseek:
+# 通义千问 AI配置 (阿里云DashScope API)
+qwen:
   api:
-    key: sk-c4895d982ec94eca8c1e7298616d28de  # DeepSeek API Key
-    base-url: https://api.deepseek.com  # DeepSeek API 基础地址
-  model: deepseek-chat  # 使用deepseek-chat模型（适合聊天场景）
-  timeout: 50000  # 超时时间 30秒
-  max-tokens: 2000  # 增加token数以确保JSON响应完整
+    key: sk-eb67303b39c34d1195e99c3a276590d3  # 通义千问 API Key
+    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1  # DashScope OpenAI兼容API端点
+  model: qwen-turbo  # 使用qwen-turbo模型（速度快，适合聊天场景）
+  timeout: 30000  # 超时时间 30秒
+  max-tokens: 2000  # token数限制
   temperature: 0.7  # 创造性参数
 
 # 聊天机器人配置

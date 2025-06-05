@@ -22,6 +22,8 @@
         <result column="driver_info" property="driverInfo"/>
         <result column="recommended" property="recommended"/>
         <result column="recommend_reason" property="recommendReason"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
     </resultMap>
 
     <!-- 获取车辆可用性列表 -->
@@ -33,7 +35,7 @@
             va.end_time as available_end_time,
             va.status,
             1 as max_groups,
-            COALESCE(assigned_count.current_groups, 0) as current_groups,
+            0 as current_groups,
             va.notes,
             v.vehicle_type,
             v.license_plate,
@@ -43,25 +45,17 @@
             va.mileage,
             COALESCE(driver_info.driver_names, '无指定司机') as driver_info,
             CASE 
-                WHEN va.status = 'available' AND COALESCE(assigned_count.current_groups, 0) = 0 THEN TRUE
+                WHEN va.status = 'available' THEN TRUE
                 ELSE FALSE
             END as recommended,
             CASE 
                 WHEN va.status = 'available' THEN '可用'
-                WHEN COALESCE(assigned_count.current_groups, 0) > 0 THEN '使用中'
                 ELSE '不可用'
-            END as recommend_reason
+            END as recommend_reason,
+            va.created_time as create_time,
+            va.updated_time as update_time
         FROM vehicle_availability va
         LEFT JOIN vehicles v ON va.vehicle_id = v.vehicle_id
-        LEFT JOIN (
-            SELECT 
-                vehicle_id, 
-                assignment_date, 
-                COUNT(*) as current_groups
-            FROM guide_daily_assignment 
-            WHERE assignment_status IN ('confirmed', 'in_progress')
-            GROUP BY vehicle_id, assignment_date
-        ) assigned_count ON va.vehicle_id = assigned_count.vehicle_id AND va.available_date = assigned_count.assignment_date
         LEFT JOIN (
             SELECT 
                 vd.vehicle_id,
@@ -73,7 +67,7 @@
         ) driver_info ON va.vehicle_id = driver_info.vehicle_id
         WHERE va.vehicle_id = #{vehicleId}
         <if test="startDate != null">
-            AND va.available_date >= #{startDate}
+            AND va.available_date &gt;= #{startDate}
         </if>
         <if test="endDate != null">
             AND va.available_date &lt;= #{endDate}
@@ -90,7 +84,7 @@
             va.end_time as available_end_time,
             va.status,
             1 as max_groups,
-            COALESCE(assigned_count.current_groups, 0) as current_groups,
+            0 as current_groups,
             va.notes,
             v.vehicle_type,
             v.license_plate,
@@ -100,25 +94,17 @@
             va.mileage,
             COALESCE(driver_info.driver_names, '无指定司机') as driver_info,
             CASE 
-                WHEN va.status = 'available' AND COALESCE(assigned_count.current_groups, 0) = 0 THEN TRUE
+                WHEN va.status = 'available' THEN TRUE
                 ELSE FALSE
             END as recommended,
             CASE 
                 WHEN va.status = 'available' THEN '可用'
-                WHEN COALESCE(assigned_count.current_groups, 0) > 0 THEN '使用中'
                 ELSE '不可用'
-            END as recommend_reason
+            END as recommend_reason,
+            va.created_time as create_time,
+            va.updated_time as update_time
         FROM vehicle_availability va
         LEFT JOIN vehicles v ON va.vehicle_id = v.vehicle_id
-        LEFT JOIN (
-            SELECT 
-                vehicle_id, 
-                assignment_date, 
-                COUNT(*) as current_groups
-            FROM guide_daily_assignment 
-            WHERE assignment_status IN ('confirmed', 'in_progress')
-            GROUP BY vehicle_id, assignment_date
-        ) assigned_count ON va.vehicle_id = assigned_count.vehicle_id AND va.available_date = assigned_count.assignment_date
         LEFT JOIN (
             SELECT 
                 vd.vehicle_id,
@@ -137,7 +123,7 @@
             vehicle_id, available_date, start_time, end_time, 
             status, notes, created_time, updated_time
         ) VALUES (
-            #{vehicleId}, #{date}, #{availableStartTime}, #{availableEndTime},
+            #{vehicleId}, #{availableDate}, #{startTime}, #{endTime},
             #{status}, #{notes}, NOW(), NOW()
         )
     </insert>
@@ -146,12 +132,12 @@
     <update id="updateVehicleAvailability">
         UPDATE vehicle_availability 
         SET 
-            start_time = #{availableStartTime},
-            end_time = #{availableEndTime},
+            start_time = #{startTime},
+            end_time = #{endTime},
             status = #{status},
             notes = #{notes},
             updated_time = NOW()
-        WHERE vehicle_id = #{vehicleId} AND available_date = #{date}
+        WHERE vehicle_id = #{vehicleId} AND available_date = #{availableDate}
     </update>
 
     <!-- 删除车辆可用性 -->
@@ -159,5 +145,114 @@
         DELETE FROM vehicle_availability 
         WHERE vehicle_id = #{vehicleId} AND available_date = #{date}
     </delete>
+
+    <!-- 设置车辆为使用中状态 -->
+    <update id="setInUse">
+        UPDATE vehicle_availability 
+        SET status = 'in_use',
+            updated_time = NOW()
+        WHERE vehicle_id = #{vehicleId} AND available_date = #{date}
+    </update>
+
+    <!-- 设置车辆为可用状态 -->
+    <update id="setAvailable">
+        UPDATE vehicle_availability 
+        SET status = 'available',
+            updated_time = NOW()
+        WHERE vehicle_id = #{vehicleId} AND available_date = #{date}
+    </update>
+
+    <!-- 重置车辆可用性状态 -->
+    <update id="resetAvailability">
+        UPDATE vehicle_availability 
+        SET status = 'available', updated_time = NOW()
+        WHERE vehicle_id = #{vehicleId} AND available_date = #{date}
+    </update>
+
+    <!-- 更新车辆可用性状态 -->
+    <update id="updateAvailability">
+        UPDATE vehicle_availability 
+        SET start_time = #{startTime},
+            end_time = #{endTime},
+            status = CASE WHEN #{isAvailable} = TRUE THEN 'available' ELSE 'unavailable' END,
+            updated_time = NOW()
+        WHERE vehicle_id = #{vehicleId} AND available_date = #{date}
+    </update>
+
+    <!-- 检查车辆在指定时间段是否可用 -->
+    <select id="checkAvailability" resultType="java.lang.Boolean">
+        SELECT CASE 
+            WHEN COUNT(*) > 0 AND va.status = 'available' THEN TRUE 
+            ELSE FALSE 
+        END
+        FROM vehicle_availability va
+        WHERE va.vehicle_id = #{vehicleId} 
+        AND va.available_date = #{date}
+        AND va.start_time &lt;= #{startTime}
+        AND va.end_time &gt;= #{endTime}
+        AND va.status = 'available'
+    </select>
+
+    <!-- 根据日期、时间和人数获取可用车辆 -->
+    <select id="getAvailableVehiclesByDateTime" resultMap="VehicleAvailabilityVOMap">
+        SELECT 
+            va.id,
+            va.vehicle_id,
+            v.vehicle_type,
+            v.license_plate,
+            v.seat_count,
+            va.available_date AS available_date,
+            va.start_time AS available_start_time,
+            va.end_time AS available_end_time,
+            va.status,
+            va.current_location,
+            COALESCE(va.fuel_level, 80) AS fuel_level,
+            COALESCE(va.mileage, 0) AS mileage,
+            va.notes,
+            'N/A' AS driver_info,
+            CASE 
+                WHEN va.status = 'available' 
+                     AND (#{startTime} IS NULL OR va.start_time &lt;= #{startTime})
+                     AND (#{endTime} IS NULL OR va.end_time &gt;= #{endTime})
+                     AND (#{peopleCount} IS NULL OR v.seat_count &gt;= #{peopleCount})
+                     AND NOT EXISTS (
+                         SELECT 1 FROM tour_guide_vehicle_assignment t 
+                         WHERE t.vehicle_id = va.vehicle_id 
+                         AND t.assignment_date = va.available_date 
+                         AND t.status != 'cancelled'
+                     )
+                THEN 1 ELSE 0 
+            END AS recommended,
+            CASE 
+                WHEN va.status = 'available' 
+                     AND (#{startTime} IS NULL OR va.start_time &lt;= #{startTime})
+                     AND (#{endTime} IS NULL OR va.end_time &gt;= #{endTime})
+                     AND (#{peopleCount} IS NULL OR v.seat_count &gt;= #{peopleCount})
+                     AND NOT EXISTS (
+                         SELECT 1 FROM tour_guide_vehicle_assignment t 
+                         WHERE t.vehicle_id = va.vehicle_id 
+                         AND t.assignment_date = va.available_date 
+                         AND t.status != 'cancelled'
+                     )
+                THEN '状态可用，座位足够' 
+                ELSE '不可用或座位不足' 
+            END AS recommend_reason,
+            va.created_time as create_time,
+            va.updated_time as update_time
+        FROM vehicle_availability va
+        LEFT JOIN vehicles v ON va.vehicle_id = v.vehicle_id
+        WHERE va.available_date = #{date}
+            AND va.status = 'available'
+            AND (#{startTime} IS NULL OR va.start_time &lt;= #{startTime})
+            AND (#{endTime} IS NULL OR va.end_time &gt;= #{endTime})
+            AND (#{peopleCount} IS NULL OR v.seat_count &gt;= #{peopleCount})
+            AND NOT EXISTS (
+                SELECT 1 FROM tour_guide_vehicle_assignment t 
+                WHERE t.vehicle_id = va.vehicle_id 
+                AND t.assignment_date = va.available_date 
+                AND t.status != 'cancelled'
+            )
+        ORDER BY v.seat_count DESC, va.vehicle_id
+    </select>
 
 </mapper> 

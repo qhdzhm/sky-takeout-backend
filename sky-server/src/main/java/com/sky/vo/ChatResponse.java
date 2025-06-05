@@ -50,6 +50,10 @@ public class ChatResponse {
      * 2: 订单查询
      * 3: 产品推荐
      * 4: 天气查询
+     * 5: 汇率查询
+     * 6: 新闻查询
+     * 7: 交通查询
+     * 8: 攻略查询
      */
     private Integer messageType;
     
@@ -109,6 +113,61 @@ public class ChatResponse {
                 .message(message)
                 .orderData(productData)
                 .messageType(3) // 产品推荐消息
+                .build();
+    }
+    
+    /**
+     * 创建天气查询响应
+     */
+    public static ChatResponse weatherResponse(String message) {
+        return ChatResponse.builder()
+                .success(true)
+                .message(message)
+                .messageType(4) // 天气查询消息
+                .build();
+    }
+    
+    /**
+     * 创建汇率查询响应
+     */
+    public static ChatResponse exchangeRateResponse(String message) {
+        return ChatResponse.builder()
+                .success(true)
+                .message(message)
+                .messageType(5) // 汇率查询消息
+                .build();
+    }
+    
+    /**
+     * 创建新闻查询响应
+     */
+    public static ChatResponse newsResponse(String message) {
+        return ChatResponse.builder()
+                .success(true)
+                .message(message)
+                .messageType(6) // 新闻查询消息
+                .build();
+    }
+    
+    /**
+     * 创建交通查询响应
+     */
+    public static ChatResponse trafficResponse(String message) {
+        return ChatResponse.builder()
+                .success(true)
+                .message(message)
+                .messageType(7) // 交通查询消息
+                .build();
+    }
+    
+    /**
+     * 创建攻略查询响应
+     */
+    public static ChatResponse travelGuideResponse(String message) {
+        return ChatResponse.builder()
+                .success(true)
+                .message(message)
+                .messageType(8) // 攻略查询消息
                 .build();
     }
 } 

@@ -25,6 +25,12 @@ public interface GuideMapper {
     Guide getGuideByEmployeeId(Long employeeId);
 
     /**
+     * 通过导游ID获取导游信息
+     */
+    @Select("SELECT * FROM guides WHERE guide_id = #{guideId}")
+    Guide getGuideById(Long guideId);
+
+    /**
      * 更新导游的员工关联
      */
     @Update("UPDATE guides SET employee_id = #{employeeId} WHERE guide_id = #{guideId}")
@@ -42,4 +48,10 @@ public interface GuideMapper {
      */
     @Select("SELECT * FROM guides WHERE employee_id IS NULL")
     List<Guide> getGuidesWithoutEmployee();
+
+    /**
+     * 获取所有活跃的导游
+     */
+    @Select("SELECT * FROM guides WHERE status = 1 ORDER BY guide_id")
+    List<Guide> getAllActiveGuides();
 } 

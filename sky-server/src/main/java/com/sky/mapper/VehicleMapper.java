@@ -50,4 +50,10 @@ public interface VehicleMapper {
      */
     @Select("SELECT * FROM vehicles WHERE license_plate = #{licensePlate}")
     Vehicle getByLicensePlate(String licensePlate);
+
+    /**
+     * 获取所有活跃的车辆
+     */
+    @Select("SELECT * FROM vehicles WHERE status = 1 ORDER BY vehicle_id")
+    List<Vehicle> getAllActiveVehicles();
 }

@@ -15,6 +15,12 @@ public class VehicleStatusConstant {
     public static final Integer REGO_EXPIRED = 4;       // 注册过期
     public static final Integer INSPECTION_EXPIRED = 5; // 车检过期
     
+    // 车辆可用性状态（对应vehicle_availability表的status字段）
+    public static final String AVAILABILITY_AVAILABLE = "available";        // 可用
+    public static final String AVAILABILITY_IN_USE = "in_use";             // 使用中
+    public static final String AVAILABILITY_MAINTENANCE = "maintenance";    // 维护中
+    public static final String AVAILABILITY_OUT_OF_SERVICE = "out_of_service"; // 停用
+    
     // 状态描述
     public static final String[] STATUS_DESC = {
         "送修中",      // 0
@@ -33,5 +39,25 @@ public class VehicleStatusConstant {
             return "未知";
         }
         return STATUS_DESC[status];
+    }
+    
+    /**
+     * 获取可用性状态描述
+     */
+    public static String getAvailabilityStatusDesc(String status) {
+        if (status == null) return "未知";
+        
+        switch (status) {
+            case AVAILABILITY_AVAILABLE:
+                return "可用";
+            case AVAILABILITY_IN_USE:
+                return "使用中";
+            case AVAILABILITY_MAINTENANCE:
+                return "维护中";
+            case AVAILABILITY_OUT_OF_SERVICE:
+                return "停用";
+            default:
+                return "未知";
+        }
     }
 } 

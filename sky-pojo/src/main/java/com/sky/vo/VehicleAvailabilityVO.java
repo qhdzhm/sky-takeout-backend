@@ -1,6 +1,8 @@
 package com.sky.vo;
 
 import lombok.Data;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 /**
@@ -10,6 +12,11 @@ import java.time.LocalTime;
 public class VehicleAvailabilityVO {
     
     private Long vehicleId;
+    
+    /**
+     * 可用日期
+     */
+    private LocalDate date;
     
     /**
      * 车辆类型
@@ -62,6 +69,16 @@ public class VehicleAvailabilityVO {
     private String notes;
     
     /**
+     * 最大分配数量
+     */
+    private Integer maxGroups;
+    
+    /**
+     * 当前分配数量
+     */
+    private Integer currentGroups;
+    
+    /**
      * 是否推荐
      */
     private Boolean recommended;
@@ -75,4 +92,14 @@ public class VehicleAvailabilityVO {
      * 司机信息
      */
     private String driverInfo;
+    
+    /**
+     * 创建时间
+     */
+    private LocalDateTime createTime;
+    
+    /**
+     * 更新时间
+     */
+    private LocalDateTime updateTime;
 } 

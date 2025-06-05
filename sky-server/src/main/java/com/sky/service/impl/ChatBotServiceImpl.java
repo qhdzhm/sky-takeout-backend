@@ -14,6 +14,11 @@ import com.sky.mapper.GroupTourMapper;
 import com.sky.mapper.TourBookingMapper;
 import com.sky.mapper.PassengerMapper;
 import com.sky.mapper.DayTourFaqMapper;
+import com.sky.mapper.RegionMapper;
+import com.sky.mapper.ReviewMapper;
+import com.sky.mapper.GuideMapper;
+import com.sky.mapper.VehicleMapper;
+import com.sky.mapper.DayTourMapper;
 import com.sky.service.ChatBotService;
 import com.sky.service.TourKnowledgeService;
 import com.sky.vo.ChatResponse;
@@ -35,6 +40,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.Arrays;
 
 /**
  * 聊天机器人服务实现类
@@ -61,6 +67,25 @@ public class ChatBotServiceImpl implements ChatBotService {
     @Value("${deepseek.temperature:0.7}")
     private double deepseekTemperature;
     
+    // Qwen API配置
+    @Value("${qwen.api.key:}")
+    private String qwenApiKey;
+    
+    @Value("${qwen.api.base-url:https://dashscope.aliyuncs.com/compatible-mode/v1}")
+    private String qwenBaseUrl;
+    
+    @Value("${qwen.model:qwen-turbo}")
+    private String qwenModel;
+    
+    @Value("${qwen.timeout:30000}")
+    private int qwenTimeout;
+    
+    @Value("${qwen.max-tokens:2000}")
+    private int qwenMaxTokens;
+    
+    @Value("${qwen.temperature:0.7}")
+    private double qwenTemperature;
+    
     @Value("${flight.api.aviationstack.api-key:}")
     private String aviationStackApiKey;
     
@@ -81,6 +106,36 @@ public class ChatBotServiceImpl implements ChatBotService {
     
     @Value("${weather.openweathermap.cache-duration:600}")
     private int weatherCacheDuration;
+    
+    // 新增：百度搜索API配置（用于获取外部信息）
+    @Value("${baidu.search.api-key:}")
+    private String baiduSearchApiKey;
+    
+    @Value("${baidu.search.base-url:https://aip.baidubce.com/rest/2.0}")
+    private String baiduSearchBaseUrl;
+    
+    @Value("${baidu.search.enabled:false}")
+    private boolean baiduSearchEnabled;
+    
+    // 新增：汇率API配置
+    @Value("${exchange.api.key:}")
+    private String exchangeApiKey;
+    
+    @Value("${exchange.api.base-url:https://api.exchangerate-api.com/v4}")
+    private String exchangeApiBaseUrl;
+    
+    @Value("${exchange.api.enabled:false}")
+    private boolean exchangeApiEnabled;
+    
+    // 新增：新闻API配置
+    @Value("${news.api.key:}")
+    private String newsApiKey;
+    
+    @Value("${news.api.base-url:https://newsapi.org/v2}")
+    private String newsApiBaseUrl;
+    
+    @Value("${news.api.enabled:false}")
+    private boolean newsApiEnabled;
     
     @Autowired
     private ChatMessageMapper chatMessageMapper;
@@ -103,21 +158,41 @@ public class ChatBotServiceImpl implements ChatBotService {
     @Autowired
     private TourKnowledgeService tourKnowledgeService;
     
+    @Autowired
+    private RegionMapper regionMapper;
+    
+    @Autowired
+    private ReviewMapper reviewMapper;
+    
+    @Autowired
+    private GuideMapper guideMapper;
+    
+    @Autowired
+    private VehicleMapper vehicleMapper;
+    
+    @Autowired
+    private DayTourMapper dayTourMapper;
+    
     private OkHttpClient httpClient;
     
     @PostConstruct
     public void init() {
         // 初始化HTTP客户端
         this.httpClient = new OkHttpClient.Builder()
-                .connectTimeout(deepseekTimeout, TimeUnit.MILLISECONDS)
-                .readTimeout(deepseekTimeout, TimeUnit.MILLISECONDS)
-                .writeTimeout(deepseekTimeout, TimeUnit.MILLISECONDS)
+                .connectTimeout(qwenTimeout, TimeUnit.MILLISECONDS)
+                .readTimeout(qwenTimeout, TimeUnit.MILLISECONDS)
+                .writeTimeout(qwenTimeout, TimeUnit.MILLISECONDS)
                 .build();
                 
-        if (deepseekApiKey != null && !deepseekApiKey.isEmpty()) {
-            log.info("DeepSeek AI服务初始化成功，模型: {}", deepseekModel);
+        if (qwenApiKey != null && !qwenApiKey.isEmpty()) {
+            log.info("Qwen AI服务初始化成功，模型: {}", qwenModel);
         } else {
-            log.warn("DeepSeek API Key未配置，聊天功能将受限");
+            log.warn("Qwen API Key未配置，聊天功能将受限");
+        }
+        
+        // 保留DeepSeek作为备用
+        if (deepseekApiKey != null && !deepseekApiKey.isEmpty()) {
+            log.info("DeepSeek AI服务作为备用，模型: {}", deepseekModel);
         }
     }
     
@@ -238,11 +313,80 @@ public class ChatBotServiceImpl implements ChatBotService {
     }
 
     /**
+     * 调用Qwen AI服务 (阿里云DashScope OpenAI兼容API)
+     */
+    private String callQwenAI(String prompt) {
+        if (qwenApiKey == null || qwenApiKey.isEmpty()) {
+            throw new RuntimeException("Qwen API Key未配置");
+        }
+        
+        try {
+            JSONObject requestBody = new JSONObject();
+            requestBody.put("model", qwenModel);
+            
+            // 使用OpenAI兼容格式的messages
+            JSONArray messages = new JSONArray();
+            JSONObject message = new JSONObject();
+            message.put("role", "user");
+            message.put("content", prompt);
+            messages.add(message);
+            
+            requestBody.put("messages", messages);
+            requestBody.put("max_tokens", qwenMaxTokens);
+            requestBody.put("temperature", qwenTemperature);
+
+            RequestBody body = RequestBody.create(
+                requestBody.toString(), 
+                MediaType.get("application/json; charset=utf-8")
+            );
+
+            Request request = new Request.Builder()
+                .url(qwenBaseUrl + "/chat/completions")
+                .addHeader("Authorization", "Bearer " + qwenApiKey)
+                .addHeader("Content-Type", "application/json")
+                .post(body)
+                .build();
+
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    String errorBody = response.body() != null ? response.body().string() : "";
+                    log.error("Qwen API调用失败: {} {}, 响应体: {}", response.code(), response.message(), errorBody);
+                    throw new RuntimeException("Qwen API调用失败: " + response.code() + " " + response.message());
+                }
+
+                String responseBody = response.body().string();
+                log.debug("Qwen API响应: {}", responseBody);
+                
+                JSONObject jsonResponse = JSON.parseObject(responseBody);
+                
+                String content = jsonResponse.getJSONArray("choices")
+                    .getJSONObject(0)
+                    .getJSONObject("message")
+                    .getString("content");
+                
+                // 清理Qwen响应中的markdown代码块标记
+                if (content.startsWith("```json")) {
+                    content = content.substring(7); // 移除 "```json"
+                }
+                if (content.endsWith("```")) {
+                    content = content.substring(0, content.length() - 3); // 移除结尾的 "```"
+                }
+                content = content.trim(); // 去除首尾空白
+                
+                return content;
+            }
+        } catch (IOException e) {
+            log.error("Qwen API调用异常", e);
+            throw new RuntimeException("Qwen AI调用失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * 使用AI智能识别结构化订单数据（增强版）
      */
     private boolean isStructuredOrderDataWithAI(String message) {
-        // 如果DeepSeek未配置，回退到传统方法
-        if (deepseekApiKey == null || deepseekApiKey.isEmpty()) {
+        // 如果Qwen未配置，回退到传统方法
+        if (qwenApiKey == null || qwenApiKey.isEmpty()) {
             return isStructuredOrderDataTraditional(message);
         }
         
@@ -283,7 +427,7 @@ public class ChatBotServiceImpl implements ChatBotService {
                     "}\n\n" +
                     "分析文本：\n" + message;
             
-            String aiResponse = callDeepSeekAI(aiPrompt);
+            String aiResponse = callQwenAI(aiPrompt);
             
             log.info("AI智能识别响应: {}", aiResponse);
             
@@ -382,8 +526,19 @@ public class ChatBotServiceImpl implements ChatBotService {
                 // 生成订单URL参数
                 String orderParams = generateOrderParams(orderInfo, product);
                 
+                // 根据用户当前状态优化响应消息
+                String responseMessage;
+                boolean isOnBookingPage = (request.getCurrentPage() != null && 
+                                         request.getCurrentPage().contains("/booking"));
+                
+                if (isOnBookingPage) {
+                    responseMessage = "订单信息已重新解析完成！找到匹配产品：" + product.getName() + 
+                                    "。页面将自动更新以显示最新的订单信息和预填数据。";
+                } else {
+                    responseMessage = "订单信息已解析完成，找到产品：" + product.getName() + "，正在跳转到订单页面...";
+                }
+                
                 // 保存聊天记录
-                String responseMessage = "订单信息已解析完成，找到产品：" + product.getName() + "，正在跳转到订单页面...";
                 saveChatMessage(request, responseMessage, 2, JSON.toJSONString(orderInfo));
                 
                 return ChatResponse.orderSuccess(
@@ -559,9 +714,9 @@ public class ChatBotServiceImpl implements ChatBotService {
      * 处理普通问答
      */
     private ChatResponse handleGeneralQuestion(ChatRequest request) {
+        String message = request.getMessage().toLowerCase().trim();
+        
         try {
-            String message = request.getMessage().trim();
-            
             // 检查是否为订单查询请求
             if (isOrderQueryRequest(message)) {
                 return handleOrderQuery(request);
@@ -572,43 +727,1029 @@ public class ChatBotServiceImpl implements ChatBotService {
                 return handleProductQuery(request);
             }
             
-            // 检查是否为天气查询请求
+            // 1. 优先处理天气查询
             if (isWeatherQueryRequest(message)) {
-                String weatherResponse = getWeatherInfo(message);
-                if (weatherResponse != null) {
-                    saveChatMessage(request, weatherResponse, 2, null);
-                    return ChatResponse.success(weatherResponse);
-                }
+                String weatherResponse = getWeatherInfo(request.getMessage());
+                saveChatMessage(request, weatherResponse, 4, null); // 4代表天气查询
+                return ChatResponse.success(weatherResponse);
             }
             
-            // 首先尝试从FAQ中查找答案
-            String faqAnswer = searchFAQAnswer(message);
-            if (faqAnswer != null) {
-                log.info("从FAQ中找到匹配答案");
+            // 2. 新增：汇率查询
+            if (isExchangeRateQuery(message)) {
+                String exchangeResponse = getExchangeRateInfo(request.getMessage());
+                saveChatMessage(request, exchangeResponse, 5, null); // 5代表汇率查询
+                return ChatResponse.success(exchangeResponse);
+            }
+            
+            // 3. 新增：旅游相关新闻查询
+            if (isTravelNewsQuery(message)) {
+                String newsResponse = getTravelNewsInfo(request.getMessage());
+                saveChatMessage(request, newsResponse, 6, null); // 6代表新闻查询
+                return ChatResponse.success(newsResponse);
+            }
+            
+            // 4. 新增：实时交通信息查询
+            if (isTrafficQuery(message)) {
+                String trafficResponse = getTrafficInfo(request.getMessage());
+                saveChatMessage(request, trafficResponse, 7, null); // 7代表交通查询
+                return ChatResponse.success(trafficResponse);
+            }
+            
+            // 5. 新增：旅游攻略查询
+            if (isTravelGuideQuery(message)) {
+                String guideResponse = getTravelGuideInfo(request.getMessage());
+                saveChatMessage(request, guideResponse, 8, null); // 8代表攻略查询
+                return ChatResponse.success(guideResponse);
+            }
+            
+            // 6. 智能问答（原有功能增强）
+            String smartResponse = handleSmartQuestion(request, message);
+            if (smartResponse != null && !smartResponse.isEmpty()) {
+                saveChatMessage(request, smartResponse, 2, null);
+                return ChatResponse.success(smartResponse);
+            }
+            
+            // 7. FAQ查询（保留原有）
+            String faqAnswer = searchFAQAnswer(request.getMessage());
+            if (faqAnswer != null && !faqAnswer.isEmpty()) {
                 saveChatMessage(request, faqAnswer, 2, null);
                 return ChatResponse.success(faqAnswer);
             }
             
-            // 如果DeepSeek服务不可用，返回默认回复
-            if (deepseekApiKey == null || deepseekApiKey.isEmpty()) {
-                return ChatResponse.success(getDefaultResponse(message));
-            }
-            
-            // 构建对话上下文
-            String conversationContext = buildConversationContextForDeepSeek(request);
-            
-            // 调用DeepSeek API
-            String response = callDeepSeekAI(conversationContext);
-            
-            // 保存对话记录
-            saveChatMessage(request, response, 2, null);
-            
-            return ChatResponse.success(response);
+            // 8. 默认智能回复
+            String defaultResponse = getEnhancedDefaultResponse(message);
+            saveChatMessage(request, defaultResponse, 2, null);
+            return ChatResponse.success(defaultResponse);
             
         } catch (Exception e) {
-            log.error("处理普通问答失败: {}", e.getMessage(), e);
-            return ChatResponse.success(getDefaultResponse(request.getMessage()));
+            log.error("处理一般问题失败: {}", e.getMessage(), e);
+            String errorResponse = "抱歉，我现在遇到了一些问题，请稍后再试或者联系客服获取帮助。";
+            saveChatMessage(request, errorResponse, 2, null);
+            return ChatResponse.success(errorResponse);
         }
+    }
+    
+    /**
+     * 智能问题分类和处理
+     */
+    private String handleSmartQuestion(ChatRequest request, String message) {
+        try {
+            log.info("开始智能问题处理，消息: {}", message);
+            
+            // 获取聊天历史作为上下文
+            List<ChatMessage> recentHistory = getRecentChatHistory(request.getSessionId(), 5);
+            
+            // 首先尝试AI驱动的意图分析（包含上下文）
+            String aiResponse = analyzeUserIntentWithAI(request, message, recentHistory);
+            if (aiResponse != null && !aiResponse.trim().isEmpty()) {
+                String result = processAIIntentResponse(request, message, aiResponse, recentHistory);
+                if (result != null && !result.trim().isEmpty()) {
+                    log.info("AI智能分析成功处理用户请求");
+                    return result;
+                }
+            }
+            
+            // AI分析失败时，回退到基础意图识别
+            log.info("AI分析未能处理，回退到基础意图识别");
+            return handleBasicIntentRecognition(request, message);
+            
+        } catch (Exception e) {
+            log.error("智能问题处理发生异常", e);
+            return handleBasicIntentRecognition(request, message);
+        }
+    }
+    
+    /**
+     * 让AI自主分析用户意图并决定查询什么
+     */
+    private String analyzeUserIntentWithAI(ChatRequest request, String message, List<ChatMessage> recentHistory) {
+        try {
+            String prompt = buildIntentAnalysisPrompt(request, message, recentHistory);
+            String response = callQwenAI(prompt);
+            log.info("AI意图分析响应: {}", response);
+            return response;
+        } catch (Exception e) {
+            log.error("AI意图分析失败", e);
+            return null;
+        }
+    }
+    
+    /**
+     * 构建AI意图分析提示词
+     */
+    private String buildIntentAnalysisPrompt(ChatRequest request, String message, List<ChatMessage> recentHistory) {
+        StringBuilder prompt = new StringBuilder();
+        
+        prompt.append("你是Happy Tassie Travel(塔斯马尼亚快乐旅行)的智能助手。请分析用户意图并提供帮助。\n\n");
+        
+        // 添加对话历史上下文
+        if (recentHistory != null && !recentHistory.isEmpty()) {
+            prompt.append("=== 对话历史上下文 ===\n");
+            for (ChatMessage msg : recentHistory) {
+                if (msg.getUserMessage() != null && !msg.getUserMessage().trim().isEmpty()) {
+                    prompt.append("用户: ").append(msg.getUserMessage()).append("\n");
+                }
+                if (msg.getBotResponse() != null && !msg.getBotResponse().trim().isEmpty()) {
+                    prompt.append("助手: ").append(msg.getBotResponse().substring(0, Math.min(200, msg.getBotResponse().length()))).append("...\n");
+                }
+            }
+            prompt.append("\n");
+        }
+        
+        prompt.append("当前用户问题: ").append(message).append("\n\n");
+        
+        prompt.append("=== 重要：数据查询规则 ===\n");
+        prompt.append("🚨 **绝对禁止编造任何信息！** 🚨\n");
+        prompt.append("- 任何涉及具体客户姓名的询问，必须查询数据库\n");
+        prompt.append("- 绝不能编造航班号、订单号、价格等具体信息\n");
+        prompt.append("- 只能基于查询到的真实数据回答\n");
+        prompt.append("- 如果数据库中没有相关信息，就说没有\n\n");
+        
+        prompt.append("=== 系统能力说明 ===\n");
+        prompt.append("我可以帮助您:\n");
+        prompt.append("1. 客户订单查询 - 通过姓名、电话、护照号查询客户的旅游订单信息\n");
+        prompt.append("2. 航班信息查询 - 查询航班号、起降时间、航空公司等信息\n");
+        prompt.append("3. 旅游产品推荐 - 根据需求推荐合适的旅游产品\n");
+        prompt.append("4. 地区信息查询 - 塔斯马尼亚各地区景点、特色介绍\n");
+        prompt.append("5. 客户评价查询 - 查看产品评价和反馈\n");
+        prompt.append("6. 导游服务信息 - 导游配备、服务标准等\n");
+        prompt.append("7. 车辆安排信息 - 不同团队规模的车辆配置\n");
+        prompt.append("8. 天气信息查询 - 塔斯马尼亚天气状况和旅行建议\n\n");
+        
+        prompt.append("=== 权限说明 ===\n");
+        prompt.append("当前用户类型: ");
+        if (request.getUserType() == 1) {
+            prompt.append("普通用户(只能查询自己的订单)\n");
+        } else if (request.getUserType() == 2) {
+            prompt.append("操作员(只能查询自己创建的订单)\n");
+        } else if (request.getUserType() == 3) {
+            prompt.append("中介主号(可查询代理商所有订单)\n");
+        }
+        prompt.append("当前页面: ").append(request.getCurrentPage() != null ? request.getCurrentPage() : "未知").append("\n\n");
+        
+        prompt.append("=== 智能分析指令 ===\n");
+        prompt.append("请根据对话上下文和用户当前问题，智能判断用户意图：\n\n");
+        
+        prompt.append("🔍 **客户信息查询（必须使用数据库查询）**\n");
+        prompt.append("1. 如果用户询问具体客户的任何信息（如航班号、订单状态、价格等），回复：\n");
+        prompt.append("   ACTION:QUERY_CUSTOMER:客户姓名\n");
+        prompt.append("   例如：\n");
+        prompt.append("   - 用户问：\"左静静航班号是什么\" → 回复：ACTION:QUERY_CUSTOMER:左静静\n");
+        prompt.append("   - 用户问：\"张三的订单\" → 回复：ACTION:QUERY_CUSTOMER:张三\n");
+        prompt.append("   - 用户问：\"王五的价格\" → 回复：ACTION:QUERY_CUSTOMER:王五\n\n");
+        
+        prompt.append("2. 如果在对话历史中已经查询过某客户，但用户询问更详细信息，仍然重新查询：\n");
+        prompt.append("   ACTION:QUERY_CUSTOMER:客户姓名\n\n");
+        
+        prompt.append("📋 **通用服务问题（不涉及具体客户）**\n");
+        prompt.append("3. 如果是导游服务咨询，回答：每个团配备1名导游，全程陪同，不固定分配景点\n\n");
+        
+        prompt.append("4. 如果是车辆安排咨询，回答：\n");
+        prompt.append("   - 1-7人：7座商务车\n");
+        prompt.append("   - 8-12人：12座中巴\n");
+        prompt.append("   - 13人以上：大巴车\n\n");
+        
+        prompt.append("5. 如果用户说\"都要\"、\"全部\"等，请根据上下文理解用户想要什么信息，但仍需查询数据库获取真实数据\n\n");
+        
+        prompt.append("6. 其他情况请提供自然、有帮助的回答，但绝不编造具体数据\n\n");
+        
+        prompt.append("🚨 **再次强调：绝对不能编造航班号、订单号、价格等任何具体信息！必须查询数据库获取真实数据！**");
+        
+        return prompt.toString();
+    }
+    
+    /**
+     * 处理AI意图分析的响应
+     */
+    private String processAIIntentResponse(ChatRequest request, String message, String aiResponse, List<ChatMessage> recentHistory) {
+        try {
+            log.info("处理AI意图响应: {}", aiResponse);
+            
+            // 检查AI是否指示需要查询客户信息
+            if (aiResponse.contains("ACTION:QUERY_CUSTOMER:")) {
+                String customerName = extractCustomerNameFromAIResponse(aiResponse);
+                if (customerName != null && !customerName.trim().isEmpty()) {
+                    log.info("AI指示查询客户: {}", customerName);
+                    return queryCustomerInfoByName(request, customerName.trim(), recentHistory);
+                }
+            }
+            
+            // 如果AI响应中包含具体的航班号、订单号等信息，但没有查询指令，说明AI可能在编造信息
+            if (containsSpecificBusinessData(aiResponse) && !aiResponse.contains("ACTION:QUERY_CUSTOMER:")) {
+                log.warn("AI响应包含具体业务数据但未执行数据库查询，可能是编造信息: {}", aiResponse);
+                
+                // 尝试从用户消息中提取客户姓名，强制执行查询
+                String extractedName = extractCustomerNameFromMessage(message);
+                if (extractedName != null && !extractedName.trim().isEmpty()) {
+                    log.info("强制执行客户查询: {}", extractedName);
+                    return queryCustomerInfoByName(request, extractedName.trim(), recentHistory);
+                }
+                
+                // 如果无法提取客户姓名，返回提示需要查询数据库
+                return "抱歉，我需要查询数据库来获取准确的信息。请告诉我您要查询的客户姓名，我会为您查找真实的数据。";
+            }
+            
+            // 如果AI给出了通用性回答且不涉及具体数据，直接返回
+            return aiResponse;
+            
+        } catch (Exception e) {
+            log.error("处理AI意图响应失败", e);
+            return "抱歉，处理您的请求时遇到了问题。请重新描述您的需求。";
+        }
+    }
+
+    /**
+     * 检查响应是否包含具体的业务数据（航班号、订单号等）
+     */
+    private boolean containsSpecificBusinessData(String response) {
+        if (response == null) return false;
+        
+        // 检查是否包含航班号模式（字母+数字组合）
+        if (response.matches(".*[A-Z]{2}\\d{3,4}.*")) {
+            return true;
+        }
+        
+        // 检查是否包含订单号模式
+        if (response.matches(".*HT\\d+.*")) {
+            return true;
+        }
+        
+        // 检查是否包含具体价格信息
+        if (response.matches(".*\\$\\d+.*") || response.matches(".*￥\\d+.*")) {
+            return true;
+        }
+        
+        // 检查是否包含具体日期信息
+        if (response.matches(".*\\d{4}-\\d{2}-\\d{2}.*")) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * 从用户消息中提取客户姓名
+     */
+    private String extractCustomerNameFromMessage(String message) {
+        if (message == null || message.trim().isEmpty()) {
+            return null;
+        }
+        
+        // 提取中文姓名
+        List<String> chineseNames = extractChineseNames(message);
+        if (!chineseNames.isEmpty()) {
+            return chineseNames.get(0);
+        }
+        
+        return null;
+    }
+    
+    /**
+     * 从AI响应中提取客户姓名
+     */
+    private String extractCustomerNameFromAIResponse(String aiResponse) {
+        try {
+            String[] parts = aiResponse.split("ACTION:QUERY_CUSTOMER:");
+            if (parts.length > 1) {
+                String namePart = parts[1].split("\n")[0].trim();
+                return namePart;
+            }
+        } catch (Exception e) {
+            log.error("从AI响应提取客户姓名失败: {}", e.getMessage(), e);
+        }
+        return null;
+    }
+    
+    /**
+     * 根据客户姓名查询客户信息
+     */
+    private String queryCustomerInfoByName(ChatRequest request, String customerName, List<ChatMessage> recentHistory) {
+        try {
+            log.info("AI指示查询客户信息: {}", customerName);
+            
+            // 查询客户订单
+            List<TourBooking> bookings = tourBookingMapper.getByContactPersonLike(customerName);
+            
+            if (bookings == null || bookings.isEmpty()) {
+                return String.format("没有找到客户 \"%s\" 的相关订单信息。请确认姓名是否正确，或联系客服获取帮助。", customerName);
+            }
+            
+            // 权限过滤
+            List<TourBooking> authorizedBookings = new ArrayList<>();
+            Long currentUserId = request.getUserId();
+            Integer userType = request.getUserType();
+            
+            for (TourBooking booking : bookings) {
+                if (hasPermissionToViewBooking(booking, currentUserId, userType)) {
+                    authorizedBookings.add(booking);
+                }
+            }
+            
+            if (authorizedBookings.isEmpty()) {
+                return String.format("找到客户 \"%s\" 的订单信息，但您没有权限查看。如需查询，请联系相关负责人。", customerName);
+            }
+            
+            // 构建客户信息回复
+            return buildCustomerInfoResponse(customerName, authorizedBookings, recentHistory);
+            
+        } catch (Exception e) {
+            log.error("查询客户信息失败: {}", e.getMessage(), e);
+            return String.format("查询客户 \"%s\" 信息时出现错误，请稍后重试或联系客服。", customerName);
+        }
+    }
+    
+    /**
+     * 构建客户信息回复
+     */
+    private String buildCustomerInfoResponse(String customerName, List<TourBooking> bookings, List<ChatMessage> recentHistory) {
+        StringBuilder response = new StringBuilder();
+        
+        if (bookings.isEmpty()) {
+            response.append("抱歉，没有找到 \"").append(customerName).append("\" 的订单信息。\n");
+            response.append("请确认客户姓名是否正确，或联系客服人员协助查询。");
+            return response.toString();
+        }
+        
+        response.append("📋 找到 \"").append(customerName).append("\" 的订单信息：\n\n");
+        
+        for (int i = 0; i < bookings.size(); i++) {
+            TourBooking booking = bookings.get(i);
+            response.append("🔸 **订单 ").append(i + 1).append("**\n");
+            response.append("订单号：").append(booking.getOrderNumber()).append("\n");
+            response.append("服务类型：").append(booking.getServiceType() != null ? booking.getServiceType() : "未指定").append("\n");
+            response.append("出发日期：").append(booking.getTourStartDate() != null ? booking.getTourStartDate().toString() : "未设定").append("\n");
+            response.append("结束日期：").append(booking.getTourEndDate() != null ? booking.getTourEndDate().toString() : "未设定").append("\n");
+            response.append("订单状态：").append(getStatusText(booking.getStatus())).append("\n");
+            response.append("支付状态：").append(getPaymentStatusText(booking.getPaymentStatus())).append("\n");
+            
+            // 航班信息
+            if (booking.getFlightNumber() != null || booking.getReturnFlightNumber() != null) {
+                response.append("\n✈️ **航班信息**\n");
+                if (booking.getFlightNumber() != null) {
+                    response.append("到达航班：").append(booking.getFlightNumber());
+                    if (booking.getArrivalDepartureTime() != null) {
+                        response.append("（起飞：").append(booking.getArrivalDepartureTime()).append("）");
+                    }
+                    if (booking.getArrivalLandingTime() != null) {
+                        response.append("（降落：").append(booking.getArrivalLandingTime()).append("）");
+                    }
+                    response.append("\n");
+                }
+                if (booking.getReturnFlightNumber() != null) {
+                    response.append("离开航班：").append(booking.getReturnFlightNumber());
+                    if (booking.getDepartureDepartureTime() != null) {
+                        response.append("（起飞：").append(booking.getDepartureDepartureTime()).append("）");
+                    }
+                    if (booking.getDepartureLandingTime() != null) {
+                        response.append("（降落：").append(booking.getDepartureLandingTime()).append("）");
+                    }
+                    response.append("\n");
+                }
+            }
+            
+            // 住宿信息
+            if (booking.getHotelLevel() != null && !booking.getHotelLevel().trim().isEmpty()) {
+                response.append("\n🏨 住宿安排：").append(booking.getHotelLevel());
+                if (booking.getRoomType() != null) {
+                    response.append(" (").append(booking.getRoomType()).append(")");
+                }
+                response.append("\n");
+            }
+            
+            // 费用信息
+            if (booking.getTotalPrice() != null) {
+                response.append("\n💰 订单金额：$").append(booking.getTotalPrice()).append("\n");
+            }
+            
+            // 备注信息
+            if (booking.getSpecialRequests() != null && !booking.getSpecialRequests().trim().isEmpty()) {
+                response.append("\n📝 特殊要求：\n");
+                // 处理特殊要求的格式化，如果包含数字序号，每行一个
+                String specialRequests = booking.getSpecialRequests();
+                if (specialRequests.matches(".*\\d+\\..*")) {
+                    // 包含数字序号，按序号分行
+                    String[] lines = specialRequests.split("(?=\\d+\\.)");
+                    for (String line : lines) {
+                        line = line.trim();
+                        if (!line.isEmpty()) {
+                            response.append(line).append("\n");
+                        }
+                    }
+                } else {
+                    // 普通文本，直接显示
+                    response.append(specialRequests).append("\n");
+                }
+            }
+            
+            // 每个订单之间空一行
+            if (i < bookings.size() - 1) {
+                response.append("\n---\n\n");
+            }
+        }
+        
+        // 检查用户是否在询问特定信息
+        String lastUserMessage = getLastUserMessage(recentHistory);
+        if (lastUserMessage != null) {
+            if (lastUserMessage.contains("航班号") || lastUserMessage.contains("航班")) {
+                response.append("\n\n🔍 **航班号汇总：**\n");
+                for (TourBooking booking : bookings) {
+                    if (booking.getFlightNumber() != null || booking.getReturnFlightNumber() != null) {
+                        response.append("订单 ").append(booking.getOrderNumber()).append("：");
+                        if (booking.getFlightNumber() != null) {
+                            response.append("到达 ").append(booking.getFlightNumber()).append(" ");
+                        }
+                        if (booking.getReturnFlightNumber() != null) {
+                            response.append("离开 ").append(booking.getReturnFlightNumber());
+                        }
+                        response.append("\n");
+                    }
+                }
+            }
+        }
+        
+        return response.toString();
+    }
+    
+    /**
+     * 获取最后一条用户消息
+     */
+    private String getLastUserMessage(List<ChatMessage> recentHistory) {
+        if (recentHistory == null || recentHistory.isEmpty()) {
+            return null;
+        }
+        
+        // 从最后开始查找最近的用户消息
+        for (int i = recentHistory.size() - 1; i >= 0; i--) {
+            ChatMessage msg = recentHistory.get(i);
+            if (msg.getUserMessage() != null && !msg.getUserMessage().trim().isEmpty()) {
+                return msg.getUserMessage();
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * 检查用户是否有权限查看订单
+     */
+    private boolean hasPermissionToViewBooking(TourBooking booking, Long currentUserId, Integer userType) {
+        if (currentUserId == null || userType == null || booking == null) {
+            return false;
+        }
+        
+        try {
+            log.info("权限判断详情 - 订单agentId: {} (类型: {}), 订单operatorId: {} (类型: {}), 当前userId: {} (类型: {})", 
+                    booking.getAgentId(), booking.getAgentId() != null ? booking.getAgentId().getClass().getSimpleName() : "null",
+                    booking.getOperatorId(), booking.getOperatorId() != null ? booking.getOperatorId().getClass().getSimpleName() : "null", 
+                    currentUserId, currentUserId.getClass().getSimpleName());
+            
+            if (userType == 1) {
+                // 普通用户：只能查询自己的订单
+                boolean hasPermission = booking.getUserId() != null && booking.getUserId().equals(currentUserId.intValue());
+                log.info(hasPermission ? "✅ 普通用户权限验证通过" : "❌ 普通用户权限验证失败：userId {} NOT equals currentUserId {}", booking.getUserId(), currentUserId);
+                return hasPermission;
+                
+            } else if (userType == 2) {
+                // userType=2 可能是操作员或者代理商主号，需要进一步判断
+                
+                // 首先检查是否是代理商主号 - 如果订单的agentId等于当前userId，说明是代理商主号
+                if (booking.getAgentId() != null && booking.getAgentId().equals(currentUserId.intValue())) {
+                    log.info("✅ 代理商主号权限验证通过：订单agentId {} equals currentUserId {}", booking.getAgentId(), currentUserId);
+                    return true;
+                }
+                
+                // 然后检查是否是操作员 - 如果订单的operatorId等于当前userId，说明是操作员
+                if (booking.getOperatorId() != null && booking.getOperatorId().equals(currentUserId)) {
+                    log.info("✅ 操作员权限验证通过：订单operatorId {} equals currentUserId {}", booking.getOperatorId(), currentUserId);
+                    return true;
+                }
+                
+                log.info("❌ userType=2 权限验证失败：既不是代理商主号（订单agentId={}, 当前userId={}），也不是操作员（订单operatorId={}, 当前userId={})", 
+                        booking.getAgentId(), currentUserId, booking.getOperatorId(), currentUserId);
+                return false;
+                
+            } else if (userType == 3) {
+                // 中介主号：可以查询代理商下所有订单
+                log.info("✅ 中介主号权限：允许查看所有订单");
+                return true;
+            }
+            
+        } catch (Exception e) {
+            log.error("权限检查失败: {}", e.getMessage(), e);
+        }
+        
+        log.info("❌ 未知用户类型或权限验证失败：userType={}", userType);
+        return false;
+    }
+    
+    /**
+     * 基础意图识别（作为AI分析的备选方案）
+     */
+    private String handleBasicIntentRecognition(ChatRequest request, String message) {
+        // 1. 人员信息查询（姓名、联系人、航班等）
+        if (isPersonInfoQuery(message)) {
+            return handlePersonInfoQuery(request, message);
+        }
+        
+        // 2. 地区相关查询
+        if (isRegionQuery(message)) {
+            return handleRegionQuery(request, message);
+        }
+
+        // 3. 产品详情查询
+        if (isProductDetailQuery(message)) {
+            return handleProductDetailQuery(request, message);
+        }
+        
+        // 4. 导游相关查询
+        if (isGuideQuery(message)) {
+            return handleGuideQuery(request, message);
+        }
+        
+        // 5. 车辆相关查询
+        if (isVehicleQuery(message)) {
+            return handleVehicleQuery(request, message);
+        }
+        
+        // 6. 订单统计查询
+        if (isOrderStatQuery(message)) {
+            return handleOrderStatQuery(request, message);
+        }
+        
+        // 7. 具体业务查询
+        if (isSpecificBusinessQuery(message)) {
+            return handleSpecificBusinessQuery(request, message);
+        }
+        
+        // 8. 问候和感谢
+        if (isGreetingOrThanks(message)) {
+            return handleGreetingOrThanks(message);
+        }
+        
+        // 9. 默认智能对话处理
+        return handleGeneralSmartConversation(request, message);
+    }
+    
+    /**
+     * 判断是否为地区查询
+     */
+    private boolean isRegionQuery(String message) {
+        String[] regionKeywords = {"地区", "区域", "塔斯马尼亚", "霍巴特", "朗塞斯顿", "德文港", "摇篮山", "威灵顿山", 
+                                 "有什么地方", "哪些地区", "景点分布", "旅游区域", "地方推荐"};
+        String lowerMessage = message.toLowerCase();
+        return Arrays.stream(regionKeywords).anyMatch(keyword -> 
+            lowerMessage.contains(keyword.toLowerCase()));
+    }
+    
+    /**
+     * 处理地区查询
+     */
+    private String handleRegionQuery(ChatRequest request, String message) {
+        try {
+            // 获取所有地区信息
+            List<com.sky.dto.RegionDTO> regions = regionMapper.getAll();
+            
+            if (regions == null || regions.isEmpty()) {
+                return "暂时没有找到地区信息，请联系客服获取更多帮助。";
+            }
+            
+            StringBuilder response = new StringBuilder();
+            response.append("📍 **塔斯马尼亚旅游地区介绍**\n\n");
+            
+            for (com.sky.dto.RegionDTO region : regions) {
+                Integer dayTourCount = regionMapper.countDayTours(region.getId());
+                Integer groupTourCount = regionMapper.countGroupTours(region.getId());
+                
+                response.append("🏞️ **").append(region.getName()).append("**\n");
+                if (region.getDescription() != null) {
+                    response.append("   ").append(region.getDescription()).append("\n");
+                }
+                response.append("   📊 一日游产品: ").append(dayTourCount != null ? dayTourCount : 0).append("个\n");
+                response.append("   🚌 跟团游产品: ").append(groupTourCount != null ? groupTourCount : 0).append("个\n\n");
+            }
+            
+            response.append("如需了解具体地区的旅游产品，请告诉我您感兴趣的地区名称！");
+            
+            return response.toString();
+            
+        } catch (Exception e) {
+            log.error("处理地区查询失败: {}", e.getMessage(), e);
+            return "查询地区信息时出现错误，请稍后重试或联系客服。";
+        }
+    }
+    
+    /**
+     * 判断是否为评价查询
+     */
+    private boolean isReviewQuery(String message) {
+        String[] reviewKeywords = {"评价", "评论", "评分", "怎么样", "好不好", "口碑", "体验", "满意度", "推荐吗"};
+        return Arrays.stream(reviewKeywords).anyMatch(keyword -> message.contains(keyword));
+    }
+    
+
+    
+
+    
+    /**
+     * 判断是否为产品详情查询
+     */
+    private boolean isProductDetailQuery(String message) {
+        String[] detailKeywords = {"详情", "介绍", "行程", "包含", "不包含", "亮点", "费用", "价格", "时间", "安排"};
+        return Arrays.stream(detailKeywords).anyMatch(keyword -> message.contains(keyword));
+    }
+    
+    /**
+     * 处理产品详情查询
+     */
+    private String handleProductDetailQuery(ChatRequest request, String message) {
+        try {
+            String productName = extractProductNameFromMessage(message);
+            
+            if (productName != null) {
+                GroupTourDTO groupTour = groupTourMapper.findByNameLike(productName);
+                if (groupTour != null) {
+                    return getProductDetailInfo(groupTour);
+                }
+            }
+            
+            return "请告诉我您想了解哪个具体产品的详情？比如'塔斯马尼亚南部4日游的详细行程'";
+            
+        } catch (Exception e) {
+            log.error("处理产品详情查询失败: {}", e.getMessage(), e);
+            return "查询产品详情时出现错误，请稍后重试。";
+        }
+    }
+    
+    /**
+     * 获取产品详情信息
+     */
+    private String getProductDetailInfo(GroupTourDTO product) {
+        try {
+            StringBuilder response = new StringBuilder();
+            response.append("🌟 **").append(product.getName()).append("**\n\n");
+            
+            // 基本信息
+            response.append("📅 时长: ").append(product.getDuration() != null ? product.getDuration() : "待定").append("\n");
+            response.append("💰 价格: $").append(product.getPrice());
+            if (product.getDiscountedPrice() != null && product.getDiscountedPrice().compareTo(product.getPrice()) < 0) {
+                response.append(" (优惠价: $").append(product.getDiscountedPrice()).append(")");
+            }
+            response.append("\n");
+            
+            if (product.getLocation() != null) {
+                response.append("📍 地点: ").append(product.getLocation()).append("\n");
+            }
+            
+            if (product.getRating() != null) {
+                response.append("⭐ 评分: ").append(product.getRating()).append("/5.0\n");
+            }
+            
+            response.append("\n");
+            
+            // 描述
+            if (product.getDescription() != null) {
+                response.append("📖 **产品描述**\n").append(product.getDescription()).append("\n\n");
+            }
+            
+            // 获取亮点
+            try {
+                List<String> highlights = groupTourMapper.getHighlights(product.getId());
+                if (highlights != null && !highlights.isEmpty()) {
+                    response.append("✨ **产品亮点**\n");
+                    for (String highlight : highlights) {
+                        response.append("• ").append(highlight).append("\n");
+                    }
+                    response.append("\n");
+                }
+            } catch (Exception e) {
+                log.warn("获取产品亮点失败: {}", e.getMessage());
+            }
+            
+            // 获取包含项目
+            try {
+                List<String> inclusions = groupTourMapper.getInclusions(product.getId());
+                if (inclusions != null && !inclusions.isEmpty()) {
+                    response.append("✅ **费用包含**\n");
+                    for (String inclusion : inclusions) {
+                        response.append("• ").append(inclusion).append("\n");
+                    }
+                    response.append("\n");
+                }
+            } catch (Exception e) {
+                log.warn("获取包含项目失败: {}", e.getMessage());
+            }
+            
+            // 获取不包含项目
+            try {
+                List<String> exclusions = groupTourMapper.getExclusions(product.getId());
+                if (exclusions != null && !exclusions.isEmpty()) {
+                    response.append("❌ **费用不包含**\n");
+                    for (String exclusion : exclusions) {
+                        response.append("• ").append(exclusion).append("\n");
+                    }
+                    response.append("\n");
+                }
+            } catch (Exception e) {
+                log.warn("获取不包含项目失败: {}", e.getMessage());
+            }
+            
+            response.append("需要预订或了解更多详情，请点击: ");
+            response.append("http://localhost:3000/booking?product=").append(product.getId());
+            
+            return response.toString();
+            
+        } catch (Exception e) {
+            log.error("获取产品详情失败: {}", e.getMessage(), e);
+            return "获取产品详情时出现错误，请稍后重试。";
+        }
+    }
+    
+    /**
+     * 判断是否为导游查询
+     */
+    private boolean isGuideQuery(String message) {
+        String[] guideKeywords = {"导游", "向导", "讲解员", "带队", "guide"};
+        return Arrays.stream(guideKeywords).anyMatch(keyword -> 
+            message.toLowerCase().contains(keyword.toLowerCase()));
+    }
+    
+    /**
+     * 处理导游查询
+     */
+    private String handleGuideQuery(ChatRequest request, String message) {
+        // 这里可以根据实际需求实现导游相关查询
+        return "关于导游服务，我们为每个团队都配备专业的中文导游。导游熟悉当地历史文化，会为您提供详细的景点讲解。如需了解特定产品的导游安排，请告诉我具体的旅游产品名称。";
+    }
+    
+    /**
+     * 判断是否为车辆查询
+     */
+    private boolean isVehicleQuery(String message) {
+        String[] vehicleKeywords = {"车辆", "交通", "大巴", "小巴", "车子", "接送", "transportation"};
+        return Arrays.stream(vehicleKeywords).anyMatch(keyword -> 
+            message.toLowerCase().contains(keyword.toLowerCase()));
+    }
+    
+    /**
+     * 处理车辆查询
+     */
+    private String handleVehicleQuery(ChatRequest request, String message) {
+        return "🚌 我们的交通安排：\n" +
+               "• 小团(1-6人): 舒适SUV或商务车\n" +
+               "• 中团(7-12人): 12座商务车\n" +
+               "• 大团(13-20人): 豪华大巴\n" +
+               "• 所有车辆都配备空调，确保舒适出行\n" +
+               "• 专业司机，安全可靠\n\n" +
+               "具体车辆安排会根据您的团队人数确定，如需了解特定产品的交通安排，请告诉我产品名称。";
+    }
+    
+    /**
+     * 判断是否为订单统计查询
+     */
+    private boolean isOrderStatQuery(String message) {
+        String[] statKeywords = {"统计", "数量", "多少", "总共", "一共", "count"};
+        String[] orderKeywords = {"订单", "预订", "booking"};
+        
+        return Arrays.stream(statKeywords).anyMatch(keyword -> message.contains(keyword)) &&
+               Arrays.stream(orderKeywords).anyMatch(keyword -> message.contains(keyword));
+    }
+    
+    /**
+     * 处理订单统计查询
+     */
+    private String handleOrderStatQuery(ChatRequest request, String message) {
+        // 基于安全考虑，不提供具体的统计数据，只给出一般性回复
+        return "关于订单统计信息，出于数据安全考虑，我无法提供具体数字。如您需要查看订单相关信息，请：\n" +
+               "1. 管理员请登录后台管理系统查看\n" +
+               "2. 客户请在'我的订单'页面查看个人订单\n" +
+               "3. 如有其他需求，请联系客服";
+    }
+    
+    /**
+     * 从消息中提取产品名称
+     */
+    private String extractProductNameFromMessage(String message) {
+        // 简单的关键词匹配，实际可以更复杂
+        String[] commonProducts = {"塔斯马尼亚南部4日游", "塔斯马尼亚北部3日游", "霍巴特一日游", "摇篮山一日游", 
+                                  "威灵顿山", "朗塞斯顿", "德文港"};
+        
+        for (String product : commonProducts) {
+            if (message.contains(product)) {
+                return product;
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * 处理一般性智能对话
+     */
+    private String handleGeneralSmartConversation(ChatRequest request, String message) {
+        // 构建更开放的对话上下文，允许AI更自由地回应
+        String conversationContext = buildSmartConversationContext(request, message);
+        
+        try {
+            String aiResponse = callQwenAI(conversationContext);
+            if (aiResponse != null && !aiResponse.trim().isEmpty()) {
+                return aiResponse;
+            }
+        } catch (Exception e) {
+            log.error("AI对话处理失败: {}", e.getMessage(), e);
+        }
+        
+        // 如果AI回复失败，提供友好的默认回复
+        return getDefaultResponse(message);
+    }
+    
+    /**
+     * 检测是否是人员信息查询
+     */
+    private boolean isPersonInfoQuery(String message) {
+        // 检测包含人名的模式
+        boolean hasPersonName = message.matches(".*[\\u4e00-\\u9fa5]{2,4}.*"); // 包含中文姓名
+        
+        // 检测查询类关键词
+        String[] queryKeywords = {"航班", "电话", "联系方式", "信息", "是啥", "是什么", "多少", "几点"};
+        boolean hasQueryKeyword = false;
+        for (String keyword : queryKeywords) {
+            if (message.contains(keyword)) {
+                hasQueryKeyword = true;
+                break;
+            }
+        }
+        
+        return hasPersonName && hasQueryKeyword;
+    }
+    
+    /**
+     * 处理人员信息查询
+     */
+    private String handlePersonInfoQuery(ChatRequest request, String message) {
+        // 提取人名
+        String[] words = message.split("[\\s，。！？、]");
+        String personName = null;
+        for (String word : words) {
+            if (word.matches("[\\u4e00-\\u9fa5]{2,4}")) { // 中文姓名模式
+                personName = word;
+                break;
+            }
+        }
+        
+        if (personName == null) {
+            return "抱歉，我没能识别出您询问的是哪位客户。请提供更具体的姓名信息，我来帮您查询。";
+        }
+        
+        // 尝试从订单系统查询该人员信息
+        try {
+            List<TourBooking> bookings = tourBookingMapper.getByContactPersonLike(personName);
+            if (bookings != null && !bookings.isEmpty()) {
+                TourBooking booking = bookings.get(0); // 获取最新的订单
+                
+                StringBuilder response = new StringBuilder();
+                response.append("📋 **找到客户信息：").append(personName).append("**\n\n");
+                
+                if (message.contains("航班")) {
+                    if (booking.getReturnFlightNumber() != null || booking.getFlightNumber() != null) {
+                        response.append("✈️ **航班信息**：\n");
+                        if (booking.getFlightNumber() != null) {
+                            response.append("• 抵达航班：").append(booking.getFlightNumber()).append("\n");
+                        }
+                        if (booking.getReturnFlightNumber() != null) {
+                            response.append("• 离开航班：").append(booking.getReturnFlightNumber()).append("\n");
+                        }
+                    } else {
+                        response.append("❌ 该客户的航班信息尚未完善，请查看订单详情或联系客户确认。\n");
+                    }
+                }
+                
+                if (message.contains("电话") || message.contains("联系")) {
+                    response.append("\n📞 **联系方式**：\n");
+                    response.append("• 联系人：").append(booking.getContactPerson()).append("\n");
+                    response.append("• 电话：").append(booking.getContactPhone()).append("\n");
+                }
+                
+                response.append("\n🔗 **订单详情**：[查看完整订单](/orders/").append(booking.getBookingId()).append(")");
+                
+                return response.toString();
+            } else {
+                return "🔍 **未找到客户：" + personName + "**\n\n" +
+                       "可能的原因：\n" +
+                       "• 姓名拼写不正确\n" +
+                       "• 该客户尚未预订\n" +
+                       "• 信息录入有误\n\n" +
+                       "💡 **建议**：\n" +
+                       "• 检查姓名拼写\n" +
+                       "• 尝试搜索电话号码\n" +
+                       "• 查看所有订单列表";
+            }
+        } catch (Exception e) {
+            log.error("查询客户信息失败: {}", e.getMessage(), e);
+            return "抱歉，查询客户信息时遇到问题。请稍后重试或联系技术支持。";
+        }
+    }
+    
+    /**
+     * 检测是否是具体业务查询
+     */
+    private boolean isSpecificBusinessQuery(String message) {
+        String[] businessKeywords = {
+            "订单", "预订", "行程", "价格", "时间", "地点", "景点", "酒店", 
+            "接送", "导游", "包含", "退款", "取消", "修改", "确认"
+        };
+        
+        for (String keyword : businessKeywords) {
+            if (message.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * 处理具体业务查询
+     */
+    private String handleSpecificBusinessQuery(ChatRequest request, String message) {
+        // 这里可以添加更多具体的业务逻辑
+        // 目前先返回null，让AI来处理
+        return null;
+    }
+    
+    /**
+     * 检测是否是打招呼或感谢
+     */
+    private boolean isGreetingOrThanks(String message) {
+        String[] greetings = {"你好", "您好", "嗨", "hi", "hello", "谢谢", "感谢", "再见", "bye"};
+        String lowerMessage = message.toLowerCase();
+        
+        for (String greeting : greetings) {
+            if (lowerMessage.contains(greeting)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * 处理打招呼或感谢
+     */
+    private String handleGreetingOrThanks(String message) {
+        String lowerMessage = message.toLowerCase();
+        
+        if (lowerMessage.contains("谢谢") || lowerMessage.contains("感谢")) {
+            return "😊 不客气！很高兴能帮助到您。如果还有其他问题，随时告诉我哦！";
+        } else if (lowerMessage.contains("再见") || lowerMessage.contains("bye")) {
+            return "👋 再见！祝您旅途愉快，期待为您提供更多服务！";
+        } else {
+            return "😊 您好！我是Happy Tassie Travel的AI客服助手，很高兴为您服务！有什么可以帮助您的吗？";
+        }
+    }
+    
+    /**
+     * 构建智能对话上下文，让AI更自由发挥
+     */
+    private String buildSmartConversationContext(ChatRequest request, String message) {
+        StringBuilder context = new StringBuilder();
+        
+        // 更灵活的系统提示
+        context.append("你是Happy Tassie Travel的专业AI客服助手，具有以下特点：\n");
+        context.append("1. 🎯 专业且人性化：既有专业知识，又能灵活应变\n");
+        context.append("2. 🔍 智能理解：能理解用户的具体需求和上下文\n");
+        context.append("3. 💡 主动帮助：不仅回答问题，还能主动提供有用建议\n");
+        context.append("4. 🌟 友好亲切：保持温暖、耐心的服务态度\n\n");
+        
+        // 当前用户信息上下文
+        if (request.getCurrentPage() != null) {
+            context.append("用户当前页面：").append(request.getCurrentPage()).append("\n");
+        }
+        context.append("用户类型：").append(request.getUserType() == 2 ? "代理商操作员" : "普通客户").append("\n\n");
+        
+        // 获取最近的对话历史
+        List<ChatMessage> history = chatMessageMapper.selectRecentByUserId(request.getUserId(), 3);
+        if (history != null && !history.isEmpty()) {
+            context.append("最近对话历史：\n");
+            for (ChatMessage msg : history) {
+                if (msg.getUserMessage() != null) {
+                    context.append("用户：").append(msg.getUserMessage()).append("\n");
+                }
+                if (msg.getBotResponse() != null) {
+                    context.append("助手：").append(msg.getBotResponse()).append("\n");
+                }
+            }
+            context.append("\n");
+        }
+        
+        // 当前用户问题
+        context.append("用户当前问题：").append(message).append("\n\n");
+        
+        // 指导原则
+        context.append("请根据用户问题智能回复，遵循以下原则：\n");
+        context.append("- 如果是具体查询，尽力提供有用信息或指导\n");
+        context.append("- 如果信息不足，礼貌询问更多详情\n");
+        context.append("- 保持专业但不失人情味\n");
+        context.append("- 适当推荐相关服务，但不要过度营销\n");
+        context.append("- 回复要简洁明了，重点突出\n\n");
+        
+        return context.toString();
     }
     
     /**
@@ -723,117 +1864,6 @@ public class ChatBotServiceImpl implements ChatBotService {
         answer.append("• 实时优惠请关注我们的公告");
         
         return answer.toString();
-    }
-    
-    /**
-     * 构建DeepSeek对话上下文
-     */
-    private String buildConversationContextForDeepSeek(ChatRequest request) {
-        StringBuilder context = new StringBuilder();
-        
-        // 系统提示 - 专业的塔斯马尼亚旅游AI助手
-        String systemPrompt = buildTasmanianTravelSystemPrompt();
-        context.append("系统指令：").append(systemPrompt).append("\n\n");
-        
-        // 获取最近的对话历史
-        List<ChatMessage> history = chatMessageMapper.selectRecentByUserId(request.getUserId(), 5);
-        for (ChatMessage msg : history) {
-            if (msg.getUserMessage() != null) {
-                context.append("用户：").append(msg.getUserMessage()).append("\n");
-            }
-            if (msg.getBotResponse() != null) {
-                context.append("助手：").append(msg.getBotResponse()).append("\n");
-            }
-        }
-        
-        // 当前用户消息
-        context.append("用户：").append(request.getMessage()).append("\n");
-        context.append("助手：");
-        
-        return context.toString();
-    }
-    
-    /**
-     * 构建对话上下文 (已废弃，保留兼容性)
-     */
-    @Deprecated
-    private List<String> buildConversationContext(ChatRequest request) {
-        // 保留空方法，避免编译错误
-        return new ArrayList<>();
-    }
-    
-    /**
-     * 构建塔斯马尼亚旅游专业系统提示
-     */
-    private String buildTasmanianTravelSystemPrompt() {
-        try {
-            // 使用产品知识服务生成系统提示
-            return tourKnowledgeService.generateAISystemPrompt();
-        } catch (Exception e) {
-            log.warn("获取产品知识系统提示失败，使用默认提示: {}", e.getMessage());
-            
-            // 降级到默认系统提示
-            return "你是Happy Tassie Travel（塔斯马尼亚快乐旅游）的专业AI客服助手。你精通塔斯马尼亚旅游，能够为客户提供专业的旅游咨询和建议。\n\n" +
-                   
-                   "## 🌟 网站介绍\n" +
-                   "Happy Tassie Travel是专业的塔斯马尼亚旅游平台，提供跟团游、一日游等优质旅游服务。\n\n" +
-                   
-                   "## 🚌 主要产品线\n" +
-                   "### 跟团游产品：\n" +
-                   "- **6日塔斯马尼亚环岛游** ($1180 → $1038, 优惠12%)\n" +
-                   "- **5日塔州南部经典游** ($880 → $748, 优惠15%)\n" +
-                   "- **4日塔州北部文化游** ($680 → $578, 优惠15%)\n" +
-                   "- **3日塔州精华游** ($480 → $408, 优惠15%)\n\n" +
-                   
-                   "### 一日游产品：\n" +
-                   "- **酒杯湾一日游** ($180 → $153, 优惠15%)\n" +
-                   "- **摇篮山一日游** ($160 → $136, 优惠15%)\n" +
-                   "- **布鲁尼岛一日游** ($150 → $128, 优惠15%)\n" +
-                   "- **MONA博物馆一日游** ($120 → $102, 优惠15%)\n\n" +
-                   
-                   "## 🎯 服务特色\n" +
-                   "- **专业导游**：中文服务，深度讲解\n" +
-                   "- **小团出行**：8-12人精品小团\n" +
-                   "- **灵活定制**：可根据需求调整行程\n" +
-                   "- **品质保证**：精选住宿和餐厅\n\n" +
-                   
-                   "## 🏞️ 热门景点\n" +
-                   "### 南部地区：\n" +
-                   "- **酒杯湾（Wineglass Bay）**：世界十大海湾之一\n" +
-                   "- **萨拉曼卡市场**：周六集市，手工艺品和美食\n" +
-                   "- **MONA博物馆**：当代艺术殿堂\n" +
-                   "- **惠灵顿山**：俯瞰霍巴特全景\n" +
-                   "- **布鲁尼岛**：野生动物和新鲜生蚝\n\n" +
-                   
-                   "### 北部地区：\n" +
-                   "- **摇篮山（Cradle Mountain）**：世界自然遗产\n" +
-                   "- **朗塞斯顿**：历史名城\n" +
-                   "- **薰衣草农场**：紫色浪漫（12月-1月）\n" +
-                   "- **塔玛河谷**：葡萄酒产区\n\n" +
-                   
-                   "## 💰 预订须知\n" +
-                   "- **预订方式**：网站在线预订或联系客服\n" +
-                   "- **付款方式**：支持信用卡、PayPal、银行转账\n" +
-                   "- **取消政策**：出发前72小时免费取消\n" +
-                   "- **儿童政策**：12岁以下儿童享受优惠价格\n\n" +
-                   
-                   "## 🎯 AI助手使命\n" +
-                   "你的任务是：\n" +
-                   "1. **产品咨询**：详细介绍旅游产品特色和行程\n" +
-                   "2. **行程规划**：根据客户需求推荐合适的产品\n" +
-                   "3. **实用建议**：提供天气、交通、美食等实用信息\n" +
-                   "4. **预订引导**：指导客户完成预订流程\n" +
-                   "5. **问题解答**：回答关于塔斯马尼亚旅游的各种问题\n\n" +
-                   
-                   "## 📝 回复风格要求\n" +
-                   "- **热情友好**：保持温暖亲切的语调\n" +
-                   "- **专业详细**：提供准确的产品信息\n" +
-                   "- **个性化**：根据客户需求定制推荐\n" +
-                   "- **实用性**：关注客户的实际需求\n" +
-                   "- **引导行动**：适时引导客户预订或咨询\n\n" +
-                   
-                   "请始终记住，你代表Happy Tassie Travel，要展现专业性和热情，帮助每位客户获得最佳的塔斯马尼亚旅游体验。";
-        }
     }
     
     /**
@@ -966,183 +1996,208 @@ public class ChatBotServiceImpl implements ChatBotService {
      * 使用AI智能解析订单信息（优化版）
      */
     private OrderInfo parseOrderInfoWithAI(String message) {
-        // 如果DeepSeek未配置，回退到传统方法
-        if (deepseekApiKey == null || deepseekApiKey.isEmpty()) {
+        // 如果Qwen未配置，回退到传统方法
+        if (qwenApiKey == null || qwenApiKey.isEmpty()) {
             return parseOrderInfoTraditional(message);
         }
         
         try {
-            // 构建专业的订单解析提示
-            String aiPrompt = "你是一个专业的旅游订单数据提取专家。请从以下文本中提取旅游订单信息。\n\n" +
-                    "## 提取任务：\n" +
-                    "1. **服务类型识别**：准确识别旅游产品类型\n" +
-                    "   - 跟团游：'X日游'、'环岛游'、'跟团'等\n" +
-                    "   - 一日游：'一日游'、'Day Tour'等\n" +
-                    "   - 包车服务：'包车'、'接送'等\n\n" +
-                    "2. **日期提取**：识别各种日期格式\n" +
-                    "   - '5月29日'、'2024年5月29日'、'05/29'、'5-29'\n" +
-                    "   - '参团日期'、'出行日期'、'开始日期'\n\n" +
-                    "3. **客户信息提取**：\n" +
-                    "   - 姓名：中英文姓名（如：张三、John Smith）\n" +
-                    "   - 电话：手机号码各种格式\n" +
-                    "   - 护照：字母+数字组合，通常8-9位\n\n" +
-                    "4. **航班信息识别**：\n" +
-                    "   - 航班号：JQ719、VA123、QF456等格式\n" +
-                    "   - 时间：24小时制或12小时制（AM/PM）\n\n" +
-                    "5. **住宿信息提取**：\n" +
-                    "   - 星级：'3星'、'3.5星'、'4星'、'4.5星'、'5星'、'三星'、'四星'、'五星'等（保持原始格式）\n" +
-                    "   - 房型：从文本中智能识别房间类型\n\n" +
-                    "6. **人数信息**：\n" +
-                    "   - 从'3个人'、'2位客人'、'成人2儿童1'等格式中提取\n" +
-                    "   - 区分成人和儿童数量\n\n" +
-                    "## 返回格式：\n" +
+            // 构建智能AI提示，让AI像人一样理解订单信息
+            String aiPrompt = "你是一个专业的旅游订单信息提取专家。请仔细分析以下订单文本，像人一样智能地理解和提取所有信息。\n\n" +
+                    "## 📋 需要提取的信息字段：\n\n" +
+                    "### 🎯 基础服务信息\n" +
+                    "- **服务类型**: 旅游产品名称（如塔州南部四日游、一日游等）\n" +
+                    "- **参团日期**: 开始和结束日期（**严格保持原始格式**：如6月22日、2024-06-22、Jun 22等，不要自动添加年份）\n" +
+                    "- **跟团人数**: 参与旅游的总人数\n\n" +
+                    "### ✈️ 航班信息\n" +
+                    "- **出发航班**: 去程航班号和时间\n" +
+                    "- **返程航班**: 回程航班号和时间\n" +
+                    "- **抵达时间**: 到达当地的具体时间\n" +
+                    "- **出发地点**: 接机或集合地点\n\n" +
+                    "### 👥 客户信息\n" +
+                    "- **主要联系人**: 姓名和电话（支持中英文姓名）\n" +
+                    "- **所有乘客**: 每个人的姓名、护照号、电话等\n" +
+                    "- **特殊需求**: 年龄、饮食要求、身体状况等\n\n" +
+                    "### 🏨 住宿信息\n" +
+                    "- **房型**: 双床房、大床房、三人房、单人房等\n" +
+                    "- **酒店级别**: 3星、4星、5星、经济型等\n" +
+                    "- **特殊要求**: 指定酒店、楼层、景观等\n\n" +
+                    "### 🧳 其他信息\n" +
+                    "- **行李数量**: 托运行李件数\n" +
+                    "- **行程安排**: 每天的详细安排\n" +
+                    "- **备注信息**: 所有特殊说明、赠品、优惠等\n\n" +
+                    "## 🤖 智能理解规则：\n\n" +
+                    "1. **日期格式严格保持原样**: \n" +
+                    "   - 如果原文是\"6月22日—6月25日\"，就输出\"6月22日\"和\"6月25日\"\n" +
+                    "   - 如果原文是\"2024-06-22\"，就输出\"2024-06-22\"\n" +
+                    "   - **绝对不要**自动添加、修改或转换年份格式\n" +
+                    "2. **姓名电话智能分离**: 识别\"方靓 0473953844\"中的姓名和电话\n" +
+                    "3. **航班号标准化**: 从\"返程航班:va1537\"中提取并转为大写\"VA1537\"\n" +
+                    "4. **房型保持原文**: \"双床房\"就是\"双床房\"，不要改成\"双人房\"\n" +
+                    "5. **数量提取**: \"跟团人数：2\"、\"2人\"、\"两个人\"都表示2人\n" +
+                    "6. **行程按天解析**: 理解\"第一天：霍巴特接机\"等分天描述\n" +
+                    "7. **备注完整保留**: 提取所有\"备注\"、\"注意\"、\"赠送\"等信息，不要遗漏\n\n" +
+                    "## 📤 返回格式（严格JSON）：\n" +
+                    "```json\n" +
                     "{\n" +
-                    "  \"serviceType\": \"服务类型或产品名称（保持原文描述）\",\n" +
-                    "  \"startDate\": \"开始日期(统一格式：X月X日)\",\n" +
-                    "  \"endDate\": \"结束日期(统一格式：X月X日)\",\n" +
-                    "  \"departure\": \"出发地点\",\n" +
-                    "  \"groupSize\": 总人数(数字),\n" +
-                    "  \"adultCount\": 成人数(数字),\n" +
-                    "  \"childCount\": 儿童数(数字),\n" +
-                    "  \"luggage\": 行李数(数字),\n" +
-                    "  \"roomType\": \"房间类型（标准化：单人房/双人房/三人房）\",\n" +
-                    "  \"hotelLevel\": \"酒店星级（保持原始格式：3星/3.5星/4星/4.5星/5星等）\",\n" +
-                    "  \"arrivalFlight\": \"抵达航班号\",\n" +
-                    "  \"departureFlight\": \"返程航班号\",\n" +
-                    "  \"arrivalTime\": \"抵达时间（24小时制：HH:MM）\",\n" +
-                    "  \"departureTime\": \"返程时间（24小时制：HH:MM）\",\n" +
-                    "  \"customers\": [\n" +
-                    "    {\n" +
-                    "      \"name\": \"姓名（保持原格式）\",\n" +
-                    "      \"phone\": \"电话号码（保持原格式）\",\n" +
-                    "      \"passport\": \"护照号（保持原格式）\",\n" +
-                    "      \"isChild\": false,\n" +
-                    "      \"age\": 年龄(如果是儿童)\n" +
-                    "    }\n" +
+                    "  \"serviceType\": \"完整的服务类型描述（保持原文）\",\n" +
+                    "  \"startDate\": \"开始日期(严格保持原始格式，不要添加年份)\",\n" +
+                    "  \"endDate\": \"结束日期(严格保持原始格式，不要添加年份)\",\n" +
+                    "  \"groupSize\": 人数(数字),\n" +
+                    "  \"customerInfo\": {\n" +
+                    "    \"primaryContact\": {\n" +
+                    "      \"name\": \"主要联系人姓名\",\n" +
+                    "      \"phone\": \"电话号码（去除空格）\",\n" +
+                    "      \"passport\": \"护照号(如有)\",\n" +
+                    "      \"email\": \"邮箱(如有)\"\n" +
+                    "    },\n" +
+                    "    \"allPassengers\": [\n" +
+                    "      {\n" +
+                    "        \"name\": \"乘客姓名\",\n" +
+                    "        \"phone\": \"电话\",\n" +
+                    "        \"passport\": \"护照号\",\n" +
+                    "        \"age\": \"年龄(如有)\",\n" +
+                    "        \"specialNeeds\": \"特殊需求(如有)\"\n" +
+                    "      }\n" +
+                    "    ]\n" +
+                    "  },\n" +
+                    "  \"flightInfo\": {\n" +
+                    "    \"departureFlightNumber\": \"出发航班号(大写)\",\n" +
+                    "    \"departureTime\": \"出发时间(原格式)\",\n" +
+                    "    \"returnFlightNumber\": \"返程航班号(大写)\",\n" +
+                    "    \"returnTime\": \"返程时间(原格式)\",\n" +
+                    "    \"arrivalTime\": \"抵达时间(原格式)\",\n" +
+                    "    \"departureLocation\": \"出发地点(原文描述)\"\n" +
+                    "  },\n" +
+                    "  \"hotelInfo\": {\n" +
+                    "    \"roomType\": \"房型(保持原文表述)\",\n" +
+                    "    \"hotelLevel\": \"酒店级别(保持原文)\",\n" +
+                    "    \"specialRequests\": \"特殊要求(原文)\"\n" +
+                    "  },\n" +
+                    "  \"luggageCount\": 行李数量(数字),\n" +
+                    "  \"itinerary\": {\n" +
+                    "    \"day1\": \"第一天行程(原文)\",\n" +
+                    "    \"day2\": \"第二天行程(原文)\",\n" +
+                    "    \"day3\": \"第三天行程(原文)\",\n" +
+                    "    \"day4\": \"第四天行程(原文)\",\n" +
+                    "    \"day5\": \"第五天行程(如有)\",\n" +
+                    "    \"summary\": \"行程总结(如有)\"\n" +
+                    "  },\n" +
+                    "  \"notes\": [\n" +
+                    "    \"备注信息1(原文)\",\n" +
+                    "    \"备注信息2(原文)\",\n" +
+                    "    \"赠品信息(原文)\",\n" +
+                    "    \"特殊安排(原文)\"\n" +
                     "  ],\n" +
-                    "  \"itinerary\": \"行程安排详情\",\n" +
-                    "  \"notes\": \"备注信息（包括特殊要求和其他说明）\",\n" +
-                    "  \"extractionQuality\": \"high|medium|low\",\n" +
-                    "  \"extractionDetails\": {\n" +
+                    "  \"extractionQuality\": {\n" +
+                    "    \"completeness\": 0.0-1.0,\n" +
                     "    \"confidence\": 0.0-1.0,\n" +
+                    "    \"missingFields\": [\"缺失的字段列表\"],\n" +
                     "    \"extractedFields\": [\"成功提取的字段列表\"],\n" +
-                    "    \"missingFields\": [\"缺失的重要字段列表\"],\n" +
-                    "    \"ambiguousFields\": [\"存在歧义的字段列表\"]\n" +
+                    "    \"notes\": \"提取说明，如发现的问题或不确定的地方\"\n" +
                     "  }\n" +
-                    "}\n\n" +
-                    "## 特别注意：\n" +
-                    "- 对于无法确定的字段请返回null\n" +
-                    "- 保持原文的重要信息，不要过度解释\n" +
-                    "- 如果存在多种可能的解释，选择最合理的一种\n" +
-                    "- 提取质量评估要客观准确\n\n" +
-                    "## 订单文本：\n" + message + "\n\n" +
-                    "请仔细分析并提取所有可用信息：";
+                    "}\n" +
+                    "```\n\n" +
+                    "## 🎯 **核心原则（非常重要）**：\n" +
+                    "1. **忠实原文**: 严格按照原文提取，不要自作主张修改格式\n" +
+                    "2. **日期格式**: 绝对不要自动添加年份或转换日期格式\n" +
+                    "3. **完整性**: 即使某个字段为空，也要在JSON中包含该字段（值为null或空字符串）\n" +
+                    "4. **准确性**: 数量字段必须是数字类型，电话号码要去除空格\n" +
+                    "5. **航班号**: 统一转换为大写格式\n" +
+                    "6. **文本清理**: 所有文本要去除前后空格，但保持内容原样\n\n" +
+                    "请仔细分析并严格按照原文提取所有可用信息：\n\n" +
+                    "=== 订单信息开始 ===\n" + message + "\n=== 订单信息结束 ===";
             
-            String aiResponse = callDeepSeekAI(aiPrompt);
+            String aiResponse = callQwenAI(aiPrompt);
             
             log.info("AI订单解析响应: {}", aiResponse);
             
-            // 解析AI响应并构建OrderInfo
             try {
-                com.alibaba.fastjson.JSONObject jsonResponse = com.alibaba.fastjson.JSON.parseObject(aiResponse);
+                JSONObject result = JSON.parseObject(aiResponse);
+                
                 OrderInfo.OrderInfoBuilder builder = OrderInfo.builder();
                 
-                // 提取基本信息，增加空值检查和数据清理
-                if (jsonResponse.containsKey("serviceType") && jsonResponse.getString("serviceType") != null && 
-                    !jsonResponse.getString("serviceType").trim().isEmpty()) {
-                    builder.serviceType(jsonResponse.getString("serviceType").trim());
-                }
-                if (jsonResponse.containsKey("startDate") && jsonResponse.getString("startDate") != null && 
-                    !jsonResponse.getString("startDate").trim().isEmpty()) {
-                    builder.startDate(jsonResponse.getString("startDate").trim());
-                }
-                if (jsonResponse.containsKey("endDate") && jsonResponse.getString("endDate") != null && 
-                    !jsonResponse.getString("endDate").trim().isEmpty()) {
-                    builder.endDate(jsonResponse.getString("endDate").trim());
-                }
-                if (jsonResponse.containsKey("departure") && jsonResponse.getString("departure") != null && 
-                    !jsonResponse.getString("departure").trim().isEmpty()) {
-                    builder.departure(jsonResponse.getString("departure").trim());
+                // 提取基础服务信息
+                if (result.containsKey("serviceType") && result.getString("serviceType") != null) {
+                    builder.serviceType(result.getString("serviceType").trim());
                 }
                 
-                // 人数信息处理（优先使用具体的成人/儿童数，其次使用总人数）
-                Integer adultCount = jsonResponse.getInteger("adultCount");
-                Integer childCount = jsonResponse.getInteger("childCount");
-                Integer groupSize = jsonResponse.getInteger("groupSize");
-                
-                if (adultCount != null && adultCount > 0) {
-                    // 如果有具体的成人数，使用它
-                    builder.groupSize(adultCount + (childCount != null ? childCount : 0));
-                } else if (groupSize != null && groupSize > 0) {
-                    // 否则使用总人数
-                    builder.groupSize(groupSize);
+                if (result.containsKey("startDate") && result.getString("startDate") != null) {
+                    builder.startDate(result.getString("startDate").trim());
                 }
                 
-                if (jsonResponse.containsKey("luggage") && jsonResponse.getInteger("luggage") != null) {
-                    builder.luggage(jsonResponse.getInteger("luggage"));
+                if (result.containsKey("endDate") && result.getString("endDate") != null) {
+                    builder.endDate(result.getString("endDate").trim());
                 }
-                if (jsonResponse.containsKey("roomType") && jsonResponse.getString("roomType") != null && 
-                    !jsonResponse.getString("roomType").trim().isEmpty()) {
-                    builder.roomType(jsonResponse.getString("roomType").trim());
-                }
-                if (jsonResponse.containsKey("hotelLevel") && jsonResponse.getString("hotelLevel") != null && 
-                    !jsonResponse.getString("hotelLevel").trim().isEmpty()) {
-                    String hotelLevel = jsonResponse.getString("hotelLevel").trim();
-                    // 特殊处理：3.5星标准化为3星
-                    if ("3.5星".equals(hotelLevel)) {
-                        hotelLevel = "3星";
-                        log.info("将酒店星级3.5星标准化为3星");
+                
+                if (result.containsKey("groupSize")) {
+                    try {
+                        builder.groupSize(result.getInteger("groupSize"));
+                    } catch (Exception e) {
+                        // 尝试从字符串解析数字
+                        String groupSizeStr = result.getString("groupSize");
+                        if (groupSizeStr != null && !groupSizeStr.trim().isEmpty()) {
+                            try {
+                                builder.groupSize(Integer.parseInt(groupSizeStr.replaceAll("[^0-9]", "")));
+                            } catch (NumberFormatException nfe) {
+                                log.warn("无法解析团队人数: {}", groupSizeStr);
+                            }
+                        }
                     }
-                    builder.hotelLevel(hotelLevel);
-                }
-                if (jsonResponse.containsKey("arrivalFlight") && jsonResponse.getString("arrivalFlight") != null && 
-                    !jsonResponse.getString("arrivalFlight").trim().isEmpty()) {
-                    builder.arrivalFlight(jsonResponse.getString("arrivalFlight").trim());
-                }
-                if (jsonResponse.containsKey("departureFlight") && jsonResponse.getString("departureFlight") != null && 
-                    !jsonResponse.getString("departureFlight").trim().isEmpty()) {
-                    builder.departureFlight(jsonResponse.getString("departureFlight").trim());
-                }
-                if (jsonResponse.containsKey("arrivalTime") && jsonResponse.getString("arrivalTime") != null && 
-                    !jsonResponse.getString("arrivalTime").trim().isEmpty()) {
-                    builder.arrivalTime(jsonResponse.getString("arrivalTime").trim());
-                }
-                
-                // 行程和备注信息
-                if (jsonResponse.containsKey("itinerary") && jsonResponse.getString("itinerary") != null && 
-                    !jsonResponse.getString("itinerary").trim().isEmpty()) {
-                    builder.itinerary(jsonResponse.getString("itinerary").trim());
-                }
-                if (jsonResponse.containsKey("notes") && jsonResponse.getString("notes") != null && 
-                    !jsonResponse.getString("notes").trim().isEmpty()) {
-                    builder.notes(jsonResponse.getString("notes").trim());
                 }
                 
                 // 提取客户信息
-                if (jsonResponse.containsKey("customers") && jsonResponse.getJSONArray("customers") != null) {
-                    com.alibaba.fastjson.JSONArray customersArray = jsonResponse.getJSONArray("customers");
+                if (result.containsKey("customerInfo")) {
+                    JSONObject customerInfo = result.getJSONObject("customerInfo");
                     List<OrderInfo.CustomerInfo> customers = new ArrayList<>();
                     
-                    for (int i = 0; i < customersArray.size(); i++) {
-                        com.alibaba.fastjson.JSONObject customerJson = customersArray.getJSONObject(i);
-                        OrderInfo.CustomerInfo.CustomerInfoBuilder customerBuilder = OrderInfo.CustomerInfo.builder();
+                    // 主要联系人
+                    if (customerInfo.containsKey("primaryContact")) {
+                        JSONObject primaryContact = customerInfo.getJSONObject("primaryContact");
+                        OrderInfo.CustomerInfo customer = new OrderInfo.CustomerInfo();
                         
-                        if (customerJson.containsKey("name") && customerJson.getString("name") != null && 
-                            !customerJson.getString("name").trim().isEmpty()) {
-                            customerBuilder.name(customerJson.getString("name").trim());
+                        if (primaryContact.containsKey("name") && primaryContact.getString("name") != null) {
+                            customer.setName(primaryContact.getString("name").trim());
                         }
-                        if (customerJson.containsKey("phone") && customerJson.getString("phone") != null && 
-                            !customerJson.getString("phone").trim().isEmpty()) {
-                            customerBuilder.phone(customerJson.getString("phone").trim());
+                        if (primaryContact.containsKey("phone") && primaryContact.getString("phone") != null) {
+                            customer.setPhone(primaryContact.getString("phone").trim().replaceAll("\\s+", ""));
                         }
-                        if (customerJson.containsKey("passport") && customerJson.getString("passport") != null && 
-                            !customerJson.getString("passport").trim().isEmpty()) {
-                            customerBuilder.passport(customerJson.getString("passport").trim());
+                        if (primaryContact.containsKey("passport") && primaryContact.getString("passport") != null) {
+                            customer.setPassport(primaryContact.getString("passport").trim());
                         }
                         
-                        OrderInfo.CustomerInfo customer = customerBuilder.build();
-                        if (customer.getName() != null || customer.getPhone() != null || customer.getPassport() != null) {
+                        if (customer.getName() != null || customer.getPhone() != null) {
                             customers.add(customer);
+                        }
+                    }
+                    
+                    // 所有乘客信息
+                    if (customerInfo.containsKey("allPassengers")) {
+                        JSONArray allPassengers = customerInfo.getJSONArray("allPassengers");
+                        for (int i = 0; i < allPassengers.size(); i++) {
+                            JSONObject passenger = allPassengers.getJSONObject(i);
+                            OrderInfo.CustomerInfo customer = new OrderInfo.CustomerInfo();
+                            
+                            if (passenger.containsKey("name") && passenger.getString("name") != null) {
+                                customer.setName(passenger.getString("name").trim());
+                            }
+                            if (passenger.containsKey("phone") && passenger.getString("phone") != null) {
+                                customer.setPhone(passenger.getString("phone").trim().replaceAll("\\s+", ""));
+                            }
+                            if (passenger.containsKey("passport") && passenger.getString("passport") != null) {
+                                customer.setPassport(passenger.getString("passport").trim());
+                            }
+                            
+                            if (customer.getName() != null || customer.getPhone() != null) {
+                                // 避免重复添加主联系人
+                                boolean isDuplicate = customers.stream().anyMatch(existing -> 
+                                    (existing.getName() != null && existing.getName().equals(customer.getName())) ||
+                                    (existing.getPhone() != null && existing.getPhone().equals(customer.getPhone()))
+                                );
+                                if (!isDuplicate) {
+                                    customers.add(customer);
+                                }
+                            }
                         }
                     }
                     
@@ -1151,44 +2206,132 @@ public class ChatBotServiceImpl implements ChatBotService {
                     }
                 }
                 
+                // 提取航班信息
+                if (result.containsKey("flightInfo")) {
+                    JSONObject flightInfo = result.getJSONObject("flightInfo");
+                    
+                    if (flightInfo.containsKey("returnFlightNumber") && flightInfo.getString("returnFlightNumber") != null) {
+                        builder.departureFlight(flightInfo.getString("returnFlightNumber").trim().toUpperCase());
+                    }
+                    if (flightInfo.containsKey("arrivalTime") && flightInfo.getString("arrivalTime") != null) {
+                        builder.arrivalTime(flightInfo.getString("arrivalTime").trim());
+                    }
+                    if (flightInfo.containsKey("departureLocation") && flightInfo.getString("departureLocation") != null) {
+                        builder.departure(flightInfo.getString("departureLocation").trim());
+                    }
+                }
+                
+                // 提取住宿信息
+                if (result.containsKey("hotelInfo")) {
+                    JSONObject hotelInfo = result.getJSONObject("hotelInfo");
+                    
+                    if (hotelInfo.containsKey("roomType") && hotelInfo.getString("roomType") != null) {
+                        builder.roomType(hotelInfo.getString("roomType").trim());
+                    }
+                    if (hotelInfo.containsKey("hotelLevel") && hotelInfo.getString("hotelLevel") != null) {
+                        builder.hotelLevel(hotelInfo.getString("hotelLevel").trim());
+                    }
+                }
+                
+                // 提取行李数量
+                if (result.containsKey("luggageCount")) {
+                    try {
+                        builder.luggage(result.getInteger("luggageCount"));
+                    } catch (Exception e) {
+                        String luggageStr = result.getString("luggageCount");
+                        if (luggageStr != null && !luggageStr.trim().isEmpty()) {
+                            try {
+                                builder.luggage(Integer.parseInt(luggageStr.replaceAll("[^0-9]", "")));
+                            } catch (NumberFormatException nfe) {
+                                log.warn("无法解析行李数量: {}", luggageStr);
+                            }
+                        }
+                    }
+                }
+                
+                // 提取行程安排
+                if (result.containsKey("itinerary")) {
+                    JSONObject itinerary = result.getJSONObject("itinerary");
+                    StringBuilder itineraryText = new StringBuilder();
+                    
+                    // 按天提取行程
+                    for (int day = 1; day <= 10; day++) { // 最多支持10天
+                        String dayKey = "day" + day;
+                        if (itinerary.containsKey(dayKey) && itinerary.getString(dayKey) != null) {
+                            String dayPlan = itinerary.getString(dayKey).trim();
+                            if (!dayPlan.isEmpty()) {
+                                if (itineraryText.length() > 0) {
+                                    itineraryText.append("\n");
+                                }
+                                itineraryText.append("第").append(day).append("天：").append(dayPlan);
+                            }
+                        }
+                    }
+                    
+                    // 如果有总结，也加入
+                    if (itinerary.containsKey("summary") && itinerary.getString("summary") != null) {
+                        String summary = itinerary.getString("summary").trim();
+                        if (!summary.isEmpty()) {
+                            if (itineraryText.length() > 0) {
+                                itineraryText.append("\n");
+                            }
+                            itineraryText.append("行程总结：").append(summary);
+                        }
+                    }
+                    
+                    if (itineraryText.length() > 0) {
+                        builder.itinerary(itineraryText.toString());
+                    }
+                }
+                
+                // 提取备注信息
+                if (result.containsKey("notes")) {
+                    JSONArray notes = result.getJSONArray("notes");
+                    StringBuilder notesText = new StringBuilder();
+                    
+                    for (int i = 0; i < notes.size(); i++) {
+                        String note = notes.getString(i);
+                        if (note != null && !note.trim().isEmpty()) {
+                            if (notesText.length() > 0) {
+                                notesText.append("\n");
+                            }
+                            notesText.append(note.trim());
+                        }
+                    }
+                    
+                    if (notesText.length() > 0) {
+                        builder.notes(notesText.toString());
+                    }
+                }
+                
                 OrderInfo orderInfo = builder.build();
                 
-                // 检查提取质量和详细信息
-                String extractionQuality = jsonResponse.getString("extractionQuality");
-                com.alibaba.fastjson.JSONObject extractionDetails = jsonResponse.getJSONObject("extractionDetails");
-                
-                if (extractionDetails != null) {
-                    Double confidence = extractionDetails.getDouble("confidence");
-                    com.alibaba.fastjson.JSONArray extractedFields = extractionDetails.getJSONArray("extractedFields");
-                    com.alibaba.fastjson.JSONArray missingFields = extractionDetails.getJSONArray("missingFields");
+                // 记录提取质量
+                if (result.containsKey("extractionQuality")) {
+                    JSONObject quality = result.getJSONObject("extractionQuality");
+                    double completeness = quality.getDoubleValue("completeness");
+                    double confidence = quality.getDoubleValue("confidence");
+                    JSONArray missingFields = quality.getJSONArray("missingFields");
+                    JSONArray extractedFields = quality.getJSONArray("extractedFields");
                     
-                    log.info("AI订单解析完成: 服务类型={}, 开始日期={}, 客户数量={}, 提取质量={}, 置信度={}, 提取字段={}, 缺失字段={}", 
-                    orderInfo.getServiceType(), orderInfo.getStartDate(), 
-                        orderInfo.getCustomers() != null ? orderInfo.getCustomers().size() : 0,
-                        extractionQuality, confidence, extractedFields, missingFields);
-                } else {
-                    log.info("AI订单解析完成: 服务类型={}, 开始日期={}, 客户数量={}, 提取质量={}", 
-                        orderInfo.getServiceType(), orderInfo.getStartDate(), 
-                        orderInfo.getCustomers() != null ? orderInfo.getCustomers().size() : 0,
-                        extractionQuality);
+                    log.info("AI提取质量评估 - 完整度: {}, 置信度: {}, 缺失字段: {}, 已提取字段: {}", 
+                        completeness, confidence, missingFields, extractedFields);
                 }
                 
-                // 如果提取质量低，尝试与传统方法合并结果
-                if ("low".equals(extractionQuality)) {
-                    log.info("AI提取质量较低，尝试与传统方法合并结果");
-                    OrderInfo traditionalResult = parseOrderInfoTraditional(message);
-                    return mergeOrderInfo(orderInfo, traditionalResult);
-                }
-                
+                log.info("AI智能解析成功，提取到的订单信息: {}", JSON.toJSONString(orderInfo));
                 return orderInfo;
                 
-            } catch (Exception e) {
-                log.warn("解析AI订单响应失败，回退到传统方法: {}", e.getMessage());
-                return parseOrderInfoTraditional(message);
+            } catch (Exception parseEx) {
+                log.warn("解析AI响应JSON失败，尝试传统方法: {}", parseEx.getMessage());
+                log.debug("原始AI响应: {}", aiResponse);
+                
+                // 如果AI解析失败，回退到传统方法
+                OrderInfo traditionalResult = parseOrderInfoTraditional(message);
+                return traditionalResult;
             }
             
         } catch (Exception e) {
-            log.warn("AI订单解析失败，回退到传统方法: {}", e.getMessage());
+            log.error("AI智能解析失败，回退到传统方法: {}", e.getMessage());
             return parseOrderInfoTraditional(message);
         }
     }
@@ -2367,22 +3510,25 @@ public class ChatBotServiceImpl implements ChatBotService {
                             currentUserId, 
                             currentUserId.getClass().getSimpleName());
                         
-                        // 修复：使用Long类型进行比较，不转换为Integer
-                        if (booking.getOperatorId() != null && booking.getOperatorId().equals(currentUserId)) {
+                        // 首先检查是否是代理商主号 - 如果订单的agentId等于当前userId，说明是代理商主号
+                        if (booking.getAgentId() != null && booking.getAgentId().equals(currentUserId.intValue())) {
+                            hasPermission = true;
+                            permissionReason = "代理商主号查询属下订单";
+                            log.info("✅ 代理商主号权限验证通过：订单agentId {} equals currentUserId {}", booking.getAgentId(), currentUserId);
+                        }
+                        // 然后检查是否是操作员 - 如果订单的operatorId等于当前userId，说明是操作员
+                        else if (booking.getOperatorId() != null && booking.getOperatorId().equals(currentUserId)) {
                             hasPermission = true;
                             permissionReason = "操作员查询自己创建的订单";
-                            log.info("✅ 权限验证通过：operatorId {} equals currentUserId {}", booking.getOperatorId(), currentUserId);
+                            log.info("✅ 操作员权限验证通过：订单operatorId {} equals currentUserId {}", booking.getOperatorId(), currentUserId);
                         } else {
-                            permissionReason = String.format("操作员只能查询自己创建的订单 (订单operatorId=%s, 当前operatorId=%s)", 
-                                booking.getOperatorId(), currentUserId);
-                            log.info("❌ 权限验证失败：operatorId {} NOT equals currentUserId {}", booking.getOperatorId(), currentUserId);
-                            if (booking.getOperatorId() != null) {
-                                log.info("具体比较结果：booking.getOperatorId().equals(currentUserId) = {}", 
-                                    booking.getOperatorId().equals(currentUserId));
-                            }
+                            permissionReason = String.format("userType=2权限验证失败：既不是代理商主号（订单agentId=%s, 当前userId=%s），也不是操作员（订单operatorId=%s, 当前userId=%s)", 
+                                booking.getAgentId(), currentUserId, booking.getOperatorId(), currentUserId);
+                            log.info("❌ userType=2权限验证失败：既不是代理商主号（订单agentId={}, 当前userId={}），也不是操作员（订单operatorId={}, 当前userId={})", 
+                                booking.getAgentId(), currentUserId, booking.getOperatorId(), currentUserId);
                         }
                     } else if (userType == 3) {
-                        // 中介主号：可以查询整个代理商的所有订单（agentId = currentUserId）
+                        // 中介主号：可以查询代理商下所有订单（agentId = currentUserId）
                         // 修复：使用Long类型进行比较，不转换为Integer
                         if (booking.getAgentId() != null && booking.getAgentId().equals(currentUserId)) {
                             hasPermission = true;
@@ -3554,5 +4700,424 @@ public class ChatBotServiceImpl implements ChatBotService {
         response.append("\n📞 **了解更多详情请联系客服！**");
         
         return response.toString();
+    }
+
+    /**
+     * 获取最近的聊天历史记录
+     */
+    private List<ChatMessage> getRecentChatHistory(String sessionId, int limit) {
+        try {
+            List<ChatMessage> allHistory = getChatHistory(sessionId);
+            if (allHistory == null || allHistory.isEmpty()) {
+                return new ArrayList<>();
+            }
+            
+            // 返回最近的几条记录，按时间倒序
+            List<ChatMessage> recent = new ArrayList<>();
+            int start = Math.max(0, allHistory.size() - limit);
+            for (int i = start; i < allHistory.size(); i++) {
+                recent.add(allHistory.get(i));
+            }
+            return recent;
+        } catch (Exception e) {
+            log.error("获取聊天历史失败", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * 判断是否为汇率查询
+     */
+    private boolean isExchangeRateQuery(String message) {
+        String[] exchangeKeywords = {
+            "汇率", "汇率查询", "exchange rate", "currency", "澳元", "人民币", "美元", "汇率换算",
+            "澳币", "aud", "cny", "usd", "货币", "兑换", "换算"
+        };
+        
+        for (String keyword : exchangeKeywords) {
+            if (message.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * 获取汇率信息
+     */
+    private String getExchangeRateInfo(String message) {
+        try {
+            // 提取货币对
+            String[] currencies = extractCurrencyPair(message);
+            String fromCurrency = currencies[0];
+            String toCurrency = currencies[1];
+            
+            // 优先使用API查询
+            if (exchangeApiEnabled && exchangeApiKey != null && !exchangeApiKey.isEmpty()) {
+                return getExchangeRateFromAPI(fromCurrency, toCurrency);
+            }
+            
+            // 如果API不可用，返回基本汇率信息
+            return getBasicExchangeRateInfo(fromCurrency, toCurrency);
+            
+        } catch (Exception e) {
+            log.error("获取汇率信息失败: {}", e.getMessage(), e);
+            return "抱歉，暂时无法获取汇率信息。不过，我可以告诉您，在计划塔斯马尼亚旅行时，" +
+                   "建议您提前了解澳元汇率变化，这样可以更好地规划旅行预算。您还可以询问我们的旅游产品和价格信息！";
+        }
+    }
+    
+    /**
+     * 从消息中提取货币对
+     */
+    private String[] extractCurrencyPair(String message) {
+        // 默认查询澳元对人民币汇率
+        String from = "AUD";  // 澳元
+        String to = "CNY";    // 人民币
+        
+        // 根据消息内容智能识别货币对
+        if (message.contains("美元") || message.contains("usd")) {
+            if (message.contains("澳元") || message.contains("aud")) {
+                from = "USD";
+                to = "AUD";
+            } else {
+                from = "USD";
+                to = "CNY";
+            }
+        } else if (message.contains("人民币") && message.contains("澳元")) {
+            from = "CNY";
+            to = "AUD";
+        }
+        
+        return new String[]{from, to};
+    }
+    
+    /**
+     * 从API获取汇率
+     */
+    private String getExchangeRateFromAPI(String from, String to) {
+        try {
+            String url = exchangeApiBaseUrl + "/latest/" + from;
+            
+            Request request = new Request.Builder()
+                    .url(url)
+                    .addHeader("User-Agent", "TravelBot/1.0")
+                    .build();
+            
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (response.isSuccessful() && response.body() != null) {
+                    String responseBody = response.body().string();
+                    return parseExchangeRateResponse(responseBody, from, to);
+                }
+            }
+        } catch (Exception e) {
+            log.error("API获取汇率失败: {}", e.getMessage(), e);
+        }
+        
+        return getBasicExchangeRateInfo(from, to);
+    }
+    
+    /**
+     * 解析汇率API响应
+     */
+    private String parseExchangeRateResponse(String responseBody, String from, String to) {
+        try {
+            JSONObject json = JSON.parseObject(responseBody);
+            JSONObject rates = json.getJSONObject("rates");
+            
+            if (rates != null && rates.containsKey(to)) {
+                double rate = rates.getDoubleValue(to);
+                return formatExchangeRateResponse(from, to, rate);
+            }
+        } catch (Exception e) {
+            log.error("解析汇率响应失败: {}", e.getMessage(), e);
+        }
+        
+        return getBasicExchangeRateInfo(from, to);
+    }
+    
+    /**
+     * 格式化汇率响应
+     */
+    private String formatExchangeRateResponse(String from, String to, double rate) {
+        String fromName = getCurrencyName(from);
+        String toName = getCurrencyName(to);
+        
+        StringBuilder response = new StringBuilder();
+        response.append("💱 实时汇率信息：\n\n");
+        response.append(String.format("1 %s = %.4f %s\n", fromName, rate, toName));
+        response.append(String.format("1 %s = %.4f %s\n\n", toName, 1/rate, fromName));
+        
+        // 添加旅游相关建议
+        if ("AUD".equals(from) || "AUD".equals(to)) {
+            response.append("🏝️ 塔斯马尼亚旅游小贴士：\n");
+            response.append("• 澳洲大部分地方都支持刷卡，建议携带少量现金\n");
+            response.append("• 我们的旅游产品价格已包含GST，无隐形费用\n");
+            response.append("• 想了解具体的旅游套餐价格吗？我可以为您推荐合适的产品！");
+        }
+        
+        return response.toString();
+    }
+    
+    /**
+     * 获取货币名称
+     */
+    private String getCurrencyName(String code) {
+        switch (code.toUpperCase()) {
+            case "AUD": return "澳元";
+            case "CNY": return "人民币";
+            case "USD": return "美元";
+            case "EUR": return "欧元";
+            case "GBP": return "英镑";
+            case "JPY": return "日元";
+            default: return code;
+        }
+    }
+    
+    /**
+     * 获取基本汇率信息
+     */
+    private String getBasicExchangeRateInfo(String from, String to) {
+        return "💱 汇率信息：\n\n" +
+               "抱歉，无法获取实时汇率数据。建议您通过银行或专业金融应用查询最新汇率。\n\n" +
+               "🏝️ 塔斯马尼亚旅游支付小贴士：\n" +
+               "• 我们接受多种支付方式，包括信用卡支付\n" +
+               "• 澳洲旅游时建议携带少量现金备用\n" +
+               "• 想了解我们的旅游产品价格吗？我可以为您详细介绍！";
+    }
+    
+    /**
+     * 判断是否为旅游新闻查询
+     */
+    private boolean isTravelNewsQuery(String message) {
+        String[] newsKeywords = {
+            "新闻", "资讯", "消息", "最新", "动态", "news", "塔斯马尼亚新闻",
+            "旅游新闻", "景点新闻", "开放时间", "活动", "节庆", "festival"
+        };
+        
+        for (String keyword : newsKeywords) {
+            if (message.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * 获取旅游新闻信息
+     */
+    private String getTravelNewsInfo(String message) {
+        try {
+            // 如果启用了新闻API，尝试获取实时新闻
+            if (newsApiEnabled && newsApiKey != null && !newsApiKey.isEmpty()) {
+                return getTravelNewsFromAPI(message);
+            }
+            
+            // 否则返回塔斯马尼亚旅游相关的固定信息
+            return getTasmanianTravelNews();
+            
+        } catch (Exception e) {
+            log.error("获取旅游新闻失败: {}", e.getMessage(), e);
+            return getTasmanianTravelNews();
+        }
+    }
+    
+    /**
+     * 从API获取旅游新闻
+     */
+    private String getTravelNewsFromAPI(String message) {
+        try {
+            String query = "Tasmania travel OR 塔斯马尼亚旅游";
+            String url = newsApiBaseUrl + "/everything?q=" + java.net.URLEncoder.encode(query, "UTF-8") +
+                        "&language=en&sortBy=publishedAt&pageSize=5";
+            
+            Request request = new Request.Builder()
+                    .url(url)
+                    .addHeader("X-API-Key", newsApiKey)
+                    .addHeader("User-Agent", "TravelBot/1.0")
+                    .build();
+            
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (response.isSuccessful() && response.body() != null) {
+                    String responseBody = response.body().string();
+                    return parseNewsResponse(responseBody);
+                }
+            }
+        } catch (Exception e) {
+            log.error("从API获取新闻失败: {}", e.getMessage(), e);
+        }
+        
+        return getTasmanianTravelNews();
+    }
+    
+    /**
+     * 解析新闻API响应
+     */
+    private String parseNewsResponse(String responseBody) {
+        try {
+            JSONObject json = JSON.parseObject(responseBody);
+            JSONArray articles = json.getJSONArray("articles");
+            
+            if (articles != null && articles.size() > 0) {
+                StringBuilder news = new StringBuilder();
+                news.append("📰 塔斯马尼亚旅游最新资讯：\n\n");
+                
+                for (int i = 0; i < Math.min(3, articles.size()); i++) {
+                    JSONObject article = articles.getJSONObject(i);
+                    String title = article.getString("title");
+                    String description = article.getString("description");
+                    
+                    news.append(String.format("%d. %s\n", i + 1, title));
+                    if (description != null && description.length() > 0) {
+                        news.append(String.format("   %s\n\n", 
+                            description.length() > 100 ? description.substring(0, 100) + "..." : description));
+                    }
+                }
+                
+                news.append("💡 想了解更多塔斯马尼亚的旅游信息吗？我可以为您推荐最适合的旅游路线！");
+                return news.toString();
+            }
+        } catch (Exception e) {
+            log.error("解析新闻响应失败: {}", e.getMessage(), e);
+        }
+        
+        return getTasmanianTravelNews();
+    }
+    
+    /**
+     * 获取塔斯马尼亚旅游新闻
+     */
+    private String getTasmanianTravelNews() {
+        return "📰 塔斯马尼亚旅游资讯：\n\n" +
+               "🏝️ 塔斯马尼亚是澳洲的旅游瑰宝，四季皆宜旅游\n" +
+               "🌺 夏季（12-2月）是薰衣草盛开的季节\n" +
+               "🍁 秋季（3-5月）可以欣赏到美丽的秋叶\n" +
+               "❄️ 冬季（6-8月）是观赏极光的最佳时期\n" +
+               "🌸 春季（9-11月）万物复苏，气候宜人\n\n" +
+               "🎯 我们提供全年的旅游服务，包括：\n" +
+               "• 摇篮山-圣克莱尔湖国家公园\n" +
+               "• 亚瑟港历史遗址\n" +
+               "• 惠灵顿山\n" +
+               "• 萨拉曼卡市场\n\n" +
+               "想了解具体的行程安排吗？我可以为您定制专属的塔斯马尼亚之旅！";
+    }
+    
+    /**
+     * 判断是否为交通查询
+     */
+    private boolean isTrafficQuery(String message) {
+        String[] trafficKeywords = {
+            "交通", "路况", "堵车", "traffic", "道路", "高速", "路线", "怎么去",
+            "开车", "自驾", "公交", "机场", "接送", "交通工具"
+        };
+        
+        for (String keyword : trafficKeywords) {
+            if (message.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * 获取交通信息
+     */
+    private String getTrafficInfo(String message) {
+        return "🚗 塔斯马尼亚交通信息：\n\n" +
+               "🛣️ 主要交通方式：\n" +
+               "• 自驾游：最受欢迎的方式，可以自由探索\n" +
+               "• 我们的旅游巴士：专业司机，安全舒适\n" +
+               "• 机场接送：霍巴特机场往返市区\n\n" +
+               "🚌 我们提供的交通服务：\n" +
+               "• 全程旅游巴士接送\n" +
+               "• 酒店接送服务\n" +
+               "• 机场接送安排\n" +
+               "• 专业中文导游陪同\n\n" +
+               "📍 主要景点距离：\n" +
+               "• 霍巴特 ↔ 摇篮山：约 2.5 小时车程\n" +
+               "• 霍巴特 ↔ 亚瑟港：约 1.5 小时车程\n" +
+               "• 霍巴特 ↔ 里奇蒙：约 30 分钟车程\n\n" +
+               "想了解具体的交通安排吗？我们的旅游套餐都包含交通接送服务！";
+    }
+    
+    /**
+     * 判断是否为旅游攻略查询
+     */
+    private boolean isTravelGuideQuery(String message) {
+        String[] guideKeywords = {
+            "攻略", "指南", "怎么玩", "推荐", "路线", "行程", "景点", "玩法",
+            "游记", "经验", "建议", "must visit", "best", "recommendation"
+        };
+        
+        for (String keyword : guideKeywords) {
+            if (message.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * 获取旅游攻略信息
+     */
+    private String getTravelGuideInfo(String message) {
+        return "📖 塔斯马尼亚旅游攻略：\n\n" +
+               "🏆 必游景点推荐：\n" +
+               "1️⃣ 摇篮山-圣克莱尔湖国家公园\n" +
+               "   - 徒步爱好者的天堂\n" +
+               "   - 可看到袋熊、袋鼠等野生动物\n\n" +
+               "2️⃣ 亚瑟港历史遗址\n" +
+               "   - 了解澳洲监狱历史\n" +
+               "   - 夜游活动别有一番风味\n\n" +
+               "3️⃣ 惠灵顿山\n" +
+               "   - 俯瞰霍巴特全景\n" +
+               "   - 日出日落都很美\n\n" +
+               "4️⃣ 萨拉曼卡市场\n" +
+               "   - 每周六的集市\n" +
+               "   - 当地手工艺品和美食\n\n" +
+               "🎯 最佳旅游时间：\n" +
+               "• 夏季（12-2月）：薰衣草季节\n" +
+               "• 秋季（3-5月）：气候宜人，游客较少\n\n" +
+               "🍽️ 必尝美食：\n" +
+               "• 塔斯马尼亚三文鱼\n" +
+               "• 生蚝和海鲜\n" +
+               "• 当地葡萄酒\n\n" +
+               "想要定制专属的塔斯马尼亚行程吗？我可以根据您的喜好推荐最合适的旅游套餐！";
+    }
+    
+    /**
+     * 获取增强的默认回复
+     */
+    private String getEnhancedDefaultResponse(String message) {
+        // 分析消息内容，提供更智能的回复
+        if (message.contains("谢谢") || message.contains("thank")) {
+            return "不客气！很高兴能为您提供帮助。如果您对塔斯马尼亚旅游有任何其他问题，随时可以问我！🌟";
+        }
+        
+        if (message.contains("你好") || message.contains("hello") || message.contains("hi")) {
+            return "您好！我是塔斯马尼亚旅游AI助手，很高兴为您服务！\n\n" +
+                   "我可以帮您：\n" +
+                   "🏝️ 了解塔斯马尼亚景点信息\n" +
+                   "📅 查询旅游行程安排\n" +
+                   "🌤️ 获取当地天气信息\n" +
+                   "💱 查询汇率信息\n" +
+                   "📰 了解最新旅游资讯\n" +
+                   "🎯 个性化行程推荐\n\n" +
+                   "请告诉我您想了解什么，我会尽力为您提供帮助！";
+        }
+        
+        if (message.contains("再见") || message.contains("bye")) {
+            return "再见！期待下次为您服务。祝您塔斯马尼亚之旅愉快！🏝️✨";
+        }
+        
+        // 默认智能回复
+        return "我是塔斯马尼亚旅游AI助手，专门为您提供旅游咨询服务！\n\n" +
+               "您可以问我：\n" +
+               "• 塔斯马尼亚的景点介绍\n" +
+               "• 天气情况查询\n" +
+               "• 旅游行程推荐\n" +
+               "• 汇率和实用信息\n" +
+               "• 订单查询和管理\n\n" +
+               "如果您有其他问题，也可以直接告诉我，我会尽力帮助您！😊";
     }
 } 

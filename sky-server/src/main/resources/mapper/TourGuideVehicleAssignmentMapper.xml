@@ -1,0 +1,377 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.TourGuideVehicleAssignmentMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="TourGuideVehicleAssignmentVOMap" type="com.sky.vo.TourGuideVehicleAssignmentVO">
+        <id column="id" property="id"/>
+        <result column="assignment_date" property="assignmentDate"/>
+        <result column="destination" property="destination"/>
+        <result column="total_people" property="totalPeople"/>
+        <result column="adult_count" property="adultCount"/>
+        <result column="child_count" property="childCount"/>
+        <result column="contact_phone" property="contactPhone"/>
+        <result column="contact_person" property="contactPerson"/>
+        <result column="pickup_method" property="pickupMethod"/>
+        <result column="pickup_location" property="pickupLocation"/>
+        <result column="dropoff_location" property="dropoffLocation"/>
+        <result column="remarks" property="remarks"/>
+        <result column="next_destination" property="nextDestination"/>
+        <result column="status" property="status"/>
+        <result column="booking_ids" property="bookingIds" typeHandler="com.sky.handler.JsonLongListTypeHandler"/>
+        <result column="tour_schedule_order_ids" property="tourScheduleOrderIds" typeHandler="com.sky.handler.JsonLongListTypeHandler"/>
+        <result column="passenger_details" property="passengerDetails" typeHandler="com.sky.handler.JsonListTypeHandler"/>
+        <result column="special_requirements" property="specialRequirements"/>
+        <result column="dietary_restrictions" property="dietaryRestrictions"/>
+        <result column="luggage_info" property="luggageInfo"/>
+        <result column="emergency_contact" property="emergencyContact"/>
+        <result column="language_preference" property="languagePreference"/>
+        <result column="created_time" property="createdTime"/>
+        <result column="updated_time" property="updatedTime"/>
+        
+        <!-- 导游信息 -->
+        <association property="guide" javaType="com.sky.vo.TourGuideVehicleAssignmentVO$GuideInfo">
+            <result column="guide_id" property="guideId"/>
+            <result column="guide_name" property="guideName"/>
+            <result column="guide_phone" property="phone"/>
+            <result column="guide_email" property="email"/>
+            <result column="guide_languages" property="languages"/>
+            <result column="guide_experience" property="experienceYears"/>
+        </association>
+        
+        <!-- 车辆信息 -->
+        <association property="vehicle" javaType="com.sky.vo.TourGuideVehicleAssignmentVO$VehicleInfo">
+            <result column="vehicle_id" property="vehicleId"/>
+            <result column="license_plate" property="licensePlate"/>
+            <result column="vehicle_type" property="vehicleType"/>
+            <result column="seat_count" property="seatCount"/>
+            <result column="vehicle_location" property="location"/>
+            <result column="vehicle_notes" property="notes"/>
+        </association>
+    </resultMap>
+
+    <!-- 插入分配记录 -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tour_guide_vehicle_assignment (
+            assignment_date, destination, guide_id, guide_name, vehicle_id, 
+            license_plate, vehicle_type, total_people, adult_count, child_count,
+            contact_phone, contact_person, pickup_method, pickup_location, 
+            dropoff_location, remarks, next_destination, status, booking_ids,
+            tour_schedule_order_ids, passenger_details, special_requirements,
+            dietary_restrictions, luggage_info, emergency_contact, language_preference,
+            created_time, updated_time, created_by, updated_by
+        ) VALUES (
+            #{assignmentDate}, #{destination}, #{guideId}, #{guideName}, #{vehicleId},
+            #{licensePlate}, #{vehicleType}, #{totalPeople}, #{adultCount}, #{childCount},
+            #{contactPhone}, #{contactPerson}, #{pickupMethod}, #{pickupLocation},
+            #{dropoffLocation}, #{remarks}, #{nextDestination}, #{status}, #{bookingIds},
+            #{tourScheduleOrderIds}, #{passengerDetails}, #{specialRequirements},
+            #{dietaryRestrictions}, #{luggageInfo}, #{emergencyContact}, #{languagePreference},
+            #{createdTime}, #{updatedTime}, #{createdBy}, #{updatedBy}
+        )
+    </insert>
+
+    <!-- 批量插入分配记录 -->
+    <insert id="batchInsert">
+        INSERT INTO tour_guide_vehicle_assignment (
+            assignment_date, destination, guide_id, guide_name, vehicle_id, 
+            license_plate, vehicle_type, total_people, adult_count, child_count,
+            contact_phone, contact_person, pickup_method, pickup_location, 
+            dropoff_location, remarks, next_destination, status, booking_ids,
+            tour_schedule_order_ids, passenger_details, special_requirements,
+            dietary_restrictions, luggage_info, emergency_contact, language_preference,
+            created_time, updated_time, created_by, updated_by
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+                #{item.assignmentDate}, #{item.destination}, #{item.guideId}, #{item.guideName}, #{item.vehicleId},
+                #{item.licensePlate}, #{item.vehicleType}, #{item.totalPeople}, #{item.adultCount}, #{item.childCount},
+                #{item.contactPhone}, #{item.contactPerson}, #{item.pickupMethod}, #{item.pickupLocation},
+                #{item.dropoffLocation}, #{item.remarks}, #{item.nextDestination}, #{item.status}, #{item.bookingIds},
+                #{item.tourScheduleOrderIds}, #{item.passengerDetails}, #{item.specialRequirements},
+                #{item.dietaryRestrictions}, #{item.luggageInfo}, #{item.emergencyContact}, #{item.languagePreference},
+                #{item.createdTime}, #{item.updatedTime}, #{item.createdBy}, #{item.updatedBy}
+            )
+        </foreach>
+    </insert>
+
+    <!-- 根据ID查询分配记录 -->
+    <select id="getById" resultMap="TourGuideVehicleAssignmentVOMap">
+        SELECT 
+            tgva.id, tgva.assignment_date, tgva.destination, tgva.total_people,
+            tgva.adult_count, tgva.child_count, tgva.contact_phone, tgva.contact_person,
+            tgva.pickup_method, tgva.pickup_location, tgva.dropoff_location, tgva.remarks,
+            tgva.next_destination, tgva.status, tgva.booking_ids, tgva.tour_schedule_order_ids,
+            tgva.passenger_details, tgva.special_requirements, tgva.dietary_restrictions,
+            tgva.luggage_info, tgva.emergency_contact, tgva.language_preference,
+            tgva.created_time, tgva.updated_time,
+            tgva.guide_id, tgva.guide_name,
+            g.phone as guide_phone, g.email as guide_email, g.languages as guide_languages, 
+            g.experience_years as guide_experience,
+            tgva.vehicle_id, tgva.license_plate, tgva.vehicle_type,
+            v.seat_count, v.location as vehicle_location, v.notes as vehicle_notes
+        FROM tour_guide_vehicle_assignment tgva
+        LEFT JOIN guides g ON tgva.guide_id = g.guide_id
+        LEFT JOIN vehicles v ON tgva.vehicle_id = v.vehicle_id
+        WHERE tgva.id = #{id}
+    </select>
+
+    <!-- 根据日期查询分配记录 -->
+    <select id="getByDate" resultMap="TourGuideVehicleAssignmentVOMap">
+        SELECT 
+            tgva.id, tgva.assignment_date, tgva.destination, tgva.total_people,
+            tgva.adult_count, tgva.child_count, tgva.contact_phone, tgva.contact_person,
+            tgva.pickup_method, tgva.pickup_location, tgva.dropoff_location, tgva.remarks,
+            tgva.next_destination, tgva.status, tgva.booking_ids, tgva.tour_schedule_order_ids,
+            tgva.passenger_details, tgva.special_requirements, tgva.dietary_restrictions,
+            tgva.luggage_info, tgva.emergency_contact, tgva.language_preference,
+            tgva.created_time, tgva.updated_time,
+            tgva.guide_id, tgva.guide_name,
+            g.phone as guide_phone, g.email as guide_email, g.languages as guide_languages, 
+            g.experience_years as guide_experience,
+            tgva.vehicle_id, tgva.license_plate, tgva.vehicle_type,
+            v.seat_count, v.location as vehicle_location, v.notes as vehicle_notes
+        FROM tour_guide_vehicle_assignment tgva
+        LEFT JOIN guides g ON tgva.guide_id = g.guide_id
+        LEFT JOIN vehicles v ON tgva.vehicle_id = v.vehicle_id
+        WHERE tgva.assignment_date = #{assignmentDate}
+        ORDER BY tgva.destination, tgva.created_time
+    </select>
+
+    <!-- 根据日期范围查询分配记录 -->
+    <select id="getByDateRange" resultMap="TourGuideVehicleAssignmentVOMap">
+        SELECT 
+            tgva.id, tgva.assignment_date, tgva.destination, tgva.total_people,
+            tgva.adult_count, tgva.child_count, tgva.contact_phone, tgva.contact_person,
+            tgva.pickup_method, tgva.pickup_location, tgva.dropoff_location, tgva.remarks,
+            tgva.next_destination, tgva.status, tgva.booking_ids, tgva.tour_schedule_order_ids,
+            tgva.passenger_details, tgva.special_requirements, tgva.dietary_restrictions,
+            tgva.luggage_info, tgva.emergency_contact, tgva.language_preference,
+            tgva.created_time, tgva.updated_time,
+            tgva.guide_id, tgva.guide_name,
+            g.phone as guide_phone, g.email as guide_email, g.languages as guide_languages, 
+            g.experience_years as guide_experience,
+            tgva.vehicle_id, tgva.license_plate, tgva.vehicle_type,
+            v.seat_count, v.location as vehicle_location, v.notes as vehicle_notes
+        FROM tour_guide_vehicle_assignment tgva
+        LEFT JOIN guides g ON tgva.guide_id = g.guide_id
+        LEFT JOIN vehicles v ON tgva.vehicle_id = v.vehicle_id
+        WHERE tgva.assignment_date BETWEEN #{startDate} AND #{endDate}
+        ORDER BY tgva.assignment_date, tgva.destination, tgva.created_time
+    </select>
+
+    <!-- 分页查询分配记录 -->
+    <select id="pageQuery" resultMap="TourGuideVehicleAssignmentVOMap">
+        SELECT 
+            tgva.id, tgva.assignment_date, tgva.destination, tgva.total_people,
+            tgva.adult_count, tgva.child_count, tgva.contact_phone, tgva.contact_person,
+            tgva.pickup_method, tgva.pickup_location, tgva.dropoff_location, tgva.remarks,
+            tgva.next_destination, tgva.status, tgva.booking_ids, tgva.tour_schedule_order_ids,
+            tgva.passenger_details, tgva.special_requirements, tgva.dietary_restrictions,
+            tgva.luggage_info, tgva.emergency_contact, tgva.language_preference,
+            tgva.created_time, tgva.updated_time,
+            tgva.guide_id, tgva.guide_name,
+            g.phone as guide_phone, g.email as guide_email, g.languages as guide_languages, 
+            g.experience_years as guide_experience,
+            tgva.vehicle_id, tgva.license_plate, tgva.vehicle_type,
+            v.seat_count, v.location as vehicle_location, v.notes as vehicle_notes
+        FROM tour_guide_vehicle_assignment tgva
+        LEFT JOIN guides g ON tgva.guide_id = g.guide_id
+        LEFT JOIN vehicles v ON tgva.vehicle_id = v.vehicle_id
+        <where>
+            <if test="startDate != null">
+                AND tgva.assignment_date >= #{startDate}
+            </if>
+            <if test="endDate != null">
+                AND tgva.assignment_date &lt;= #{endDate}
+            </if>
+            <if test="destination != null and destination != ''">
+                AND tgva.destination LIKE CONCAT('%', #{destination}, '%')
+            </if>
+            <if test="guideName != null and guideName != ''">
+                AND tgva.guide_name LIKE CONCAT('%', #{guideName}, '%')
+            </if>
+            <if test="licensePlate != null and licensePlate != ''">
+                AND tgva.license_plate LIKE CONCAT('%', #{licensePlate}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND tgva.status = #{status}
+            </if>
+        </where>
+        ORDER BY tgva.assignment_date DESC, tgva.created_time DESC
+    </select>
+
+    <!-- 根据目的地查询分配记录 -->
+    <select id="getByDestination" resultMap="TourGuideVehicleAssignmentVOMap">
+        SELECT 
+            tgva.id, tgva.assignment_date, tgva.destination, tgva.total_people,
+            tgva.adult_count, tgva.child_count, tgva.contact_phone, tgva.contact_person,
+            tgva.pickup_method, tgva.pickup_location, tgva.dropoff_location, tgva.remarks,
+            tgva.next_destination, tgva.status, tgva.booking_ids, tgva.tour_schedule_order_ids,
+            tgva.passenger_details, tgva.special_requirements, tgva.dietary_restrictions,
+            tgva.luggage_info, tgva.emergency_contact, tgva.language_preference,
+            tgva.created_time, tgva.updated_time,
+            tgva.guide_id, tgva.guide_name,
+            g.phone as guide_phone, g.email as guide_email, g.languages as guide_languages, 
+            g.experience_years as guide_experience,
+            tgva.vehicle_id, tgva.license_plate, tgva.vehicle_type,
+            v.seat_count, v.location as vehicle_location, v.notes as vehicle_notes
+        FROM tour_guide_vehicle_assignment tgva
+        LEFT JOIN guides g ON tgva.guide_id = g.guide_id
+        LEFT JOIN vehicles v ON tgva.vehicle_id = v.vehicle_id
+        WHERE tgva.destination = #{destination} 
+        <if test="assignmentDate != null">
+            AND tgva.assignment_date = #{assignmentDate}
+        </if>
+        ORDER BY tgva.created_time
+    </select>
+
+    <!-- 根据导游ID查询分配记录 -->
+    <select id="getByGuideId" resultMap="TourGuideVehicleAssignmentVOMap">
+        SELECT 
+            tgva.id, tgva.assignment_date, tgva.destination, tgva.total_people,
+            tgva.adult_count, tgva.child_count, tgva.contact_phone, tgva.contact_person,
+            tgva.pickup_method, tgva.pickup_location, tgva.dropoff_location, tgva.remarks,
+            tgva.next_destination, tgva.status, tgva.booking_ids, tgva.tour_schedule_order_ids,
+            tgva.passenger_details, tgva.special_requirements, tgva.dietary_restrictions,
+            tgva.luggage_info, tgva.emergency_contact, tgva.language_preference,
+            tgva.created_time, tgva.updated_time,
+            tgva.guide_id, tgva.guide_name,
+            g.phone as guide_phone, g.email as guide_email, g.languages as guide_languages, 
+            g.experience_years as guide_experience,
+            tgva.vehicle_id, tgva.license_plate, tgva.vehicle_type,
+            v.seat_count, v.location as vehicle_location, v.notes as vehicle_notes
+        FROM tour_guide_vehicle_assignment tgva
+        LEFT JOIN guides g ON tgva.guide_id = g.guide_id
+        LEFT JOIN vehicles v ON tgva.vehicle_id = v.vehicle_id
+        WHERE tgva.guide_id = #{guideId}
+        <if test="assignmentDate != null">
+            AND tgva.assignment_date = #{assignmentDate}
+        </if>
+        ORDER BY tgva.assignment_date DESC, tgva.created_time
+    </select>
+
+    <!-- 根据车辆ID查询分配记录 -->
+    <select id="getByVehicleId" resultMap="TourGuideVehicleAssignmentVOMap">
+        SELECT 
+            tgva.id, tgva.assignment_date, tgva.destination, tgva.total_people,
+            tgva.adult_count, tgva.child_count, tgva.contact_phone, tgva.contact_person,
+            tgva.pickup_method, tgva.pickup_location, tgva.dropoff_location, tgva.remarks,
+            tgva.next_destination, tgva.status, tgva.booking_ids, tgva.tour_schedule_order_ids,
+            tgva.passenger_details, tgva.special_requirements, tgva.dietary_restrictions,
+            tgva.luggage_info, tgva.emergency_contact, tgva.language_preference,
+            tgva.created_time, tgva.updated_time,
+            tgva.guide_id, tgva.guide_name,
+            g.phone as guide_phone, g.email as guide_email, g.languages as guide_languages, 
+            g.experience_years as guide_experience,
+            tgva.vehicle_id, tgva.license_plate, tgva.vehicle_type,
+            v.seat_count, v.location as vehicle_location, v.notes as vehicle_notes
+        FROM tour_guide_vehicle_assignment tgva
+        LEFT JOIN guides g ON tgva.guide_id = g.guide_id
+        LEFT JOIN vehicles v ON tgva.vehicle_id = v.vehicle_id
+        WHERE tgva.vehicle_id = #{vehicleId}
+        <if test="assignmentDate != null">
+            AND tgva.assignment_date = #{assignmentDate}
+        </if>
+        ORDER BY tgva.assignment_date DESC, tgva.created_time
+    </select>
+
+    <!-- 根据订单ID列表查询分配记录 -->
+    <select id="getByBookingIds" resultMap="TourGuideVehicleAssignmentVOMap">
+        SELECT 
+            tgva.id, tgva.assignment_date, tgva.destination, tgva.total_people,
+            tgva.adult_count, tgva.child_count, tgva.contact_phone, tgva.contact_person,
+            tgva.pickup_method, tgva.pickup_location, tgva.dropoff_location, tgva.remarks,
+            tgva.next_destination, tgva.status, tgva.booking_ids, tgva.tour_schedule_order_ids,
+            tgva.passenger_details, tgva.special_requirements, tgva.dietary_restrictions,
+            tgva.luggage_info, tgva.emergency_contact, tgva.language_preference,
+            tgva.created_time, tgva.updated_time,
+            tgva.guide_id, tgva.guide_name,
+            g.phone as guide_phone, g.email as guide_email, g.languages as guide_languages, 
+            g.experience_years as guide_experience,
+            tgva.vehicle_id, tgva.license_plate, tgva.vehicle_type,
+            v.seat_count, v.location as vehicle_location, v.notes as vehicle_notes
+        FROM tour_guide_vehicle_assignment tgva
+        LEFT JOIN guides g ON tgva.guide_id = g.guide_id
+        LEFT JOIN vehicles v ON tgva.vehicle_id = v.vehicle_id
+        <where>
+            <foreach collection="bookingIds" item="bookingId" open="(" close=")" separator=" OR ">
+                JSON_CONTAINS(tgva.booking_ids, CAST(#{bookingId} AS JSON), '$')
+            </foreach>
+        </where>
+        ORDER BY tgva.assignment_date DESC, tgva.created_time
+    </select>
+
+    <!-- 更新分配记录 -->
+    <update id="update">
+        UPDATE tour_guide_vehicle_assignment
+        <set>
+            <if test="assignmentDate != null">assignment_date = #{assignmentDate},</if>
+            <if test="destination != null">destination = #{destination},</if>
+            <if test="guideId != null">guide_id = #{guideId},</if>
+            <if test="guideName != null">guide_name = #{guideName},</if>
+            <if test="vehicleId != null">vehicle_id = #{vehicleId},</if>
+            <if test="licensePlate != null">license_plate = #{licensePlate},</if>
+            <if test="vehicleType != null">vehicle_type = #{vehicleType},</if>
+            <if test="totalPeople != null">total_people = #{totalPeople},</if>
+            <if test="adultCount != null">adult_count = #{adultCount},</if>
+            <if test="childCount != null">child_count = #{childCount},</if>
+            <if test="contactPhone != null">contact_phone = #{contactPhone},</if>
+            <if test="contactPerson != null">contact_person = #{contactPerson},</if>
+            <if test="pickupMethod != null">pickup_method = #{pickupMethod},</if>
+            <if test="pickupLocation != null">pickup_location = #{pickupLocation},</if>
+            <if test="dropoffLocation != null">dropoff_location = #{dropoffLocation},</if>
+            <if test="remarks != null">remarks = #{remarks},</if>
+            <if test="nextDestination != null">next_destination = #{nextDestination},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="bookingIds != null">booking_ids = #{bookingIds},</if>
+            <if test="tourScheduleOrderIds != null">tour_schedule_order_ids = #{tourScheduleOrderIds},</if>
+            <if test="passengerDetails != null">passenger_details = #{passengerDetails},</if>
+            <if test="specialRequirements != null">special_requirements = #{specialRequirements},</if>
+            <if test="dietaryRestrictions != null">dietary_restrictions = #{dietaryRestrictions},</if>
+            <if test="luggageInfo != null">luggage_info = #{luggageInfo},</if>
+            <if test="emergencyContact != null">emergency_contact = #{emergencyContact},</if>
+            <if test="languagePreference != null">language_preference = #{languagePreference},</if>
+            updated_time = #{updatedTime},
+            <if test="updatedBy != null">updated_by = #{updatedBy}</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 删除分配记录 -->
+    <delete id="deleteById">
+        DELETE FROM tour_guide_vehicle_assignment WHERE id = #{id}
+    </delete>
+
+    <!-- 统计指定日期的分配数量 -->
+    <select id="countByDate" resultType="int">
+        SELECT COUNT(*) FROM tour_guide_vehicle_assignment 
+        WHERE assignment_date = #{assignmentDate} AND status != 'cancelled'
+    </select>
+
+    <!-- 检查导游在指定日期是否已有分配 -->
+    <select id="checkGuideAssigned" resultType="boolean">
+        SELECT CASE 
+            WHEN COUNT(*) > 0 THEN TRUE 
+            ELSE FALSE 
+        END
+        FROM tour_guide_vehicle_assignment 
+        WHERE guide_id = #{guideId} 
+        AND assignment_date = #{assignmentDate} 
+        AND status IN ('confirmed', 'in_progress')
+    </select>
+
+    <!-- 检查车辆在指定日期是否已有分配 -->
+    <select id="checkVehicleAssigned" resultType="boolean">
+        SELECT CASE 
+            WHEN COUNT(*) > 0 THEN TRUE 
+            ELSE FALSE 
+        END
+        FROM tour_guide_vehicle_assignment 
+        WHERE vehicle_id = #{vehicleId} 
+        AND assignment_date = #{assignmentDate} 
+        AND status IN ('confirmed', 'in_progress')
+    </select>
+
+</mapper> 
