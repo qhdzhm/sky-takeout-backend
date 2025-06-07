@@ -213,12 +213,13 @@
             tgva.luggage_info, tgva.emergency_contact, tgva.language_preference,
             tgva.created_time, tgva.updated_time,
             tgva.guide_id, tgva.guide_name,
-            g.phone as guide_phone, g.email as guide_email, g.languages as guide_languages, 
-            g.experience_years as guide_experience,
+            NULL as guide_phone, NULL as guide_email, NULL as guide_languages, 
+            NULL as guide_experience,
             tgva.vehicle_id, tgva.license_plate, tgva.vehicle_type,
-            v.seat_count, v.location as vehicle_location, v.notes as vehicle_notes
+            COALESCE(v.seat_count, 25) as seat_count, 
+            COALESCE(v.location, v.current_location, '未知位置') as vehicle_location, 
+            v.notes as vehicle_notes
         FROM tour_guide_vehicle_assignment tgva
-        LEFT JOIN guides g ON tgva.guide_id = g.guide_id
         LEFT JOIN vehicles v ON tgva.vehicle_id = v.vehicle_id
         WHERE tgva.destination = #{destination} 
         <if test="assignmentDate != null">

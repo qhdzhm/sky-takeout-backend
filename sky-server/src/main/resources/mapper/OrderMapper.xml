@@ -13,7 +13,9 @@
         <result column="operator_id" property="operatorId"/>
         <result column="booking_date" property="bookingDate"/>
         <result column="flight_number" property="flightNumber"/>
+        <result column="arrival_landing_time" property="arrivalLandingTime"/>
         <result column="return_flight_number" property="returnFlightNumber"/>
+        <result column="departure_departure_time" property="departureDepartureTime"/>
         <result column="tour_start_date" property="tourStartDate"/>
         <result column="tour_end_date" property="tourEndDate"/>
         <result column="pickup_date" property="pickupDate"/>
@@ -54,7 +56,7 @@
     <!-- 基本订单查询SQL -->
     <sql id="baseOrderSelect">
         SELECT tb.booking_id, tb.order_number, tb.tour_id, tb.tour_type, tb.user_id, tb.agent_id, tb.operator_id,
-            tb.booking_date, tb.flight_number, tb.return_flight_number, tb.tour_start_date, 
+            tb.booking_date, tb.flight_number, tb.arrival_landing_time, tb.return_flight_number, tb.departure_departure_time, tb.tour_start_date, 
             tb.tour_end_date, tb.pickup_date, tb.dropoff_date, tb.pickup_location, tb.dropoff_location,
             tb.service_type, tb.group_size, tb.adult_count, tb.child_count, tb.luggage_count, tb.passenger_contact, tb.contact_person,
             tb.contact_phone, tb.hotel_level, tb.room_type, tb.hotel_room_count, tb.room_details,

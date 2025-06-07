@@ -1,11 +1,19 @@
 package com.sky.service.impl;
 
+import com.sky.dto.GroupTourDTO;
 import com.sky.dto.TourScheduleBatchSaveDTO;
 import com.sky.dto.TourScheduleOrderDTO;
+import com.sky.entity.DayTour;
+import com.sky.entity.TourBooking;
 import com.sky.entity.TourScheduleOrder;
+import com.sky.mapper.DayTourMapper;
+import com.sky.mapper.GroupTourMapper;
+import com.sky.mapper.TourBookingMapper;
 import com.sky.mapper.TourScheduleOrderMapper;
+import com.sky.mapper.TourGuideVehicleAssignmentMapper;
 import com.sky.service.TourScheduleOrderService;
 import com.sky.vo.TourScheduleVO;
+// import com.sky.vo.TourGuideVehicleAssignmentVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +35,18 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
 
     @Autowired
     private TourScheduleOrderMapper tourScheduleOrderMapper;
+
+    @Autowired
+    private TourBookingMapper tourBookingMapper;
+
+    @Autowired
+    private TourGuideVehicleAssignmentMapper tourGuideVehicleAssignmentMapper;
+    
+    @Autowired
+    private DayTourMapper dayTourMapper;
+    
+    @Autowired
+    private GroupTourMapper groupTourMapper;
 
     /**
      * 通过订单ID获取行程排序
@@ -69,10 +89,19 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
         
         try {
             TourScheduleOrder tourScheduleOrder = convertToEntity(tourScheduleOrderDTO);
-            tourScheduleOrder.setCreatedAt(LocalDateTime.now());
             tourScheduleOrder.setUpdatedAt(LocalDateTime.now());
             
-            tourScheduleOrderMapper.insert(tourScheduleOrder);
+            // 判断是插入还是更新
+            if (tourScheduleOrderDTO.getId() != null && tourScheduleOrderDTO.getId() > 0) {
+                // 更新操作
+                log.info("执行更新操作 - ID: {}", tourScheduleOrderDTO.getId());
+                tourScheduleOrderMapper.update(tourScheduleOrder);
+            } else {
+                // 插入操作
+                log.info("执行插入操作");
+                tourScheduleOrder.setCreatedAt(LocalDateTime.now());
+                tourScheduleOrderMapper.insert(tourScheduleOrder);
+            }
             return true;
         } catch (Exception e) {
             log.error("保存行程排序失败", e);
@@ -101,10 +130,19 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
                 tourScheduleOrderMapper.deleteByBookingId(batchSaveDTO.getBookingId());
             }
             
-            // 转换DTO为实体对象
-            List<TourScheduleOrder> scheduleOrders = batchSaveDTO.getSchedules().stream()
-                    .map(this::convertToEntity)
-                    .collect(Collectors.toList());
+            // ====== 关键修改：从订单表获取完整信息 ======
+            TourBooking originalBooking = null;
+            if (batchSaveDTO.getBookingId() != null) {
+                originalBooking = tourBookingMapper.getById(batchSaveDTO.getBookingId());
+                log.info("获取到原始订单信息: {}", originalBooking);
+            }
+            
+            // 转换DTO为实体对象，并补充完整的订单信息
+            List<TourScheduleOrder> scheduleOrders = new ArrayList<>();
+            for (TourScheduleOrderDTO dto : batchSaveDTO.getSchedules()) {
+                TourScheduleOrder entity = convertToEntityWithBookingInfo(dto, originalBooking);
+                scheduleOrders.add(entity);
+            }
             
             // 设置创建和更新时间
             LocalDateTime now = LocalDateTime.now();
@@ -115,6 +153,7 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
             
             // 批量插入
             tourScheduleOrderMapper.insertBatch(scheduleOrders);
+            log.info("成功批量保存行程排序，共 {} 条记录", scheduleOrders.size());
             return true;
         } catch (Exception e) {
             log.error("批量保存行程排序失败", e);
@@ -122,29 +161,11 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
         }
     }
 
-    /**
-     * 初始化订单的行程排序
-     * @param bookingId 订单ID
-     * @return 初始化结果
-     */
-    @Override
-    @Transactional
-    public boolean initOrderSchedules(Integer bookingId) {
-        log.info("初始化订单的行程排序: {}", bookingId);
-        
-        try {
-            // 先删除该订单的所有行程排序
-            tourScheduleOrderMapper.deleteByBookingId(bookingId);
-            
-            // 这里可以根据业务需求添加初始化逻辑
-            // 例如：根据订单信息自动生成默认的行程排序
-            
-            return true;
-        } catch (Exception e) {
-            log.error("初始化订单行程排序失败", e);
-            return false;
-        }
-    }
+
+    
+
+    
+
 
     /**
      * 将实体对象转换为VO对象
@@ -154,6 +175,8 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
     private TourScheduleVO convertToVO(TourScheduleOrder entity) {
         TourScheduleVO vo = new TourScheduleVO();
         BeanUtils.copyProperties(entity, vo);
+        
+
         
         // 根据标题或地点名称生成颜色
         String locationName = entity.getTitle() != null ? entity.getTitle() : 
@@ -172,6 +195,317 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
     private TourScheduleOrder convertToEntity(TourScheduleOrderDTO dto) {
         TourScheduleOrder entity = new TourScheduleOrder();
         BeanUtils.copyProperties(dto, entity);
+        return entity;
+    }
+    
+    /**
+     * 将DTO对象转换为实体对象，并补充完整的订单信息
+     * @param dto DTO对象
+     * @param originalBooking 原始订单信息
+     * @return 实体对象
+     */
+    private TourScheduleOrder convertToEntityWithBookingInfo(TourScheduleOrderDTO dto, TourBooking originalBooking) {
+        TourScheduleOrder entity = new TourScheduleOrder();
+        
+        // 首先复制DTO中的字段
+        BeanUtils.copyProperties(dto, entity);
+        
+        // 如果有原始订单信息，补充缺失的字段（强制覆盖null值）
+        if (originalBooking != null) {
+            // ============ 必填字段优先设置 ============
+            // 确保必填字段不为null
+            if (entity.getTourId() == null) {
+                entity.setTourId(originalBooking.getTourId());
+            }
+            if (entity.getTourType() == null || entity.getTourType().isEmpty()) {
+                entity.setTourType(originalBooking.getTourType());
+            }
+            log.info("开始补充订单 {} 的完整信息到排团表", originalBooking.getOrderNumber());
+            
+            // 记录补充前的状态
+            log.info("补充前DTO状态 - 联系人:{}, 电话:{}, 航班号:{}, 返程航班:{}, 酒店房数:{}, 房间详情:{}", 
+                    entity.getContactPerson(), entity.getContactPhone(), 
+                    entity.getFlightNumber(), entity.getReturnFlightNumber(),
+                    entity.getHotelRoomCount(), entity.getRoomDetails());
+            
+            // 记录原始订单的可用数据
+            log.info("原始订单可用数据 - 联系人:{}, 电话:{}, 航班号:{}, 返程航班:{}, 酒店房数:{}, 房间详情:{}", 
+                    originalBooking.getContactPerson(), originalBooking.getContactPhone(), 
+                    originalBooking.getFlightNumber(), originalBooking.getReturnFlightNumber(),
+                    originalBooking.getHotelRoomCount(), originalBooking.getRoomDetails());
+            
+            // ============ 基本订单信息 ============
+            // 强制补充所有null或空值字段
+            if (entity.getOrderNumber() == null || entity.getOrderNumber().isEmpty()) {
+                entity.setOrderNumber(originalBooking.getOrderNumber());
+            }
+            if (entity.getAdultCount() == null) {
+                entity.setAdultCount(originalBooking.getAdultCount());
+            }
+            if (entity.getChildCount() == null) {
+                entity.setChildCount(originalBooking.getChildCount());
+            }
+            if (entity.getContactPerson() == null || entity.getContactPerson().isEmpty()) {
+                entity.setContactPerson(originalBooking.getContactPerson());
+            }
+            if (entity.getContactPhone() == null || entity.getContactPhone().isEmpty()) {
+                entity.setContactPhone(originalBooking.getContactPhone());
+            }
+            // ============ 智能设置接送地点 ============
+            // 无论前端传递什么，都按照智能逻辑重新设置接送地点
+            Integer currentDayNumber = entity.getDayNumber();
+            LocalDate startDate = originalBooking.getTourStartDate();
+            LocalDate endDate = originalBooking.getTourEndDate();
+            
+            if (currentDayNumber != null && startDate != null && endDate != null) {
+                long totalDays = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate) + 1;
+                boolean isFirstDay = currentDayNumber == 1;
+                boolean isLastDay = currentDayNumber == totalDays;
+                
+                if (isFirstDay) {
+                    // 第一天：接客地点=订单pickup_location，送客地点=酒店(未开发，暂时空着)
+                    entity.setPickupLocation(originalBooking.getPickupLocation() != null ? originalBooking.getPickupLocation() : "");
+                    entity.setDropoffLocation(""); // 送客地点是酒店，等酒店系统开发完成
+                    log.info("📍 智能设置第一天接送地点 - 订单{} 第{}天: 接客地点=\"{}\", 送客地点=酒店(未开发)", 
+                            originalBooking.getOrderNumber(), currentDayNumber, entity.getPickupLocation());
+                } else if (isLastDay) {
+                    // 最后一天：接客地点=酒店(未开发，暂时空着)，送客地点=订单dropoff_location
+                    entity.setPickupLocation(""); // 接客地点是酒店，等酒店系统开发完成
+                    entity.setDropoffLocation(originalBooking.getDropoffLocation() != null ? originalBooking.getDropoffLocation() : "");
+                    log.info("📍 智能设置最后一天接送地点 - 订单{} 第{}天: 接客地点=酒店(未开发), 送客地点=\"{}\"", 
+                            originalBooking.getOrderNumber(), currentDayNumber, entity.getDropoffLocation());
+                } else {
+                    // 中间天数：都是酒店到酒店，等酒店系统开发完成后再决定
+                    entity.setPickupLocation(""); // 等酒店系统开发
+                    entity.setDropoffLocation(""); // 等酒店系统开发
+                    log.info("📍 智能设置中间天数接送地点 - 订单{} 第{}天: 等酒店系统开发", 
+                            originalBooking.getOrderNumber(), currentDayNumber);
+                }
+            } else {
+                // 如果无法确定天数，使用原始数据
+                log.warn("无法确定行程天数，使用原始接送地点 - 订单{}, dayNumber={}", 
+                        originalBooking.getOrderNumber(), currentDayNumber);
+                if (entity.getPickupLocation() == null) {
+                    entity.setPickupLocation(originalBooking.getPickupLocation());
+                }
+                if (entity.getDropoffLocation() == null) {
+                    entity.setDropoffLocation(originalBooking.getDropoffLocation());
+                }
+            }
+            if (entity.getSpecialRequests() == null || entity.getSpecialRequests().isEmpty()) {
+                entity.setSpecialRequests(originalBooking.getSpecialRequests());
+            }
+            if (entity.getLuggageCount() == null) {
+                entity.setLuggageCount(originalBooking.getLuggageCount());
+            }
+            if (entity.getPassengerContact() == null || entity.getPassengerContact().isEmpty()) {
+                entity.setPassengerContact(originalBooking.getPassengerContact());
+            }
+            
+            // ============ 酒店信息 ============
+            // 强制补充所有null值，不管前端是否传递
+            if (entity.getHotelLevel() == null || entity.getHotelLevel().isEmpty()) {
+                entity.setHotelLevel(originalBooking.getHotelLevel());
+            }
+            if (entity.getRoomType() == null || entity.getRoomType().isEmpty()) {
+                entity.setRoomType(originalBooking.getRoomType());
+            }
+            if (entity.getHotelRoomCount() == null) {
+                entity.setHotelRoomCount(originalBooking.getHotelRoomCount());
+            }
+            if (entity.getHotelCheckInDate() == null) {
+                entity.setHotelCheckInDate(originalBooking.getHotelCheckInDate());
+            }
+            if (entity.getHotelCheckOutDate() == null) {
+                entity.setHotelCheckOutDate(originalBooking.getHotelCheckOutDate());
+            }
+            if (entity.getRoomDetails() == null || entity.getRoomDetails().isEmpty()) {
+                entity.setRoomDetails(originalBooking.getRoomDetails());
+            }
+            
+            // ============ 航班信息智能分配 ============
+            // 根据行程天数智能分配航班信息：
+            // - 第一天：使用到达航班信息
+            // - 最后一天：使用返程航班信息  
+            // - 中间天数：不需要航班信息
+            Integer dayNumber = entity.getDayNumber();
+            LocalDate tourStartDate = originalBooking.getTourStartDate();
+            LocalDate tourEndDate = originalBooking.getTourEndDate();
+            
+            if (dayNumber != null && tourStartDate != null && tourEndDate != null) {
+                long totalDays = java.time.temporal.ChronoUnit.DAYS.between(tourStartDate, tourEndDate) + 1;
+                boolean isFirstDay = dayNumber == 1;
+                boolean isLastDay = dayNumber == totalDays;
+                
+                if (isFirstDay) {
+                    // 第一天：设置到达航班信息
+                    if (entity.getFlightNumber() == null || entity.getFlightNumber().isEmpty()) {
+                        entity.setFlightNumber(originalBooking.getFlightNumber());
+                    }
+                    if (entity.getArrivalDepartureTime() == null) {
+                        entity.setArrivalDepartureTime(originalBooking.getArrivalDepartureTime());
+                    }
+                    if (entity.getArrivalLandingTime() == null) {
+                        entity.setArrivalLandingTime(originalBooking.getArrivalLandingTime());
+                    }
+                    // 清空返程航班信息（第一天不需要）
+                    entity.setReturnFlightNumber("");
+                    entity.setDepartureDepartureTime(null);
+                    entity.setDepartureLandingTime(null);
+                    
+                    log.info("🛫 第一天航班信息设置 - 订单{} 第{}天: 到达航班={}, 到达时间={}", 
+                            originalBooking.getOrderNumber(), dayNumber, 
+                            entity.getFlightNumber(), entity.getArrivalLandingTime());
+                            
+                } else if (isLastDay) {
+                    // 最后一天：设置返程航班信息
+                    if (entity.getReturnFlightNumber() == null || entity.getReturnFlightNumber().isEmpty()) {
+                        entity.setReturnFlightNumber(originalBooking.getReturnFlightNumber());
+                    }
+                    if (entity.getDepartureDepartureTime() == null) {
+                        entity.setDepartureDepartureTime(originalBooking.getDepartureDepartureTime());
+                    }
+                    if (entity.getDepartureLandingTime() == null) {
+                        entity.setDepartureLandingTime(originalBooking.getDepartureLandingTime());
+                    }
+                    // 清空到达航班信息（最后一天不需要）
+                    entity.setFlightNumber("");
+                    entity.setArrivalDepartureTime(null);
+                    entity.setArrivalLandingTime(null);
+                    
+                    log.info("🛫 最后一天航班信息设置 - 订单{} 第{}天: 返程航班={}, 起飞时间={}", 
+                            originalBooking.getOrderNumber(), dayNumber, 
+                            entity.getReturnFlightNumber(), entity.getDepartureDepartureTime());
+                            
+                } else {
+                    // 中间天数：清空所有航班信息
+                    entity.setFlightNumber("");
+                    entity.setArrivalDepartureTime(null);
+                    entity.setArrivalLandingTime(null);
+                    entity.setReturnFlightNumber("");
+                    entity.setDepartureDepartureTime(null);
+                    entity.setDepartureLandingTime(null);
+                    
+                    log.info("🛫 中间天数航班信息设置 - 订单{} 第{}天: 无航班信息需求", 
+                            originalBooking.getOrderNumber(), dayNumber);
+                }
+            } else {
+                // 如果无法确定行程天数，使用原有逻辑
+                log.warn("无法确定行程天数，使用原有航班信息逻辑 - 订单{}, dayNumber={}", 
+                        originalBooking.getOrderNumber(), dayNumber);
+                        
+                if (entity.getFlightNumber() == null || entity.getFlightNumber().isEmpty()) {
+                    entity.setFlightNumber(originalBooking.getFlightNumber());
+                }
+                if (entity.getArrivalDepartureTime() == null) {
+                    entity.setArrivalDepartureTime(originalBooking.getArrivalDepartureTime());
+                }
+                if (entity.getArrivalLandingTime() == null) {
+                    entity.setArrivalLandingTime(originalBooking.getArrivalLandingTime());
+                }
+                if (entity.getReturnFlightNumber() == null || entity.getReturnFlightNumber().isEmpty()) {
+                    entity.setReturnFlightNumber(originalBooking.getReturnFlightNumber());
+                }
+                if (entity.getDepartureDepartureTime() == null) {
+                    entity.setDepartureDepartureTime(originalBooking.getDepartureDepartureTime());
+                }
+                if (entity.getDepartureLandingTime() == null) {
+                    entity.setDepartureLandingTime(originalBooking.getDepartureLandingTime());
+                }
+            }
+            
+            // ============ 日期信息 ============
+            if (entity.getTourStartDate() == null) {
+                entity.setTourStartDate(originalBooking.getTourStartDate());
+            }
+            if (entity.getTourEndDate() == null) {
+                entity.setTourEndDate(originalBooking.getTourEndDate());
+            }
+            if (entity.getPickupDate() == null) {
+                entity.setPickupDate(originalBooking.getPickupDate());
+            }
+            if (entity.getDropoffDate() == null) {
+                entity.setDropoffDate(originalBooking.getDropoffDate());
+            }
+            if (entity.getBookingDate() == null) {
+                entity.setBookingDate(originalBooking.getBookingDate());
+            }
+            
+            // ============ 联系和行程信息 ============
+            // 注意：passengerContact 已在基本信息部分处理过，此处不重复
+            if (entity.getItineraryDetails() == null || entity.getItineraryDetails().isEmpty()) {
+                entity.setItineraryDetails(originalBooking.getItineraryDetails());
+            }
+            
+            // ============ 标识字段 ============
+            if (entity.getIsFirstOrder() == null) {
+                entity.setIsFirstOrder(originalBooking.getIsFirstOrder() != null && originalBooking.getIsFirstOrder() == 1);
+            }
+            if (entity.getFromReferral() == null) {
+                entity.setFromReferral(originalBooking.getFromReferral() != null && originalBooking.getFromReferral() == 1);
+            }
+            if (entity.getReferralCode() == null || entity.getReferralCode().isEmpty()) {
+                entity.setReferralCode(originalBooking.getReferralCode());
+            }
+            
+            // ============ 业务信息 ============
+            // 强制补充业务字段，确保完整性
+            if (entity.getServiceType() == null || entity.getServiceType().isEmpty()) {
+                entity.setServiceType(originalBooking.getServiceType());
+            }
+            if (entity.getPaymentStatus() == null || entity.getPaymentStatus().isEmpty()) {
+                entity.setPaymentStatus(originalBooking.getPaymentStatus());
+            }
+            if (entity.getTotalPrice() == null) {
+                entity.setTotalPrice(originalBooking.getTotalPrice());
+            }
+            if (entity.getUserId() == null) {
+                entity.setUserId(originalBooking.getUserId());
+            }
+            if (entity.getAgentId() == null) {
+                entity.setAgentId(originalBooking.getAgentId());
+            }
+            if (entity.getOperatorId() == null) {
+                entity.setOperatorId(originalBooking.getOperatorId());
+            }
+            if (entity.getGroupSize() == null) {
+                entity.setGroupSize(originalBooking.getGroupSize());
+            }
+            if (entity.getStatus() == null || entity.getStatus().isEmpty()) {
+                entity.setStatus(originalBooking.getStatus());
+            }
+            if (entity.getBookingDate() == null) {
+                entity.setBookingDate(originalBooking.getBookingDate());
+            }
+            
+            // ============ 产品名称设置 ============
+            // 从原始订单中获取产品名称
+            if (entity.getTourName() == null || entity.getTourName().isEmpty()) {
+                // 根据产品类型获取产品名称
+                try {
+                                         String tourName = getTourName(originalBooking.getTourId(), originalBooking.getTourType());
+                    entity.setTourName(tourName);
+                } catch (Exception e) {
+                    log.warn("获取产品名称失败，使用默认值: {}", e.getMessage());
+                    entity.setTourName("未知产品");
+                }
+            }
+            
+            log.info("✅ 已补充订单 {} 第{}天的完整信息", originalBooking.getOrderNumber(), entity.getDayNumber());
+            log.info("  基本信息 - 联系人={}, 电话={}, 成人数={}, 儿童数={}, 总价={}", 
+                    entity.getContactPerson(), entity.getContactPhone(), 
+                    entity.getAdultCount(), entity.getChildCount(), entity.getTotalPrice());
+            log.info("  酒店信息 - 等级={}, 房型={}, 房间数={}, 入住={}, 退房={}, 详情={}", 
+                    entity.getHotelLevel(), entity.getRoomType(), entity.getHotelRoomCount(),
+                    entity.getHotelCheckInDate(), entity.getHotelCheckOutDate(), entity.getRoomDetails());
+            log.info("  智能航班信息 - 到达航班={}, 到达时间={}, 返程航班={}, 返程起飞={}", 
+                    entity.getFlightNumber(), entity.getArrivalLandingTime(),
+                    entity.getReturnFlightNumber(), entity.getDepartureDepartureTime());
+            log.info("  其他信息 - 服务类型={}, 支付状态={}, 代理商ID={}, 团队规模={}, 状态={}", 
+                    entity.getServiceType(), entity.getPaymentStatus(), 
+                    entity.getAgentId(), entity.getGroupSize(), entity.getStatus());
+        }
+        
         return entity;
     }
 
@@ -218,5 +552,45 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
         int l = 55 + Math.abs((hashCode >> 4) % 15); // 55-70%亮度
         
         return String.format("hsl(%d, %d%%, %d%%)", h, s, l);
+    }
+
+    /**
+     * 根据产品ID和类型获取产品名称
+     * @param tourId 产品ID
+     * @param tourType 产品类型
+     * @return 产品名称
+     */
+    private String getTourName(Integer tourId, String tourType) {
+        try {
+            if ("day_tour".equals(tourType)) {
+                DayTour dayTour = dayTourMapper.getById(tourId);
+                return dayTour != null ? dayTour.getName() : "一日游";
+            } else if ("group_tour".equals(tourType)) {
+                GroupTourDTO groupTour = groupTourMapper.getById(tourId);
+                return groupTour != null ? groupTour.getName() : "团队游";
+            }
+        } catch (Exception e) {
+            log.warn("获取产品名称失败: {}", e.getMessage());
+        }
+        return "旅游产品";
+    }
+
+    /**
+     * 根据日期和地点获取导游车辆分配信息
+     * @param date 日期
+     * @param location 地点
+     * @return 分配信息列表
+     */
+    @Override
+    public List<Object> getAssignmentByDateAndLocation(LocalDate date, String location) {
+        log.info("根据日期和地点获取导游车辆分配信息: 日期={}, 地点={}", date, location);
+        
+        try {
+            // TODO: 临时禁用，等TourGuideVehicleAssignmentVO类可用时再启用
+            return new ArrayList<>();
+        } catch (Exception e) {
+            log.error("获取导游车辆分配信息失败", e);
+            return new ArrayList<>();
+        }
     }
 } 

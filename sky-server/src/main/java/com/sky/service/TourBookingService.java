@@ -198,4 +198,14 @@ public interface TourBookingService {
      * @return 是否成功
      */
     Boolean updateBookingDetails(TourBookingUpdateDTO updateDTO);
+    
+
+    
+    /**
+     * 自动同步订单数据到排团表
+     * 供订单创建时自动调用
+     * 
+     * @param bookingId 订单ID
+     */
+    void autoSyncOrderToScheduleTable(Integer bookingId);
 } 

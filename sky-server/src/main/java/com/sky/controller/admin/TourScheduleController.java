@@ -4,6 +4,7 @@ import com.sky.dto.TourScheduleBatchSaveDTO;
 import com.sky.dto.TourScheduleOrderDTO;
 import com.sky.result.Result;
 import com.sky.service.TourScheduleOrderService;
+import com.sky.service.TourBookingService;
 import com.sky.vo.TourScheduleVO;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -26,6 +27,9 @@ public class TourScheduleController {
 
     @Autowired
     private TourScheduleOrderService tourScheduleOrderService;
+
+    @Autowired
+    private TourBookingService tourBookingService;
 
     /**
      * 通过订单ID获取行程排序
@@ -73,14 +77,20 @@ public class TourScheduleController {
         return Result.success(result);
     }
 
+
+
+
+
     /**
-     * 初始化订单的行程排序
+     * 根据日期和地点获取导游车辆分配信息
      */
-    @PostMapping("/init/{bookingId}")
-    @ApiOperation("初始化订单的行程排序")
-    public Result<Boolean> initOrderSchedules(@PathVariable Integer bookingId) {
-        log.info("初始化订单的行程排序: {}", bookingId);
-        boolean result = tourScheduleOrderService.initOrderSchedules(bookingId);
-        return Result.success(result);
+    @GetMapping("/assignment")
+    @ApiOperation("根据日期和地点获取导游车辆分配信息")
+    public Result<List<Object>> getAssignmentByDateAndLocation(
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
+            @RequestParam String location) {
+        log.info("获取导游车辆分配信息: 日期={}, 地点={}", date, location);
+        List<Object> assignments = tourScheduleOrderService.getAssignmentByDateAndLocation(date, location);
+        return Result.success(assignments);
     }
 } 

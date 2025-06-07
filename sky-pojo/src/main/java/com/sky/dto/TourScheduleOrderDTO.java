@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /**
  * 行程排序数据传输对象
@@ -121,6 +122,101 @@ public class TourScheduleOrderDTO implements Serializable {
     private String roomType;
     
     /**
+     * 酒店房间数量
+     */
+    private Integer hotelRoomCount;
+    
+    /**
+     * 酒店入住日期
+     */
+    private LocalDate hotelCheckInDate;
+    
+    /**
+     * 酒店退房日期
+     */
+    private LocalDate hotelCheckOutDate;
+    
+    /**
+     * 房间详情
+     */
+    private String roomDetails;
+    
+    /**
+     * 到达航班号
+     */
+    private String flightNumber;
+    
+    /**
+     * 到达航班起飞时间
+     */
+    private LocalDateTime arrivalDepartureTime;
+    
+    /**
+     * 到达航班降落时间
+     */
+    private LocalDateTime arrivalLandingTime;
+    
+    /**
+     * 返程航班号
+     */
+    private String returnFlightNumber;
+    
+    /**
+     * 返程航班起飞时间
+     */
+    private LocalDateTime departureDepartureTime;
+    
+    /**
+     * 返程航班降落时间
+     */
+    private LocalDateTime departureLandingTime;
+    
+    /**
+     * 行程开始日期
+     */
+    private LocalDate tourStartDate;
+    
+    /**
+     * 行程结束日期
+     */
+    private LocalDate tourEndDate;
+    
+    /**
+     * 接客日期
+     */
+    private LocalDate pickupDate;
+    
+    /**
+     * 送客日期
+     */
+    private LocalDate dropoffDate;
+    
+    /**
+     * 乘客联系方式
+     */
+    private String passengerContact;
+    
+    /**
+     * 行程详情
+     */
+    private String itineraryDetails;
+    
+    /**
+     * 是否首单
+     */
+    private Boolean isFirstOrder;
+    
+    /**
+     * 是否来自推荐
+     */
+    private Boolean fromReferral;
+    
+    /**
+     * 推荐码
+     */
+    private String referralCode;
+    
+    /**
      * 服务类型
      */
     private String serviceType;
@@ -146,6 +242,16 @@ public class TourScheduleOrderDTO implements Serializable {
     private Integer agentId;
     
     /**
+     * 操作员ID
+     */
+    private Long operatorId;
+    
+    /**
+     * 预订日期
+     */
+    private LocalDateTime bookingDate;
+    
+    /**
      * 团队大小
      */
     private Integer groupSize;
@@ -164,4 +270,14 @@ public class TourScheduleOrderDTO implements Serializable {
      * 旅游目的地
      */
     private String tourLocation;
+    
+    /**
+     * 创建时间
+     */
+    private LocalDateTime createdAt;
+    
+    /**
+     * 更新时间
+     */
+    private LocalDateTime updatedAt;
 } 

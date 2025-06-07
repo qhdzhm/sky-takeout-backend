@@ -23,7 +23,9 @@ public class OrderVO {
     private Long operatorId; // 操作员ID
     private Date bookingDate; // 预订日期
     private String flightNumber; // 航班号
+    private Date arrivalLandingTime; // 到达时间
     private String returnFlightNumber; // 返程航班号
+    private Date departureDepartureTime; // 起飞时间
     private Date tourStartDate; // 旅行开始日期
     private Date tourEndDate; // 旅行结束日期
     private Date pickupDate; // 接机日期

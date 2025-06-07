@@ -722,5 +722,5 @@ public class BookingController {
             log.error("计算价格失败: {}", e.getMessage(), e);
             return Result.error("计算价格失败: " + e.getMessage());
         }
-    }
+        }
 } 

@@ -21,6 +21,7 @@ import com.sky.service.UserCreditService;
 import com.sky.service.GroupTourService;
 import com.sky.service.DayTourService;
 import com.sky.service.NotificationService;
+import com.sky.service.TourBookingService;
 import com.sky.vo.OrderVO;
 import com.sky.vo.PageResultVO;
 import lombok.extern.slf4j.Slf4j;
@@ -279,6 +280,21 @@ public class OrderServiceImpl implements OrderService {
         
         // 插入订单
         orderMapper.insert(tourBooking);
+        
+        // 🔄 自动将订单数据复制到排团表
+        try {
+            // 注入TourBookingService
+            TourBookingService tourBookingService = SpringUtils.getBean("tourBookingServiceImpl", TourBookingService.class);
+            if (tourBookingService != null) {
+                tourBookingService.autoSyncOrderToScheduleTable(tourBooking.getBookingId());
+                log.info("✅ 订单创建后自动同步到排团表完成: 订单ID={}", tourBooking.getBookingId());
+            } else {
+                log.warn("⚠️ 无法获取TourBookingService，跳过自动同步到排团表");
+            }
+        } catch (Exception e) {
+            log.error("❌ 自动同步订单到排团表失败: 订单ID={}, 错误: {}", tourBooking.getBookingId(), e.getMessage(), e);
+            // 不抛出异常，避免影响订单创建的主流程
+        }
         
         // 🔔 发送新订单通知
         try {

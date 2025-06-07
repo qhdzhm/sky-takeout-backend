@@ -41,10 +41,13 @@ public interface TourScheduleOrderService {
      */
     boolean saveBatchSchedules(TourScheduleBatchSaveDTO batchSaveDTO);
 
+
+
     /**
-     * 初始化订单的行程排序
-     * @param bookingId 订单ID
-     * @return 初始化结果
+     * 根据日期和地点获取导游车辆分配信息
+     * @param date 日期
+     * @param location 地点
+     * @return 分配信息列表
      */
-    boolean initOrderSchedules(Integer bookingId);
+    List<Object> getAssignmentByDateAndLocation(LocalDate date, String location);
 } 

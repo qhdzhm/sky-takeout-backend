@@ -143,4 +143,13 @@ public class TourBooking implements Serializable {
     
     // 更新时间
     private LocalDateTime updatedAt;
+    
+    // 是否为用户首单
+    private Integer isFirstOrder;
+    
+    // 是否来自推荐
+    private Integer fromReferral;
+    
+    // 推荐码
+    private String referralCode;
 } 
