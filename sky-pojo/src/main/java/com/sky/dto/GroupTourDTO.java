@@ -33,6 +33,8 @@ public class GroupTourDTO {
     private Integer maxPeople;
     private Integer currentBookings;
     private String coverImage;
+    private String bannerImage;
+    private String productShowcaseImage;
     private Integer regionId;
     private String regionName;
     

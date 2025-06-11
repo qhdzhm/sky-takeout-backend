@@ -31,6 +31,7 @@ import java.util.Map;
 import javax.servlet.http.HttpServletRequest;
 import io.jsonwebtoken.Claims;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 /**
  * 代理商客户端Controller
@@ -616,86 +617,189 @@ public class AgentClientController {
     }
 
     /**
-     * 获取代理商个人资料
-     * @return 代理商个人资料
+     * 获取代理商或操作员个人资料
+     * @return 个人资料
      */
     @GetMapping("/profile")
-    public Result<Agent> getAgentProfile() {
-        log.info("获取代理商个人资料");
+    public Result<Object> getAgentProfile() {
+        log.info("获取个人资料");
         
         try {
-            // 从BaseContext获取代理商ID
+            // 从BaseContext获取用户信息
+            String userType = BaseContext.getCurrentUserType();
+            Long currentUserId = BaseContext.getCurrentId();
             Long agentId = BaseContext.getCurrentAgentId();
+            Long operatorId = BaseContext.getCurrentOperatorId();
+            
+            log.info("当前用户类型: {}, 用户ID: {}, 代理商ID: {}, 操作员ID: {}", 
+                    userType, currentUserId, agentId, operatorId);
+            
             if (agentId == null) {
-                return Result.error("未登录或无法识别代理商信息");
+                return Result.error("未登录或无法识别用户信息");
             }
             
-            // 查询代理商信息
-            Agent agent = agentMapper.getById(agentId);
-            if (agent == null) {
-                return Result.error("代理商不存在");
+            // 区分代理商和操作员
+            if ("agent_operator".equals(userType) && operatorId != null) {
+                // 操作员登录 - 返回操作员信息
+                AgentOperator operator = agentOperatorService.getById(operatorId);
+                if (operator == null) {
+                    return Result.error("操作员信息不存在");
+                }
+                
+                // 获取所属代理商信息，用于显示代理商名称
+                Agent belongsToAgent = agentMapper.getById(operator.getAgentId());
+                
+                // 安全处理 - 不返回密码
+                operator.setPassword(null);
+                
+                // 创建包含代理商名称的返回对象
+                Map<String, Object> operatorWithAgentInfo = new HashMap<>();
+                operatorWithAgentInfo.put("id", operator.getId());
+                operatorWithAgentInfo.put("username", operator.getUsername());
+                operatorWithAgentInfo.put("name", operator.getName());
+                operatorWithAgentInfo.put("email", operator.getEmail());
+                operatorWithAgentInfo.put("phone", operator.getPhone());
+                operatorWithAgentInfo.put("status", operator.getStatus());
+                operatorWithAgentInfo.put("agentId", operator.getAgentId());
+                operatorWithAgentInfo.put("agentName", belongsToAgent != null ? belongsToAgent.getCompanyName() : "未知代理商");
+                operatorWithAgentInfo.put("userType", "operator");
+                
+                log.info("成功获取操作员信息，操作员ID={}，所属代理商={}", operatorId, operatorWithAgentInfo.get("agentName"));
+                return Result.success(operatorWithAgentInfo);
+            } else {
+                // 代理商主账号登录 - 返回代理商信息
+                Agent agent = agentMapper.getById(agentId);
+                if (agent == null) {
+                    return Result.error("代理商不存在");
+                }
+                
+                // 安全处理 - 不返回密码
+                agent.setPassword(null);
+                
+                // 创建包含用户类型的返回对象
+                Map<String, Object> agentWithUserType = new HashMap<>();
+                agentWithUserType.put("id", agent.getId());
+                agentWithUserType.put("username", agent.getUsername());
+                agentWithUserType.put("companyName", agent.getCompanyName());
+                agentWithUserType.put("contactPerson", agent.getContactPerson());
+                agentWithUserType.put("email", agent.getEmail());
+                agentWithUserType.put("phone", agent.getPhone());
+                agentWithUserType.put("discountRate", agent.getDiscountRate());
+                agentWithUserType.put("status", agent.getStatus());
+                agentWithUserType.put("userType", "agent");
+                
+                log.info("成功获取代理商信息，代理商ID={}", agentId);
+                return Result.success(agentWithUserType);
             }
-            
-            // 安全处理 - 不返回密码
-            agent.setPassword(null);
-            
-            log.info("成功获取代理商信息，代理商ID={}", agentId);
-            return Result.success(agent);
         } catch (Exception e) {
-            log.error("获取代理商个人资料异常", e);
-            return Result.error("获取代理商个人资料失败：" + e.getMessage());
+            log.error("获取个人资料异常", e);
+            return Result.error("获取个人资料失败：" + e.getMessage());
         }
     }
     
     /**
-     * 更新代理商个人资料
-     * @param agent 代理商信息
+     * 更新代理商或操作员个人资料
+     * @param requestBody 包含信息的请求体
      * @return 更新结果
      */
     @PutMapping("/profile")
-    public Result<String> updateAgentProfile(@RequestBody Agent agent) {
-        log.info("更新代理商个人资料，代理商信息：{}", agent);
+    public Result<String> updateProfile(@RequestBody Map<String, Object> requestBody) {
+        log.info("更新个人资料，请求信息：{}", requestBody);
         
         try {
-            // 从BaseContext获取代理商ID
+            // 从BaseContext获取用户信息
+            String userType = BaseContext.getCurrentUserType();
+            Long currentUserId = BaseContext.getCurrentId();
             Long agentId = BaseContext.getCurrentAgentId();
+            Long operatorId = BaseContext.getCurrentOperatorId();
+            
             if (agentId == null) {
-                return Result.error("未登录或无法识别代理商信息");
+                return Result.error("未登录或无法识别用户信息");
             }
             
-            // 安全检查 - 确保只能修改自己的信息
-            if (!agentId.equals(agent.getId())) {
-                log.error("安全警告：代理商尝试修改其他代理商信息，当前用户ID={}，目标ID={}", agentId, agent.getId());
-                return Result.error("只能修改自己的信息");
-            }
-            
-            // 获取原始代理商信息
-            Agent existingAgent = agentMapper.getById(agentId);
-            if (existingAgent == null) {
-                return Result.error("代理商不存在");
-            }
-            
-            // 设置不允许用户修改的字段
-            agent.setId(agentId);  // 确保ID不变
-            agent.setUsername(existingAgent.getUsername());  // 用户名不允许修改
-            agent.setPassword(existingAgent.getPassword());  // 密码不通过此接口修改
-            agent.setDiscountRate(existingAgent.getDiscountRate());  // 折扣率不允许用户修改
-            agent.setStatus(existingAgent.getStatus());  // 状态不允许用户修改
-            agent.setCreatedAt(existingAgent.getCreatedAt());  // 创建时间不允许修改
-            agent.setUpdatedAt(LocalDateTime.now());  // 更新修改时间
-            
-            // 更新代理商信息
-            int result = agentMapper.update(agent);
-            if (result > 0) {
-                log.info("代理商信息更新成功，代理商ID={}", agentId);
-                return Result.success("代理商信息更新成功");
+            // 区分代理商和操作员
+            if ("agent_operator".equals(userType) && operatorId != null) {
+                // 操作员更新信息
+                AgentOperator operator = agentOperatorService.getById(operatorId);
+                if (operator == null) {
+                    return Result.error("操作员信息不存在");
+                }
+                
+                // 更新操作员信息（只允许修改特定字段）
+                if (requestBody.containsKey("name")) {
+                    operator.setName((String) requestBody.get("name"));
+                }
+                if (requestBody.containsKey("phone")) {
+                    operator.setPhone((String) requestBody.get("phone"));
+                }
+                if (requestBody.containsKey("email")) {
+                    operator.setEmail((String) requestBody.get("email"));
+                }
+                
+                // 设置不允许用户修改的字段
+                operator.setId(operatorId);
+                operator.setUsername(operator.getUsername()); // 用户名不允许修改
+                operator.setAgentId(operator.getAgentId()); // 所属代理商不允许修改
+                operator.setStatus(operator.getStatus()); // 状态不允许修改
+                operator.setUpdatedAt(LocalDateTime.now());
+                
+                // 更新操作员信息
+                agentOperatorService.update(operator);
+                log.info("操作员信息更新成功，操作员ID={}", operatorId);
+                return Result.success("操作员信息更新成功");
+                
             } else {
-                log.error("代理商信息更新失败，代理商ID={}", agentId);
-                return Result.error("代理商信息更新失败");
+                // 代理商更新信息
+                Agent existingAgent = agentMapper.getById(agentId);
+                if (existingAgent == null) {
+                    return Result.error("代理商不存在");
+                }
+                
+                // 创建新的Agent对象进行更新
+                Agent agent = new Agent();
+                agent.setId(agentId);
+                agent.setUsername(existingAgent.getUsername()); // 用户名不允许修改
+                agent.setPassword(existingAgent.getPassword()); // 密码不通过此接口修改
+                agent.setDiscountRate(existingAgent.getDiscountRate()); // 折扣率不允许用户修改
+                agent.setStatus(existingAgent.getStatus()); // 状态不允许用户修改
+                agent.setCreatedAt(existingAgent.getCreatedAt()); // 创建时间不允许修改
+                agent.setUpdatedAt(LocalDateTime.now()); // 更新修改时间
+                
+                // 更新用户可修改的字段
+                if (requestBody.containsKey("companyName")) {
+                    agent.setCompanyName((String) requestBody.get("companyName"));
+                } else {
+                    agent.setCompanyName(existingAgent.getCompanyName());
+                }
+                if (requestBody.containsKey("contactPerson")) {
+                    agent.setContactPerson((String) requestBody.get("contactPerson"));
+                } else {
+                    agent.setContactPerson(existingAgent.getContactPerson());
+                }
+                if (requestBody.containsKey("phone")) {
+                    agent.setPhone((String) requestBody.get("phone"));
+                } else {
+                    agent.setPhone(existingAgent.getPhone());
+                }
+                if (requestBody.containsKey("email")) {
+                    agent.setEmail((String) requestBody.get("email"));
+                } else {
+                    agent.setEmail(existingAgent.getEmail());
+                }
+                
+                // 更新代理商信息
+                int result = agentMapper.update(agent);
+                if (result > 0) {
+                    log.info("代理商信息更新成功，代理商ID={}", agentId);
+                    return Result.success("代理商信息更新成功");
+                } else {
+                    log.error("代理商信息更新失败，代理商ID={}", agentId);
+                    return Result.error("代理商信息更新失败");
+                }
             }
         } catch (Exception e) {
-            log.error("更新代理商个人资料异常", e);
-            return Result.error("更新代理商个人资料失败：" + e.getMessage());
+            log.error("更新个人资料异常", e);
+            return Result.error("更新个人资料失败：" + e.getMessage());
         }
     }
     

@@ -35,6 +35,8 @@ public class DayTourDTO implements Serializable {
     private Integer maxCapacity;
     private Integer currentBookings;
     private String coverImage;
+    private String bannerImage;
+    private String productShowcaseImage;
     private String imageUrl;
     private Integer regionId;
     private String regionName;

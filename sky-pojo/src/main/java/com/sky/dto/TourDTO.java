@@ -31,6 +31,8 @@ public class TourDTO {
     private Integer maxPeople;
     private Integer currentBookings;
     private String coverImage;
+    private String bannerImage;
+    private String productShowcaseImage;
     private String tourType; // "day" 或 "group"
     private Integer regionId;
     private String regionName;

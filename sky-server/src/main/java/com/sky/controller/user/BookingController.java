@@ -1,16 +1,19 @@
 package com.sky.controller.user;
 
 import com.sky.dto.BookingDTO;
-import com.sky.dto.GroupTourDTO;
+import com.sky.dto.EmailConfirmationDTO;
+import com.sky.dto.EmailInvoiceDTO;
 import com.sky.dto.PaymentDTO;
 import com.sky.dto.TourBookingDTO;
-import com.sky.entity.DayTour;
+import java.util.concurrent.CompletableFuture;
 import com.sky.entity.HotelPriceDifference;
 import com.sky.entity.TourBooking;
 import com.sky.result.Result;
 import com.sky.service.BookingService;
+import com.sky.service.EmailService;
 import com.sky.service.HotelPriceService;
 import com.sky.service.TourBookingService;
+import com.sky.vo.PassengerVO;
 import com.sky.vo.PriceDetailVO;
 import com.sky.vo.TourBookingVO;
 import com.sky.context.BaseContext;
@@ -22,9 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +47,9 @@ public class BookingController {
     
     @Autowired
     private HotelPriceService hotelPriceService;
+    
+    @Autowired
+    private EmailService emailService;
 
     /**
      * 创建预订
@@ -127,6 +131,29 @@ public class BookingController {
         if (bookingId != null) {
             TourBookingVO bookingVO = tourBookingService.getById(bookingId);
             
+            // 🔥 订单创建成功后，异步发送邮件（不阻塞响应）
+            // ⚠️ 重要：在主线程中提前获取BaseContext信息，避免异步线程中ThreadLocal丢失
+            Long orderIdLong = bookingId.longValue();
+            TourBookingVO bookingVOFinal = bookingVO;
+            String currentUserType = BaseContext.getCurrentUserType();
+            Long currentUserId = BaseContext.getCurrentId(); 
+            Long currentAgentId = BaseContext.getCurrentAgentId();
+            Long currentOperatorId = BaseContext.getCurrentOperatorId();
+            
+            log.info("💾 保存用户上下文信息用于异步邮件: userType={}, userId={}, agentId={}, operatorId={}", 
+                    currentUserType, currentUserId, currentAgentId, currentOperatorId);
+            
+            CompletableFuture.runAsync(() -> {
+                try {
+                    log.info("开始异步发送邮件: orderId={}", orderIdLong);
+                    sendEmailsAfterOrderCreation(orderIdLong, bookingVOFinal, 
+                            currentUserType, currentUserId, currentAgentId, currentOperatorId);
+                    log.info("异步邮件发送完成: orderId={}", orderIdLong);
+                } catch (Exception e) {
+                    log.error("异步邮件发送失败: orderId={}", orderIdLong, e);
+                }
+            });
+            
             Map<String, Object> data = new HashMap<>();
             data.put("bookingId", bookingVO.getBookingId());
             data.put("orderNumber", bookingVO.getOrderNumber());
@@ -183,223 +210,9 @@ public class BookingController {
                 tourId, tourType, adultCount, childCount, hotelLevel, roomCount, userId, childrenAges, agentId, roomType);
         
         try {
-            // 获取原始价格（从产品获取）
-            BigDecimal originalPrice = BigDecimal.ZERO;
-            int nights = 0;
-            BigDecimal discountRate = BigDecimal.ONE; // 默认折扣率为1（不打折）
-
-            if ("day_tour".equals(tourType)) {
-                // 获取一日游产品信息以获取原价
-                DayTour dayTour = tourBookingService.getDayTourById(tourId);
-                if (dayTour != null) {
-                    originalPrice = dayTour.getPrice();
-                }
-            } else if ("group_tour".equals(tourType)) {
-                // 获取跟团游产品信息以获取原价和天数
-                GroupTourDTO groupTour = tourBookingService.getGroupTourById(tourId);
-                if (groupTour != null) {
-                    originalPrice = groupTour.getPrice();
-                    
-                    // 解析天数和夜数
-                    try {
-                        String duration = groupTour.getDuration();
-                        if (duration != null && duration.contains("天")) {
-                            // 例如："5天4晚" -> 解析出天数5
-                            String daysStr = duration.substring(0, duration.indexOf("天"));
-                            int days = Integer.parseInt(daysStr);
-                            nights = days > 1 ? days - 1 : 0; // 夜数 = 天数 - 1
-                        }
-                    } catch (Exception e) {
-                        log.warn("解析行程天数失败: {}", e.getMessage());
-                        // 默认至少一晚
-                        nights = 1;
-                    }
-                }
-            }
-            
-            // 获取代理商折扣率
-            if (agentId != null) {
-                try {
-                    discountRate = tourBookingService.getAgentDiscountRate(agentId);
-                    log.info("获取到代理商折扣率: {}, 代理商ID: {}", discountRate, agentId);
-                } catch (Exception e) {
-                    log.error("获取代理商折扣率失败: {}", e.getMessage(), e);
-                }
-            }
-            
-            // 计算折扣价
-            BigDecimal discountedPrice = originalPrice.multiply(discountRate).setScale(2, RoundingMode.HALF_UP);
-
-            // 获取价格详情 - 关键修改：调用带房型参数的方法
-            log.info("正在调用价格计算详情方法，使用agentId={}, discountRate={}, roomType={}", agentId, discountRate, roomType);
-            
-            // 确保agentId的类型正确
-            if (agentId != null) {
-                log.info("代理商ID类型：{}", agentId.getClass().getName());
-                
-                // 如果需要，可以转换agentId类型
-                if (!(agentId instanceof Long)) {
-                    try {
-                        agentId = Long.valueOf(agentId.toString());
-                        log.info("成功将代理商ID转换为Long类型: {}", agentId);
-                    } catch (Exception e) {
-                        log.error("代理商ID类型转换失败: {}", e.getMessage(), e);
-                        agentId = null; // 转换失败时设为null
-                    }
-                }
-            }
-            
-            // 🔧 关键修改：调用带房型参数的价格计算方法
-            PriceDetailVO priceDetail = tourBookingService.calculatePriceDetail(
-                    tourId, tourType, agentId, adultCount, childCount, hotelLevel, roomCount, userId, roomType);
-            
-            // 提取总价，基础价格和额外房费
-            BigDecimal totalPrice = priceDetail.getTotalPrice();
-            BigDecimal basePrice = priceDetail.getBasePrice();
-            BigDecimal extraRoomFee = priceDetail.getExtraRoomFee();
-            BigDecimal nonAgentPrice = priceDetail.getNonAgentPrice(); // 获取非代理商价格
-            
-            // 获取基准酒店等级
-            String baseHotelLevel = hotelPriceService.getBaseHotelLevel();
-            
-            // 获取酒店价格差异
-            BigDecimal hotelPriceDiff = hotelPriceService.getPriceDifferenceByLevel(hotelLevel);
-            
-            // 获取酒店单房差
-            BigDecimal singleRoomSupplement = hotelPriceService.getDailySingleRoomSupplementByLevel(hotelLevel);
-            
-            // 根据房型获取相应的房间价格
-            BigDecimal hotelRoomPrice;
-            BigDecimal tripleDifference = BigDecimal.ZERO;
-            if (roomType != null && (roomType.contains("三人间") || roomType.contains("三床") || roomType.contains("家庭") || roomType.equalsIgnoreCase("triple") || roomType.equalsIgnoreCase("family"))) {
-                BigDecimal roomBasePrice = hotelPriceService.getHotelRoomPriceByLevel(hotelLevel);
-                tripleDifference = hotelPriceService.getTripleBedRoomPriceDifferenceByLevel(hotelLevel);
-                hotelRoomPrice = roomBasePrice.add(tripleDifference);
-                log.info("使用三人间房价: {} = 基础价格{} + 三人房差价{}", hotelRoomPrice, roomBasePrice, tripleDifference);
-            } else {
-                hotelRoomPrice = hotelPriceService.getHotelRoomPriceByLevel(hotelLevel);
-                log.info("使用标准房价: {}", hotelRoomPrice);
-            }
-            
-            // 判断是否需要单房差
-            int totalPeople = adultCount + childCount;
-            boolean needsSingleRoomSupplement = (totalPeople % 2 != 0) && (roomCount == Math.ceil(totalPeople / 2.0));
-            
-            // 额外房间数
-            int theoreticalRoomCount = (int) Math.ceil(totalPeople / 2.0);
-            int extraRooms = roomCount > theoreticalRoomCount ? roomCount - theoreticalRoomCount : 0;
-            
-            // 处理儿童年龄和相应的票价计算
-            List<Map<String, Object>> childPrices = new ArrayList<>();
-            
-            // 解析儿童年龄字符串，格式可能是：1,2,3或者[1,2,3]
-            Integer[] validChildrenAges = null;
-            if (childrenAges != null && !childrenAges.trim().isEmpty()) {
-                try {
-                    // 先尝试移除可能存在的方括号
-                    String cleanAges = childrenAges.replace("[", "").replace("]", "").trim();
-                    
-                    // 按逗号分隔并解析为整数
-                    String[] agesArray = cleanAges.split(",");
-                    validChildrenAges = new Integer[agesArray.length];
-                    
-                    for (int i = 0; i < agesArray.length; i++) {
-                        validChildrenAges[i] = Integer.parseInt(agesArray[i].trim());
-                    }
-                    
-                    log.info("成功解析儿童年龄数组: {}", Arrays.toString(validChildrenAges));
-                } catch (Exception e) {
-                    log.error("解析儿童年龄字符串失败: {}", e.getMessage(), e);
-                    // 解析失败，使用默认值
-                    validChildrenAges = null;
-                }
-            }
-            
-            // 如果解析失败或未提供，创建默认年龄数组
-            if (validChildrenAges == null || validChildrenAges.length == 0) {
-                // 如果未提供年龄，则假设所有儿童都是3-7岁，适用-50的折扣
-                validChildrenAges = new Integer[childCount];
-                Arrays.fill(validChildrenAges, 5); // 默认5岁
-                log.info("使用默认儿童年龄: 5岁");
-            }
-            
-            // 确保年龄数组长度与儿童数量匹配
-            if (validChildrenAges.length < childCount) {
-                // 如果年龄数组长度小于儿童数量，用默认值补齐
-                Integer[] extendedAges = new Integer[childCount];
-                System.arraycopy(validChildrenAges, 0, extendedAges, 0, validChildrenAges.length);
-                
-                // 剩余的用默认年龄填充
-                for (int i = validChildrenAges.length; i < childCount; i++) {
-                    extendedAges[i] = 5; // 默认5岁
-                }
-                
-                validChildrenAges = extendedAges;
-                log.info("扩展儿童年龄数组: {}", Arrays.toString(validChildrenAges));
-            }
-            
-            // 根据不同年龄的儿童计算总价
-            BigDecimal childrenTotalPrice = BigDecimal.ZERO;
-            
-            for (int i = 0; i < validChildrenAges.length && i < childCount; i++) {
-                Integer age = validChildrenAges[i];
-                BigDecimal childPrice;
-                String priceType;
-                
-                if (age < 3) {
-                    // 小于3岁半价(成人折扣价的一半)
-                    childPrice = discountedPrice.multiply(new BigDecimal("0.5")).setScale(2, RoundingMode.HALF_UP);
-                    priceType = "半价";
-                } else if (age <= 7) {
-                    // 3-7岁减50
-                    childPrice = discountedPrice.subtract(new BigDecimal("50")).setScale(2, RoundingMode.HALF_UP);
-                    priceType = "减50";
-                    // 确保价格不小于0
-                    if (childPrice.compareTo(BigDecimal.ZERO) < 0) {
-                        childPrice = BigDecimal.ZERO;
-                    }
-                } else {
-                    // 8岁及以上成人价
-                    childPrice = discountedPrice;
-                    priceType = "成人价";
-                }
-                
-                childrenTotalPrice = childrenTotalPrice.add(childPrice);
-                
-                // 添加到儿童价格列表
-                Map<String, Object> childPriceInfo = new HashMap<>();
-                childPriceInfo.put("age", age);
-                childPriceInfo.put("price", childPrice);
-                childPriceInfo.put("priceType", priceType);
-                childPrices.add(childPriceInfo);
-            }
-            
-            // 构建返回数据
-            Map<String, Object> data = new HashMap<>();
-            data.put("totalPrice", totalPrice);
-            data.put("basePrice", basePrice);
-            data.put("extraRoomFee", extraRoomFee);
-            data.put("nonAgentPrice", nonAgentPrice);
-            data.put("originalPrice", originalPrice);
-            data.put("discountedPrice", discountedPrice);
-            data.put("discountRate", discountRate);
-            data.put("adultCount", adultCount);
-            data.put("childCount", childCount);
-            data.put("adultTotalPrice", discountedPrice.multiply(BigDecimal.valueOf(adultCount)));
-            data.put("childrenTotalPrice", childrenTotalPrice);
-            data.put("childPrices", childPrices);
-            data.put("childrenAges", validChildrenAges);
-            data.put("baseHotelLevel", baseHotelLevel);
-            data.put("hotelPriceDifference", hotelPriceDiff);
-            data.put("dailySingleRoomSupplement", singleRoomSupplement);
-            data.put("hotelRoomPrice", hotelRoomPrice);
-            data.put("roomCount", roomCount);
-            data.put("roomType", roomType); // 添加房型信息
-            data.put("hotelNights", nights);
-            data.put("theoreticalRoomCount", theoreticalRoomCount);
-            data.put("extraRooms", extraRooms);
-            data.put("needsSingleRoomSupplement", needsSingleRoomSupplement);
-            data.put("tripleBedRoomPriceDifference", tripleDifference); // 添加三人房差价信息
+            // 🔧 调用Service层的详细计算方法，包含儿童年龄处理
+            Map<String, Object> data = tourBookingService.calculatePriceDetailWithChildrenAges(
+                    tourId, tourType, agentId, adultCount, childCount, hotelLevel, roomCount, userId, roomType, childrenAges);
             
             return Result.success(data);
         } catch (Exception e) {
@@ -723,4 +536,131 @@ public class BookingController {
             return Result.error("计算价格失败: " + e.getMessage());
         }
         }
+    
+    /**
+     * 订单创建成功后自动发送邮件
+     * @param orderId 订单ID
+     * @param bookingVO 订单信息
+     * @param userType 用户类型
+     * @param currentUserId 当前用户ID
+     * @param agentId 代理商ID
+     * @param operatorId 操作员ID
+     */
+    private void sendEmailsAfterOrderCreation(Long orderId, TourBookingVO bookingVO, 
+            String userType, Long currentUserId, Long agentId, Long operatorId) {
+        log.info("订单创建成功，开始自动发送邮件: orderId={}", orderId);
+        
+        try {
+            log.info("🔄 使用传入的用户信息: userType={}, currentUserId={}, agentId={}, operatorId={}", 
+                    userType, currentUserId, agentId, operatorId);
+            
+            // 确定实际的代理商ID和操作员ID
+            Long actualAgentId;
+            Long actualOperatorId = null;
+            String recipientType;
+            
+            if (agentId != null) {
+                // 有agentId说明是操作员
+                actualAgentId = agentId;
+                actualOperatorId = currentUserId;
+                recipientType = "operator";
+                log.info("✅ 操作员下单: 代理商ID={}, 操作员ID={}", actualAgentId, actualOperatorId);
+            } else {
+                // 没有agentId说明是代理商主号
+                actualAgentId = currentUserId;
+                recipientType = "agent";
+                log.info("✅ 代理商主号下单: 代理商ID={}", actualAgentId);
+            }
+            
+            // 构建订单详情
+            EmailConfirmationDTO.OrderDetails orderDetails = buildOrderDetails(bookingVO);
+            EmailInvoiceDTO.InvoiceDetails invoiceDetails = buildInvoiceDetails(bookingVO);
+            
+            // 1. 发送发票邮件给代理商主号（不管是主号下单还是操作员下单都要发）
+            try {
+                EmailInvoiceDTO invoiceDTO = new EmailInvoiceDTO();
+                invoiceDTO.setOrderId(orderId);
+                invoiceDTO.setAgentId(actualAgentId);
+                invoiceDTO.setOperatorId(actualOperatorId);
+                invoiceDTO.setInvoiceDetails(invoiceDetails);
+                
+                emailService.sendInvoiceEmail(invoiceDTO);
+                log.info("✅ 发票邮件发送成功: orderId={}, agentId={}", orderId, actualAgentId);
+            } catch (Exception e) {
+                log.error("❌ 发票邮件发送失败: orderId={}", orderId, e);
+            }
+            
+            // 2. 发送确认单邮件给代理商主号
+            try {
+                EmailConfirmationDTO confirmationDTO = new EmailConfirmationDTO();
+                confirmationDTO.setOrderId(orderId);
+                confirmationDTO.setRecipientType("agent");
+                confirmationDTO.setAgentId(actualAgentId);
+                confirmationDTO.setOperatorId(actualOperatorId);
+                confirmationDTO.setOrderDetails(orderDetails);
+                
+                emailService.sendConfirmationEmail(confirmationDTO);
+                log.info("✅ 代理商确认单邮件发送成功: orderId={}, agentId={}", orderId, actualAgentId);
+            } catch (Exception e) {
+                log.error("❌ 代理商确认单邮件发送失败: orderId={}", orderId, e);
+            }
+            
+            // 3. 如果是操作员下单，再发送确认单邮件给操作员
+            if ("operator".equals(recipientType) && actualOperatorId != null) {
+                try {
+                    EmailConfirmationDTO operatorConfirmationDTO = new EmailConfirmationDTO();
+                    operatorConfirmationDTO.setOrderId(orderId);
+                    operatorConfirmationDTO.setRecipientType("operator");
+                    operatorConfirmationDTO.setAgentId(actualAgentId);
+                    operatorConfirmationDTO.setOperatorId(actualOperatorId);
+                    operatorConfirmationDTO.setOrderDetails(orderDetails);
+                    
+                    emailService.sendConfirmationEmail(operatorConfirmationDTO);
+                    log.info("✅ 操作员确认单邮件发送成功: orderId={}, operatorId={}", orderId, actualOperatorId);
+                } catch (Exception e) {
+                    log.error("❌ 操作员确认单邮件发送失败: orderId={}", orderId, e);
+                }
+            }
+            
+            log.info("订单邮件发送处理完成: orderId={}, recipientType={}", orderId, recipientType);
+            
+        } catch (Exception e) {
+            log.error("订单邮件发送处理异常: orderId={}", orderId, e);
+        }
+    }
+    
+    /**
+     * 构建订单详情（用于确认邮件）
+     */
+    private EmailConfirmationDTO.OrderDetails buildOrderDetails(TourBookingVO bookingVO) {
+        EmailConfirmationDTO.OrderDetails orderDetails = new EmailConfirmationDTO.OrderDetails();
+        orderDetails.setTourName(bookingVO.getTourName() != null ? bookingVO.getTourName() : "塔斯马尼亚旅游");
+        orderDetails.setTourType(bookingVO.getTourType());
+        orderDetails.setStartDate(bookingVO.getTourStartDate() != null ? bookingVO.getTourStartDate().toString() : null);
+        orderDetails.setEndDate(bookingVO.getTourEndDate() != null ? bookingVO.getTourEndDate().toString() : null);
+        orderDetails.setAdultCount(bookingVO.getGroupSize() != null ? bookingVO.getGroupSize() : 1);
+        orderDetails.setChildCount(0); // TourBookingVO中没有单独的childCount字段，暂时设为0
+        orderDetails.setContactPerson(bookingVO.getContactPerson());
+        orderDetails.setContactPhone(bookingVO.getContactPhone());
+        orderDetails.setPickupLocation(bookingVO.getPickupLocation());
+        orderDetails.setDropoffLocation(bookingVO.getDropoffLocation());
+        orderDetails.setHotelLevel(bookingVO.getHotelLevel());
+        orderDetails.setSpecialRequests(bookingVO.getSpecialRequests());
+        return orderDetails;
+    }
+    
+    /**
+     * 构建发票详情（用于发票邮件）
+     */
+    private EmailInvoiceDTO.InvoiceDetails buildInvoiceDetails(TourBookingVO bookingVO) {
+        EmailInvoiceDTO.InvoiceDetails invoiceDetails = new EmailInvoiceDTO.InvoiceDetails();
+        invoiceDetails.setTourName(bookingVO.getTourName() != null ? bookingVO.getTourName() : "塔斯马尼亚旅游");
+        invoiceDetails.setTourType(bookingVO.getTourType());
+        invoiceDetails.setStartDate(bookingVO.getTourStartDate() != null ? bookingVO.getTourStartDate().toString() : null);
+        invoiceDetails.setEndDate(bookingVO.getTourEndDate() != null ? bookingVO.getTourEndDate().toString() : null);
+        invoiceDetails.setAdultCount(bookingVO.getGroupSize() != null ? bookingVO.getGroupSize() : 1);
+        invoiceDetails.setChildCount(0); // TourBookingVO中没有单独的childCount字段，暂时设为0
+        invoiceDetails.setTotalPrice(bookingVO.getTotalPrice() != null ? bookingVO.getTotalPrice().doubleValue() : 0.0);
+        return invoiceDetails;
+    }
 } 

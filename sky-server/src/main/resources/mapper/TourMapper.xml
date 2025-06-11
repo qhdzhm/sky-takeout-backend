@@ -43,7 +43,8 @@
                 day_tour_id as id, name, description, price, 
                 duration as duration, location, 
                 departure_address, guide_fee, rating, category,
-                image_url as cover_image, 'day_tour' as tour_type
+                image_url as cover_image, banner_image as bannerImage, 
+                product_showcase_image as productShowcaseImage, 'day_tour' as tour_type
             FROM day_tours 
             WHERE day_tour_id = #{id}
         </if>
@@ -52,7 +53,8 @@
                 group_tour_id as id, title as name, description, price, 
                 duration as duration, location, 
                 departure_address, guide_fee, rating, category,
-                image_url as cover_image, 'group_tour' as tour_type
+                image_url as cover_image, banner_image as bannerImage, 
+                product_showcase_image as productShowcaseImage, 'group_tour' as tour_type
             FROM group_tours
             WHERE group_tour_id = #{id}
         </if>

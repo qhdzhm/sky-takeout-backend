@@ -95,4 +95,11 @@ public interface AgentMapper {
      * @return 销售数据，包含totalSales和savedAmount
      */
     Map<String, BigDecimal> getSalesDataByAgentId(@Param("agentId") Long agentId);
+    
+    /**
+     * 根据代理商ID获取邮箱地址
+     * @param agentId 代理商ID
+     * @return 邮箱地址
+     */
+    String getEmailById(@Param("agentId") Long agentId);
 } 

@@ -234,4 +234,11 @@ public interface DayTourService {
      * @return 行程详情列表
      */
     List<Map<String, Object>> getDayTourItinerary(Integer tourId);
+    
+    /**
+     * 更新产品展示图片
+     * @param dayTourId 一日游ID
+     * @param imageUrl 图片URL
+     */
+    void updateProductShowcaseImage(Integer dayTourId, String imageUrl);
 } 

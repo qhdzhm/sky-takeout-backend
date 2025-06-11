@@ -18,6 +18,13 @@ sky:
   wechat:
     appid: wx6a4d9f9390fa4e49
     secret: fd706c40e9a471ff19bd9cf947321398
+  mail:
+    enabled: true  # 启用邮件发送
+    host: smtp.gmail.com
+    port: 587
+    username: "Tom.zhang@htas.com.au"
+    password: "igdf bnrq nrga qxnn"
+    from: "Tom.zhang@htas.com.au"
 
 # OpenWeatherMap 天气API配置
 weather:

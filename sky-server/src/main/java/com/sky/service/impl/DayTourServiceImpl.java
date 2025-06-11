@@ -483,11 +483,23 @@ public class DayTourServiceImpl implements DayTourService {
         
         log.info("拷贝完基本属性后的DTO：dayTourId={}, id={}", dayTourDTO.getDayTourId(), dayTourDTO.getId());
         
-        // 确保imageUrl和coverImage一致性
+        // 确保图片字段的正确设置
         if (dayTour.getImageUrl() != null) {
             dayTourDTO.setImageUrl(dayTour.getImageUrl());
             dayTourDTO.setCoverImage(dayTour.getImageUrl());
             log.info("设置图片URL：{}", dayTour.getImageUrl());
+        }
+        
+        // 设置Banner图片
+        if (dayTour.getBannerImage() != null) {
+            dayTourDTO.setBannerImage(dayTour.getBannerImage());
+            log.info("设置Banner图片URL：{}", dayTour.getBannerImage());
+        }
+        
+        // 设置地区名称
+        if (dayTour.getRegionName() != null) {
+            dayTourDTO.setRegionName(dayTour.getRegionName());
+            log.info("设置地区名称：{}", dayTour.getRegionName());
         }
         
         // 查询亮点
@@ -849,5 +861,19 @@ public class DayTourServiceImpl implements DayTourService {
         }
         
         return result;
+    }
+    
+    /**
+     * 更新产品展示图片
+     */
+    @Override
+    public void updateProductShowcaseImage(Integer dayTourId, String imageUrl) {
+        log.info("更新一日游产品展示图片，ID：{}，图片URL：{}", dayTourId, imageUrl);
+        DayTour dayTour = new DayTour();
+        dayTour.setId(dayTourId);
+        dayTour.setDayTourId(dayTourId);
+        dayTour.setProductShowcaseImage(imageUrl);
+        dayTour.setUpdatedAt(LocalDateTime.now());
+        dayTourMapper.update(dayTour);
     }
 } 

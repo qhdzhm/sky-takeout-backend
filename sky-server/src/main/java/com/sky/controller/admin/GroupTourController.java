@@ -10,6 +10,8 @@ import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import com.sky.service.ImageService;
 
 import java.util.List;
 import java.util.Map;
@@ -28,6 +30,9 @@ public class GroupTourController {
     
     @Autowired
     private TourService tourService;
+    
+    @Autowired
+    private ImageService imageService;
 
     /**
      * 获取团队游列表（分页）
@@ -360,5 +365,44 @@ public class GroupTourController {
         log.info("获取适合人群列表");
         List<Map<String, Object>> suitables = tourService.getSuitableForOptions();
         return Result.success(suitables);
+    }
+    
+    /**
+     * 上传产品展示图片
+     */
+    @PostMapping("/product-showcase-image/{groupTourId}")
+    @ApiOperation("上传产品展示图片")
+    public Result<String> uploadProductShowcaseImage(@PathVariable Integer groupTourId,
+                                                     @RequestParam("file") MultipartFile file) {
+        log.info("上传团体游产品展示图片，ID：{}, 文件名：{}", groupTourId, file.getOriginalFilename());
+        try {
+            // 上传图片并获取URL
+            String imageUrl = imageService.upload(file);
+            
+            // 更新团体游的产品展示图片字段
+            groupTourService.updateProductShowcaseImage(groupTourId, imageUrl);
+            
+            return Result.success(imageUrl);
+        } catch (Exception e) {
+            log.error("上传产品展示图片失败：{}", e.getMessage(), e);
+            return Result.error("上传产品展示图片失败：" + e.getMessage());
+        }
+    }
+    
+    /**
+     * 删除产品展示图片
+     */
+    @DeleteMapping("/product-showcase-image/{groupTourId}")
+    @ApiOperation("删除产品展示图片")
+    public Result<String> deleteProductShowcaseImage(@PathVariable Integer groupTourId) {
+        log.info("删除团体游产品展示图片，ID：{}", groupTourId);
+        try {
+            // 清空团体游的产品展示图片字段
+            groupTourService.updateProductShowcaseImage(groupTourId, null);
+            return Result.success();
+        } catch (Exception e) {
+            log.error("删除产品展示图片失败：{}", e.getMessage(), e);
+            return Result.error("删除产品展示图片失败：" + e.getMessage());
+        }
     }
 } 

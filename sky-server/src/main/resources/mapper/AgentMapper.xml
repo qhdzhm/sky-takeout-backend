@@ -127,4 +127,9 @@
         WHERE agent_id = #{agentId}
           AND status != 'cancelled'
     </select>
+    
+    <!-- 根据代理商ID获取邮箱地址 -->
+    <select id="getEmailById" resultType="string">
+        SELECT email FROM agents WHERE id = #{agentId}
+    </select>
 </mapper> 

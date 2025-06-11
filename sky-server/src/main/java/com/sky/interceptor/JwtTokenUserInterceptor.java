@@ -145,11 +145,18 @@ public class JwtTokenUserInterceptor implements HandlerInterceptor {
                 BaseContext.setCurrentUserType("regular");
             }
             
-            // 从JWT中获取代理商ID并存入BaseContext（如果存在）
-            if (claims.get(JwtClaimsConstant.AGENT_ID) != null) {
+            // 从JWT中获取代理商ID并存入BaseContext（只有代理商用户才设置）
+            if (claims.get(JwtClaimsConstant.AGENT_ID) != null && 
+                ("agent".equals(userType) || "agent_operator".equals(userType))) {
                 Long agentId = Long.valueOf(claims.get(JwtClaimsConstant.AGENT_ID).toString());
                 BaseContext.setCurrentAgentId(agentId);
                 log.info("代理商ID: {}", agentId);
+            } else {
+                // 清空代理商ID，确保普通用户不会获得代理商折扣
+                BaseContext.setCurrentAgentId(null);
+                if (claims.get(JwtClaimsConstant.AGENT_ID) != null) {
+                    log.info("普通用户({})的Token中包含代理商ID，已忽略", userType);
+                }
             }
             
             // 从JWT中获取操作员ID并存入BaseContext（如果存在）

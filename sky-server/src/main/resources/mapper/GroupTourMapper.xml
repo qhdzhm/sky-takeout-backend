@@ -14,6 +14,7 @@
             gt.location, 
             gt.rating,
             gt.image_url AS coverImage,
+            gt.banner_image AS bannerImage,
             gt.departure_address AS departureAddress,
             gt.guide_id AS guideId
         FROM group_tours gt
@@ -80,6 +81,8 @@
             <if test="minPeople != null">min_people = #{minPeople},</if>
             <if test="maxPeople != null">max_people = #{maxPeople},</if>
             <if test="coverImage != null">image_url = #{coverImage},</if>
+            <if test="bannerImage != null">banner_image = #{bannerImage},</if>
+            <if test="productShowcaseImage != null">product_showcase_image = #{productShowcaseImage},</if>
             <if test="regionId != null">region_id = #{regionId},</if>
             <if test="departureAddress != null">departure_address = #{departureAddress},</if>
             <if test="guideId != null">guide_id = #{guideId},</if>
@@ -102,7 +105,8 @@
             gt.location, 
             gt.departure_info AS departureInfo, 
             gt.rating,
-            gt.image_url AS coverImage, 
+            gt.image_url AS coverImage,
+            gt.banner_image AS bannerImage,
             gt.category
         FROM group_tours gt
         LEFT JOIN (
@@ -127,7 +131,8 @@
             gt.location, 
             gt.departure_info AS departureInfo, 
             gt.rating,
-            gt.image_url AS coverImage, 
+            gt.image_url AS coverImage,
+            gt.banner_image AS bannerImage,
             gt.category
         FROM group_tours gt
         ORDER BY gt.group_tour_id DESC

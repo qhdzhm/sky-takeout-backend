@@ -5,25 +5,30 @@
     <!-- 根据ID查询一日游 -->
     <select id="getById" resultType="com.sky.entity.DayTour">
         SELECT 
-            day_tour_id as dayTourId,
-            day_tour_id as id,
-            name, 
-            location, 
-            description, 
-            price, 
-            duration, 
-            rating,
-            image_url as imageUrl,
-            category,
-            is_active as isActive,
-            created_at as createdAt,
-            updated_at as updatedAt,
-            region_id as regionId,
-            departure_address as departureAddress,
-            guide_fee as guideFee,
-            guide_id as guideId
-        FROM day_tours 
-        WHERE day_tour_id = #{id}
+            dt.day_tour_id as dayTourId,
+            dt.day_tour_id as id,
+            dt.name, 
+            dt.location, 
+            dt.description, 
+            dt.price, 
+            dt.duration, 
+            dt.rating,
+            dt.image_url as imageUrl,
+            dt.banner_image as bannerImage,
+            dt.product_showcase_image as productShowcaseImage,
+            dt.category,
+            dt.is_active as isActive,
+            dt.created_at as createdAt,
+            dt.updated_at as updatedAt,
+            dt.region_id as regionId,
+            dt.departure_address as departureAddress,
+            dt.guide_fee as guideFee,
+            dt.guide_id as guideId,
+            dt.cost_price as costPrice,
+            r.name as regionName
+        FROM day_tours dt
+        LEFT JOIN regions r ON dt.region_id = r.region_id
+        WHERE dt.day_tour_id = #{id}
     </select>
 
     <!-- 分页查询 -->
@@ -31,7 +36,7 @@
         SELECT 
             dt.day_tour_id as id, dt.day_tour_id as dayTourId, dt.name, dt.description, dt.price, dt.duration, dt.location, 
             dt.departure_address, dt.guide_fee, dt.rating,  
-            dt.region_id, dt.category, dt.image_url as cover_image, r.name as region_name
+            dt.region_id, dt.category, dt.image_url as coverImage, dt.banner_image as bannerImage, r.name as regionName
         FROM day_tours dt
         LEFT JOIN regions r ON dt.region_id = r.region_id
         <where>
@@ -73,7 +78,7 @@
         SELECT 
             dt.day_tour_id as id, dt.day_tour_id as dayTourId, dt.name, dt.description, dt.price, dt.duration, dt.location, 
             dt.departure_address, dt.guide_fee, dt.rating,  
-            dt.region_id, dt.category, dt.image_url as cover_image, r.name as region_name
+            dt.region_id, dt.category, dt.image_url as coverImage, dt.banner_image as bannerImage, r.name as regionName
         FROM day_tours dt
         LEFT JOIN regions r ON dt.region_id = r.region_id
         LEFT JOIN (
@@ -91,7 +96,7 @@
         SELECT 
             dt.day_tour_id as id, dt.day_tour_id as dayTourId, dt.name, dt.description, dt.price, dt.duration, dt.location, 
             dt.departure_address, dt.guide_fee, dt.rating,  
-            dt.region_id, dt.category, dt.image_url as cover_image, r.name as region_name
+            dt.region_id, dt.category, dt.image_url as coverImage, dt.banner_image as bannerImage, r.name as regionName
         FROM day_tours dt
         LEFT JOIN regions r ON dt.region_id = r.region_id
         ORDER BY dt.day_tour_id DESC
@@ -108,6 +113,8 @@
             <if test="price != null">price = #{price},</if>
             <if test="duration != null">duration = #{duration},</if>
             <if test="imageUrl != null">image_url = #{imageUrl},</if>
+            <if test="bannerImage != null">banner_image = #{bannerImage},</if>
+            <if test="productShowcaseImage != null">product_showcase_image = #{productShowcaseImage},</if>
             <if test="category != null">category = #{category},</if>
             <if test="isActive != null">is_active = #{isActive},</if>
             <if test="updatedAt != null">updated_at = #{updatedAt},</if>
@@ -115,6 +122,7 @@
             <if test="departureAddress != null">departure_address = #{departureAddress},</if>
             <if test="guideFee != null">guide_fee = #{guideFee},</if>
             <if test="guideId != null">guide_id = #{guideId},</if>
+            <if test="costPrice != null">cost_price = #{costPrice},</if>
         </set>
         WHERE day_tour_id = #{dayTourId}
     </update>

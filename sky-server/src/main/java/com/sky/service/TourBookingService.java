@@ -8,6 +8,7 @@ import com.sky.dto.GroupTourDTO;
 import com.sky.vo.TourBookingVO;
 import com.sky.vo.PriceDetailVO;
 import java.math.BigDecimal;
+import java.util.Map;
 
 /**
  * 旅游订单服务接口
@@ -157,6 +158,26 @@ public interface TourBookingService {
     PriceDetailVO calculatePriceDetail(Integer tourId, String tourType, Long agentId, Integer adultCount, 
                                    Integer childCount, String hotelLevel, Integer roomCount, Long userId, 
                                    String roomType);
+    
+    /**
+     * 计算价格明细（带儿童年龄详细信息）
+     * 
+     * @param tourId 旅游产品ID
+     * @param tourType 旅游产品类型 (day_tour/group_tour)
+     * @param agentId 代理商ID，如果是普通用户则为null
+     * @param adultCount 成人数量
+     * @param childCount 儿童数量
+     * @param hotelLevel 酒店等级
+     * @param roomCount 房间数量
+     * @param userId 用户ID
+     * @param roomType 房间类型
+     * @param childrenAges 儿童年龄数组
+     * @return 价格明细和儿童详细价格信息
+     */
+    Map<String, Object> calculatePriceDetailWithChildrenAges(Integer tourId, String tourType, Long agentId, 
+                                                            Integer adultCount, Integer childCount, String hotelLevel, 
+                                                            Integer roomCount, Long userId, String roomType, 
+                                                            String childrenAges);
     
     /**
      * 根据ID获取一日游信息

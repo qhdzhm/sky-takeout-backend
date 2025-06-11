@@ -163,4 +163,11 @@ public interface GroupTourService {
      * @param id 团队游ID
      */
     void enableOrDisableGroupTour(Integer status, Integer id);
+    
+    /**
+     * 更新产品展示图片
+     * @param groupTourId 团体游ID
+     * @param imageUrl 图片URL
+     */
+    void updateProductShowcaseImage(Integer groupTourId, String imageUrl);
 } 

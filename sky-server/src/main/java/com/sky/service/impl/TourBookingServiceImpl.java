@@ -37,9 +37,11 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import com.sky.mapper.UserMapper;
 import com.sky.mapper.AgentOperatorMapper;
@@ -1950,5 +1952,226 @@ public class TourBookingServiceImpl implements TourBookingService {
         
         // 如果清理后为空，返回原标题
         return cleaned.isEmpty() ? title : cleaned;
+    }
+
+    /**
+     * 计算价格明细（带儿童年龄详细信息）
+     * 
+     * @param tourId 旅游产品ID
+     * @param tourType 旅游产品类型 (day_tour/group_tour)
+     * @param agentId 代理商ID，如果是普通用户则为null
+     * @param adultCount 成人数量
+     * @param childCount 儿童数量
+     * @param hotelLevel 酒店等级
+     * @param roomCount 房间数量
+     * @param userId 用户ID
+     * @param roomType 房间类型
+     * @param childrenAges 儿童年龄数组
+     * @return 价格明细和儿童详细价格信息
+     */
+    @Override
+    public Map<String, Object> calculatePriceDetailWithChildrenAges(Integer tourId, String tourType, Long agentId, 
+                                                                   Integer adultCount, Integer childCount, String hotelLevel, 
+                                                                   Integer roomCount, Long userId, String roomType, 
+                                                                   String childrenAges) {
+        log.info("计算带儿童年龄的价格明细: tourId={}, tourType={}, agentId={}, adultCount={}, childCount={}, hotelLevel={}, roomCount={}, userId={}, roomType={}, childrenAges={}", 
+                tourId, tourType, agentId, adultCount, childCount, hotelLevel, roomCount, userId, roomType, childrenAges);
+        
+        try {
+            // 调用基础的价格计算方法
+            PriceDetailVO priceDetail = calculatePriceDetail(tourId, tourType, agentId, adultCount, childCount, hotelLevel, roomCount, userId, roomType);
+            
+            // 获取基础数据
+            BigDecimal originalPrice = BigDecimal.ZERO;
+            BigDecimal discountedPrice = BigDecimal.ZERO;
+            BigDecimal discountRate = BigDecimal.ONE;
+            int nights = 0;
+            
+            // 根据旅游类型获取原价
+            if ("day_tour".equals(tourType)) {
+                DayTour dayTour = dayTourMapper.getById(tourId);
+                if (dayTour == null) {
+                    throw new RuntimeException("一日游不存在: " + tourId);
+                }
+                originalPrice = dayTour.getPrice();
+            } else if ("group_tour".equals(tourType)) {
+                GroupTourDTO groupTour = groupTourMapper.getById(tourId);
+                if (groupTour == null) {
+                    throw new RuntimeException("跟团游不存在: " + tourId);
+                }
+                originalPrice = groupTour.getPrice();
+                
+                // 解析天数计算夜数
+                try {
+                    String duration = groupTour.getDuration();
+                    if (duration != null && duration.contains("天")) {
+                        String daysStr = duration.substring(0, duration.indexOf("天"));
+                        int days = Integer.parseInt(daysStr);
+                        nights = days > 1 ? days - 1 : 0;
+                    }
+                } catch (Exception e) {
+                    log.warn("解析行程天数失败: {}", e.getMessage());
+                    nights = 1;
+                }
+            }
+            
+            // 应用代理商折扣
+            if (agentId != null) {
+                try {
+                    Agent agent = agentMapper.getById(agentId);
+                    if (agent != null && agent.getDiscountRate() != null) {
+                        discountRate = agent.getDiscountRate();
+                    }
+                } catch (Exception e) {
+                    log.error("获取代理商信息失败: {}", e.getMessage(), e);
+                }
+            }
+            
+            discountedPrice = originalPrice.multiply(discountRate).setScale(2, RoundingMode.HALF_UP);
+            
+            // 处理儿童年龄和相应的票价计算
+            List<Map<String, Object>> childPrices = new ArrayList<>();
+            
+            // 解析儿童年龄字符串，格式可能是：1,2,3或者[1,2,3]
+            Integer[] validChildrenAges = null;
+            if (childrenAges != null && !childrenAges.trim().isEmpty()) {
+                try {
+                    // 先尝试移除可能存在的方括号
+                    String cleanAges = childrenAges.replace("[", "").replace("]", "").trim();
+                    
+                    // 按逗号分隔并解析为整数
+                    String[] agesArray = cleanAges.split(",");
+                    validChildrenAges = new Integer[agesArray.length];
+                    
+                    for (int i = 0; i < agesArray.length; i++) {
+                        validChildrenAges[i] = Integer.parseInt(agesArray[i].trim());
+                    }
+                    
+                    log.info("成功解析儿童年龄数组: {}", Arrays.toString(validChildrenAges));
+                } catch (Exception e) {
+                    log.error("解析儿童年龄字符串失败: {}", e.getMessage(), e);
+                    validChildrenAges = null;
+                }
+            }
+            
+            // 如果解析失败或未提供，创建默认年龄数组
+            if (validChildrenAges == null || validChildrenAges.length == 0) {
+                validChildrenAges = new Integer[childCount];
+                Arrays.fill(validChildrenAges, 5); // 默认5岁
+                log.info("使用默认儿童年龄: 5岁");
+            }
+            
+            // 确保年龄数组长度与儿童数量匹配
+            if (validChildrenAges.length < childCount) {
+                Integer[] extendedAges = new Integer[childCount];
+                System.arraycopy(validChildrenAges, 0, extendedAges, 0, validChildrenAges.length);
+                
+                for (int i = validChildrenAges.length; i < childCount; i++) {
+                    extendedAges[i] = 5; // 默认5岁
+                }
+                
+                validChildrenAges = extendedAges;
+                log.info("扩展儿童年龄数组: {}", Arrays.toString(validChildrenAges));
+            }
+            
+            // 根据不同年龄的儿童计算总价
+            BigDecimal childrenTotalPrice = BigDecimal.ZERO;
+            
+            for (int i = 0; i < validChildrenAges.length && i < childCount; i++) {
+                Integer age = validChildrenAges[i];
+                BigDecimal childPrice;
+                String priceType;
+                
+                if (age < 3) {
+                    // 小于3岁半价(成人折扣价的一半)
+                    childPrice = discountedPrice.multiply(new BigDecimal("0.5")).setScale(2, RoundingMode.HALF_UP);
+                    priceType = "半价";
+                } else if (age <= 7) {
+                    // 3-7岁减50
+                    childPrice = discountedPrice.subtract(new BigDecimal("50")).setScale(2, RoundingMode.HALF_UP);
+                    priceType = "减50";
+                    if (childPrice.compareTo(BigDecimal.ZERO) < 0) {
+                        childPrice = BigDecimal.ZERO;
+                    }
+                } else {
+                    // 8岁及以上成人价
+                    childPrice = discountedPrice;
+                    priceType = "成人价";
+                }
+                
+                childrenTotalPrice = childrenTotalPrice.add(childPrice);
+                
+                // 添加到儿童价格列表
+                Map<String, Object> childPriceInfo = new HashMap<>();
+                childPriceInfo.put("age", age);
+                childPriceInfo.put("price", childPrice);
+                childPriceInfo.put("priceType", priceType);
+                childPrices.add(childPriceInfo);
+            }
+            
+            // 重新计算正确的总价（使用实际儿童价格）
+            BigDecimal correctTotalPrice = discountedPrice.multiply(BigDecimal.valueOf(adultCount))
+                    .add(childrenTotalPrice)
+                    .add(priceDetail.getExtraRoomFee());
+            
+            // 获取基准酒店等级和相关信息
+            String baseHotelLevel = hotelPriceService.getBaseHotelLevel();
+            BigDecimal hotelPriceDiff = hotelPriceService.getPriceDifferenceByLevel(hotelLevel);
+            BigDecimal singleRoomSupplement = hotelPriceService.getDailySingleRoomSupplementByLevel(hotelLevel);
+            
+            // 根据房型获取相应的房间价格
+            BigDecimal hotelRoomPrice;
+            BigDecimal tripleDifference = BigDecimal.ZERO;
+            if (roomType != null && (roomType.contains("三人间") || roomType.contains("三床") || roomType.contains("家庭") || 
+                roomType.equalsIgnoreCase("triple") || roomType.equalsIgnoreCase("family"))) {
+                BigDecimal roomBasePrice = hotelPriceService.getHotelRoomPriceByLevel(hotelLevel);
+                tripleDifference = hotelPriceService.getTripleBedRoomPriceDifferenceByLevel(hotelLevel);
+                hotelRoomPrice = roomBasePrice.add(tripleDifference);
+            } else {
+                hotelRoomPrice = hotelPriceService.getHotelRoomPriceByLevel(hotelLevel);
+            }
+            
+            // 判断是否需要单房差
+            int totalPeople = adultCount + childCount;
+            boolean needsSingleRoomSupplement = (totalPeople % 2 != 0) && (roomCount == Math.ceil(totalPeople / 2.0));
+            
+            // 额外房间数
+            int theoreticalRoomCount = (int) Math.ceil(totalPeople / 2.0);
+            int extraRooms = roomCount > theoreticalRoomCount ? roomCount - theoreticalRoomCount : 0;
+            
+            // 构建返回数据
+            Map<String, Object> data = new HashMap<>();
+            data.put("totalPrice", correctTotalPrice);
+            data.put("basePrice", priceDetail.getBasePrice());
+            data.put("extraRoomFee", priceDetail.getExtraRoomFee());
+            data.put("nonAgentPrice", priceDetail.getNonAgentPrice());
+            data.put("originalPrice", originalPrice);
+            data.put("discountedPrice", discountedPrice);
+            data.put("discountRate", discountRate);
+            data.put("adultCount", adultCount);
+            data.put("childCount", childCount);
+            data.put("adultTotalPrice", discountedPrice.multiply(BigDecimal.valueOf(adultCount)));
+            data.put("childrenTotalPrice", childrenTotalPrice);
+            data.put("childPrices", childPrices);
+            data.put("childrenAges", validChildrenAges);
+            data.put("baseHotelLevel", baseHotelLevel);
+            data.put("hotelPriceDifference", hotelPriceDiff);
+            data.put("dailySingleRoomSupplement", singleRoomSupplement);
+            data.put("hotelRoomPrice", hotelRoomPrice);
+            data.put("roomCount", roomCount);
+            data.put("roomType", roomType);
+            data.put("hotelNights", nights);
+            data.put("theoreticalRoomCount", theoreticalRoomCount);
+            data.put("extraRooms", extraRooms);
+            data.put("needsSingleRoomSupplement", needsSingleRoomSupplement);
+            data.put("tripleBedRoomPriceDifference", tripleDifference);
+            
+            log.info("Service层计算完成，正确总价: {}", correctTotalPrice);
+            return data;
+            
+        } catch (Exception e) {
+            log.error("Service层计算价格失败: {}", e.getMessage(), e);
+            throw new RuntimeException("计算价格失败: " + e.getMessage());
+        }
     }
 } 

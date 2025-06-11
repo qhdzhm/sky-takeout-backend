@@ -59,6 +59,12 @@ public class DayTour implements Serializable {
     /** 封面图片 */
     private String coverImage;
     
+    /** Banner背景图片URL */
+    private String bannerImage;
+    
+    /** 产品展示图片URL */
+    private String productShowcaseImage;
+    
     /** 主图URL */
     private String imageUrl;
     
@@ -73,6 +79,18 @@ public class DayTour implements Serializable {
     
     /** 地区ID */
     private Integer regionId;
+    
+    /** 出发地址 */
+    private String departureAddress;
+    
+    /** 导游费用 */
+    private BigDecimal guideFee;
+    
+    /** 导游ID */
+    private Integer guideId;
+    
+    /** 成本价格 */
+    private BigDecimal costPrice;
     
     /** 地区名称（非数据库字段，关联查询） */
     private String regionName;

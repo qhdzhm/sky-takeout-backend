@@ -76,4 +76,10 @@ public interface AgentOperatorMapper {
      */
     @Select("SELECT COUNT(*) FROM agent_operators WHERE username = #{username} AND id != #{id}")
     int countByUsernameExcludeId(String username, Long id);
+    
+    /**
+     * 根据操作员ID获取邮箱地址
+     */
+    @Select("SELECT email FROM agent_operators WHERE id = #{operatorId}")
+    String getEmailById(Long operatorId);
 } 

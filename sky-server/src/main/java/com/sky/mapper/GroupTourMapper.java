@@ -45,7 +45,7 @@ public interface GroupTourMapper {
     @Select("SELECT group_tour_id AS id, title AS name, description, price, discounted_price AS discountedPrice, " +
             "duration, days, nights, rating, reviews_count AS reviewsCount, tour_code AS tourCode, " +
             "departure_info AS departureInfo, group_size AS groupSize, language, " +
-            "image_url AS coverImage, is_active AS isActive, location, category, " +
+            "image_url AS coverImage, banner_image AS bannerImage, product_showcase_image AS productShowcaseImage, is_active AS isActive, location, category, " +
             "departure_address AS departureAddress, guide_fee AS guideFee, guide_id AS guideId " +
             "FROM group_tours WHERE group_tour_id = #{id}")
     GroupTourDTO getById(Integer id);
@@ -350,9 +350,9 @@ public interface GroupTourMapper {
      * @return 插入后的团队游ID
      */
     @Insert("INSERT INTO group_tours (title, short_title, description, price, discounted_price, " +
-            "duration, days, nights, image_url, is_active, location, category, departure_address) " +
+            "duration, days, nights, image_url, banner_image, is_active, location, category, departure_address) " +
             "VALUES (#{name}, #{shortTitle}, #{description}, #{price}, #{discountedPrice}, " +
-            "#{duration}, #{days}, #{nights}, #{coverImage}, 1, #{location}, #{category}, #{departureAddress})")
+            "#{duration}, #{days}, #{nights}, #{coverImage}, #{bannerImage}, 1, #{location}, #{category}, #{departureAddress})")
     @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "group_tour_id")
     Integer insert(GroupTourDTO groupTourDTO);
 
@@ -386,7 +386,7 @@ public interface GroupTourMapper {
     @Select("SELECT group_tour_id AS id, title AS name, description, price, discounted_price AS discountedPrice, " +
             "duration, days, nights, rating, reviews_count AS reviewsCount, tour_code AS tourCode, " +
             "departure_info AS departureInfo, group_size AS groupSize, language, " +
-            "image_url AS coverImage, is_active AS isActive, location, category, " +
+            "image_url AS coverImage, banner_image AS bannerImage, is_active AS isActive, location, category, " +
             "departure_address AS departureAddress, guide_fee AS guideFee, guide_id AS guideId " +
             "FROM group_tours WHERE title LIKE CONCAT('%', #{name}, '%') AND is_active = 1 LIMIT 1")
     GroupTourDTO findByNameLike(String name);
@@ -400,7 +400,7 @@ public interface GroupTourMapper {
             "SELECT group_tour_id AS id, title AS name, description, price, discounted_price AS discountedPrice, " +
             "duration, days, nights, rating, reviews_count AS reviewsCount, tour_code AS tourCode, " +
             "departure_info AS departureInfo, group_size AS groupSize, language, " +
-            "image_url AS coverImage, is_active AS isActive, location, category, " +
+            "image_url AS coverImage, banner_image AS bannerImage, is_active AS isActive, location, category, " +
             "departure_address AS departureAddress, guide_fee AS guideFee, guide_id AS guideId " +
             "FROM group_tours WHERE is_active = 1 " +
             "<foreach collection='keywords' item='keyword' separator=' '>" +
@@ -421,7 +421,7 @@ public interface GroupTourMapper {
     @Select("SELECT group_tour_id AS id, title AS name, description, price, discounted_price AS discountedPrice, " +
             "duration, days, nights, rating, reviews_count AS reviewsCount, tour_code AS tourCode, " +
             "departure_info AS departureInfo, group_size AS groupSize, language, " +
-            "image_url AS coverImage, is_active AS isActive, location, category, " +
+            "image_url AS coverImage, banner_image AS bannerImage, is_active AS isActive, location, category, " +
             "departure_address AS departureAddress, guide_fee AS guideFee, guide_id AS guideId " +
             "FROM group_tours WHERE is_active = 1 ORDER BY id LIMIT 10")
     List<GroupTourDTO> findAllActive();

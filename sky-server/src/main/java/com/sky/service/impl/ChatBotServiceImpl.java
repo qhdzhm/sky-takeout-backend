@@ -526,7 +526,23 @@ public class ChatBotServiceImpl implements ChatBotService {
                 // 生成订单URL参数
                 String orderParams = generateOrderParams(orderInfo, product);
                 
-                // 根据用户当前状态优化响应消息
+                // 根据用户类型决定跳转页面
+                String redirectUrl;
+                Integer userType = request.getUserType();
+                boolean isAgent = (userType != null && (userType == 2 || userType == 3)); // 2=操作员, 3=中介主号(代理商)
+                
+                if (isAgent) {
+                    // 中介用户（操作员或中介主号）跳转到中介订单页面
+                    redirectUrl = "/agent-booking/group-tours/" + product.getId() + "?" + orderParams;
+                    String userTypeName = (userType == 2) ? "操作员" : (userType == 3) ? "中介主号" : "中介用户";
+                    log.info("{}，跳转到中介订单页面: {}", userTypeName, redirectUrl);
+                } else {
+                    // 普通用户跳转到普通订单页面
+                    redirectUrl = "/booking?" + orderParams;
+                    log.info("普通用户，跳转到普通订单页面: {}", redirectUrl);
+                }
+                
+                // 根据用户当前状态和用户类型优化响应消息
                 String responseMessage;
                 boolean isOnBookingPage = (request.getCurrentPage() != null && 
                                          request.getCurrentPage().contains("/booking"));
@@ -535,7 +551,12 @@ public class ChatBotServiceImpl implements ChatBotService {
                     responseMessage = "订单信息已重新解析完成！找到匹配产品：" + product.getName() + 
                                     "。页面将自动更新以显示最新的订单信息和预填数据。";
                 } else {
-                    responseMessage = "订单信息已解析完成，找到产品：" + product.getName() + "，正在跳转到订单页面...";
+                    if (isAgent) {
+                        String userTypeName = (userType == 2) ? "操作员" : (userType == 3) ? "中介主号" : "中介";
+                        responseMessage = "订单信息已解析完成，找到产品：" + product.getName() + "，正在为" + userTypeName + "跳转到订单页面...";
+                    } else {
+                        responseMessage = "订单信息已解析完成，找到产品：" + product.getName() + "，正在跳转到订单页面...";
+                    }
                 }
                 
                 // 保存聊天记录
@@ -544,7 +565,7 @@ public class ChatBotServiceImpl implements ChatBotService {
                 return ChatResponse.orderSuccess(
                     responseMessage,
                     JSON.toJSONString(orderInfo),
-                    "/booking?" + orderParams
+                    redirectUrl
                 );
             } else {
                 // 未找到匹配产品，提供相似产品选择
@@ -2169,7 +2190,7 @@ public class ChatBotServiceImpl implements ChatBotService {
                     List<OrderInfo.CustomerInfo> customers = new ArrayList<>();
                     
                     // 主要联系人
-                    if (customerInfo.containsKey("primaryContact")) {
+                    if (customerInfo.containsKey("primaryContact") && customerInfo.getJSONObject("primaryContact") != null) {
                         JSONObject primaryContact = customerInfo.getJSONObject("primaryContact");
                         OrderInfo.CustomerInfo customer = new OrderInfo.CustomerInfo();
                         
@@ -2427,14 +2448,16 @@ public class ChatBotServiceImpl implements ChatBotService {
         OrderInfo.OrderInfoBuilder builder = OrderInfo.builder();
         
         // 使用正则表达式提取信息
+        // 支持多种服务类型字段名
         extractField(message, "服务类型：(.+?)\\n", builder::serviceType);
+        extractField(message, "目的地：(.+?)\\n", builder::serviceType);
         extractField(message, "出发地点：(.+?)\\n", builder::departure);
         extractField(message, "服务车型：(.+?)\\n", builder::vehicleType);
         extractField(message, "房型：(.+?)\\n", builder::roomType);
         extractField(message, "酒店级别：(.+?)\\n", builder::hotelLevel);
         
         // 解析日期范围
-        Pattern datePattern = Pattern.compile("参团日期.*?：(.+?)\\n");
+        Pattern datePattern = Pattern.compile("(?:参团日期|预计到达日期).*?：(.+?)\\n");
         Matcher dateMatcher = datePattern.matcher(message);
         if (dateMatcher.find()) {
             String dateRange = dateMatcher.group(1).trim();
@@ -2497,9 +2520,9 @@ public class ChatBotServiceImpl implements ChatBotService {
      * 解析日期范围
      */
     private String[] parseDateRange(String dateRange) {
-        // 处理 "6月19日-6月22日" 格式
-        if (dateRange.contains("-")) {
-            String[] parts = dateRange.split("-");
+        // 处理 "6月19日-6月22日" 或 "6月19日—6月22日" 格式
+        if (dateRange.contains("-") || dateRange.contains("—")) {
+            String[] parts = dateRange.split("[-—]");
             if (parts.length >= 2) {
                 return new String[]{parts[0].trim(), parts[1].trim()};
             }

@@ -55,6 +55,12 @@ public class GroupTour implements Serializable {
     /** 封面图片 */
     private String coverImage;
     
+    /** Banner背景图片URL */
+    private String bannerImage;
+    
+    /** 产品展示图片URL */
+    private String productShowcaseImage;
+    
     /** 地区ID */
     private Integer regionId;
     

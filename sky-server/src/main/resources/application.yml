@@ -40,6 +40,20 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: "Tom.zhang@htas.com.au"
+    password: "igdf bnrq nrga qxnn"
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          ssl:
+            trust: smtp.gmail.com
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
@@ -77,6 +91,14 @@ sky:
   wechat:
     appid: ${sky.wechat.appid}
     secret: ${sky.wechat.secret}
+  mail:
+    enabled: true
+    host: smtp.gmail.com
+    port: 587
+    username: "Tom.zhang@htas.com.au"
+    password: "igdf bnrq nrga qxnn"
+    from: "Tom.zhang@htas.com.au"
+
 credit:
   referral:
     direct-rate: 0.05
@@ -85,42 +107,36 @@ credit:
 # 通义千问 AI配置 (阿里云DashScope API)
 qwen:
   api:
-    key: sk-eb67303b39c34d1195e99c3a276590d3  # 通义千问 API Key
-    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1  # DashScope OpenAI兼容API端点
-  model: qwen-turbo  # 使用qwen-turbo模型（速度快，适合聊天场景）
-  timeout: 30000  # 超时时间 30秒
-  max-tokens: 2000  # token数限制
-  temperature: 0.7  # 创造性参数
+    key: sk-eb67303b39c34d1195e99c3a276590d3
+    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  model: qwen-turbo
+  timeout: 30000
+  max-tokens: 2000
+  temperature: 0.7
 
-# 聊天机器人配置
 chatbot:
   rate-limit:
-    requests-per-minute: 10  # 每分钟最大请求数
-    daily-limit: 100  # 每日最大对话数
+    requests-per-minute: 10
+    daily-limit: 100
   message:
-    max-length: 1000  # 消息最大长度
+    max-length: 1000
   context:
-    history-size: 5  # 保留的历史对话数量
+    history-size: 5
 
-# 产品知识服务配置
 tour-knowledge:
   cache:
-    enabled: true  # 是否启用缓存
-    ttl: 3600  # 缓存过期时间（秒）
+    enabled: true
+    ttl: 3600
   recommendation:
-    max-results: 8  # 最大推荐产品数量
-    fallback-enabled: true  # 是否启用降级方案
+    max-results: 8
+    fallback-enabled: true
   query:
-    min-keywords: 1  # 最少关键词数量
-    similarity-threshold: 0.6  # 相似度阈值
+    min-keywords: 1
+    similarity-threshold: 0.6
 
-# 航班查询API配置
 flight:
   api:
     aviationstack:
-      # AviationStack免费API配置
-      # 注册地址: https://aviationstack.com/
-      # 免费额度: 100次/月
-      api-key: 1779d870374fb097423fff552925cedb  # 您的免费API Key
+      api-key: 1779d870374fb097423fff552925cedb
       base-url: http://api.aviationstack.com/v1
-      enabled: true  # 已启用真实API调用
+      enabled: true

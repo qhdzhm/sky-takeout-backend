@@ -792,4 +792,20 @@ public class GroupTourServiceImpl implements GroupTourService {
             throw new RuntimeException("团队游状态更新失败", e);
         }
     }
+    
+    /**
+     * 更新产品展示图片
+     */
+    @Override
+    public void updateProductShowcaseImage(Integer groupTourId, String imageUrl) {
+        log.info("更新团体游产品展示图片，ID：{}，图片URL：{}", groupTourId, imageUrl);
+        try {
+            String sql = "UPDATE group_tours SET product_showcase_image = ? WHERE id = ?";
+            jdbcTemplate.update(sql, imageUrl, groupTourId);
+            log.info("更新团体游产品展示图片成功");
+        } catch (Exception e) {
+            log.error("更新团体游产品展示图片失败：{}", e.getMessage(), e);
+            throw new RuntimeException("更新团体游产品展示图片失败", e);
+        }
+    }
 } 
