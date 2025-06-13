@@ -17,6 +17,7 @@ import com.sky.utils.JwtUtil;
 import com.sky.vo.AgentLoginVO;
 import com.sky.vo.UserLoginVO;
 import com.sky.context.BaseContext;
+import com.sky.mapper.UserMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.DigestUtils;
@@ -60,19 +61,28 @@ public class AgentClientController {
     private DiscountService discountService;
     
     @Autowired
+    private UserMapper userMapper;
+    
+    @Autowired
     private HttpServletRequest request;
     
     /**
-     * 代理商登录（支持代理商主账号和操作员账号）
+     * 代理商登录（支持代理商主账号和操作员账号）- 严格权限控制
      * @param agentLoginDTO 登录DTO
      * @return 登录结果
      */
     @PostMapping("/login")
     public Result<UserLoginVO> login(@RequestBody AgentLoginDTO agentLoginDTO, HttpServletResponse response) {
-        log.info("代理商登录：{}", agentLoginDTO);
+        log.info("代理商登录请求：{}", agentLoginDTO.getUsername());
         
         try {
-            // 首先尝试代理商主账号登录
+            // 安全检查：防止普通用户通过代理商接口登录
+            User existingUser = userMapper.getUserByUsername(agentLoginDTO.getUsername());
+            if (existingUser != null && "regular".equals(existingUser.getUserType())) {
+                log.warn("普通用户 {} 尝试通过代理商接口登录，已拒绝", agentLoginDTO.getUsername());
+                return Result.error("该账号为普通用户账号，请使用用户登录入口");
+            }
+            
             Agent agent = null;
             AgentOperator operator = null;
             boolean isOperator = false;

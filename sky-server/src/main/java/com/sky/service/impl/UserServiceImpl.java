@@ -92,41 +92,11 @@ public class UserServiceImpl implements UserService {
                     }
                 }
 
-                // 首先检查是否是代理商登录
+                // 🚨 安全检查：拒绝代理商通过普通用户接口登录
                 Agent agent = agentMapper.getByUsername(userLoginDTO.getUsername());
                 if (agent != null) {
-                    // 代理商登录处理
-                    log.info("检测到代理商登录尝试：{}", userLoginDTO.getUsername());
-                    
-                    // 验证代理商密码 - 生产环境应该使用MD5或更安全的加密方式
-                    String password = DigestUtils.md5DigestAsHex(userLoginDTO.getPassword().getBytes());
-                    
-                    // 验证代理商密码，不再特殊处理测试账号
-                    if (!password.equals(agent.getPassword())) {
-                        log.error("代理商密码错误");
-                        throw new LoginFailedException(MessageConstant.LOGIN_FAILED);
-                    }
-                    
-                    // 检查代理商状态
-                    if (agent.getStatus() == 0) {
-                        log.error("代理商账号已被禁用");
-                        throw new LoginFailedException(MessageConstant.ACCOUNT_LOCKED);
-                    }
-                    
-                    // 创建对应的User对象
-                    User user = User.builder()
-                            .id(agent.getId())
-                            .username(agent.getUsername())
-                            .name(agent.getCompanyName())
-                            .phone(agent.getPhone())
-                            .userType("agent")
-                            .role("agent")
-                            .agentId(agent.getId()) // 设置agentId
-                            .status(StatusConstant.ENABLE)
-                            .build();
-                    
-                    log.info("代理商登录成功：{}", agent.getUsername());
-                    return user;
+                    log.warn("🚫 代理商账号 {} 尝试通过普通用户接口登录，已拒绝", userLoginDTO.getUsername());
+                    throw new LoginFailedException("该账号为代理商账号，请使用代理商登录入口");
                 }
                 
                 // 常规用户名密码登录流程

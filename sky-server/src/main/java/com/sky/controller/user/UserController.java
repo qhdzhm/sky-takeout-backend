@@ -4,6 +4,9 @@ import com.sky.constant.JwtClaimsConstant;
 import com.sky.dto.UserLoginDTO;
 import com.sky.dto.UserRegisterDTO;
 import com.sky.entity.User;
+import com.sky.entity.Agent;
+import com.sky.mapper.AgentMapper;
+import com.sky.mapper.UserMapper;
 import com.sky.properties.JwtProperties;
 import com.sky.result.Result;
 import com.sky.service.UserService;
@@ -34,9 +37,11 @@ public class UserController {
     private UserService userService;
     @Autowired
     private JwtProperties jwtProperties;
+    @Autowired
+    private AgentMapper agentMapper;
 
     /**
-     * 用户登录
+     * 用户登录 - 仅限普通用户
      *
      * @param userLoginDTO
      * @return
@@ -44,11 +49,36 @@ public class UserController {
     @PostMapping("/login")
     @ApiOperation("用户登录")
     public Result<UserLoginVO> login(@RequestBody UserLoginDTO userLoginDTO, HttpServletResponse response) {
-        log.info("用户登录：{}", userLoginDTO);
+        log.info("普通用户登录请求：{}", userLoginDTO.getUsername());
 
-        User user = userService.wxLogin(userLoginDTO);
+        // 1. 安全检查：防止代理商通过普通用户接口登录
+        Agent existingAgent = agentMapper.getByUsername(userLoginDTO.getUsername());
+        if (existingAgent != null) {
+            log.warn("代理商账号 {} 尝试通过普通用户接口登录，已拒绝", userLoginDTO.getUsername());
+            return Result.error("该账号为代理商账号，请使用代理商登录入口");
+        }
 
-        //登录成功后，生成jwt令牌
+        // 2. 验证普通用户
+        User user;
+        try {
+            user = userService.wxLogin(userLoginDTO);
+        } catch (Exception e) {
+            log.error("普通用户登录失败：{}, 错误：{}", userLoginDTO.getUsername(), e.getMessage());
+            return Result.error("用户名或密码错误");
+        }
+
+        if (user == null) {
+            log.warn("普通用户不存在：{}", userLoginDTO.getUsername());
+            return Result.error("用户名或密码错误");
+        }
+
+        // 3. 确保用户类型为普通用户
+        if (!"regular".equals(user.getUserType()) && user.getUserType() != null) {
+            log.warn("用户 {} 类型为 {}，不允许通过普通用户接口登录", userLoginDTO.getUsername(), user.getUserType());
+            return Result.error("账号类型错误，请使用正确的登录入口");
+        }
+
+        // 4. 生成JWT令牌 - 使用用户密钥
         Map<String, Object> claims = new HashMap<>();
         claims.put(JwtClaimsConstant.USER_ID, user.getId());
         claims.put(JwtClaimsConstant.USERNAME, user.getUsername());
@@ -59,6 +89,7 @@ public class UserController {
                 jwtProperties.getUserTtl(),
                 claims);
 
+        // 5. 设置安全Cookie
         // 设置HttpOnly Cookie用于安全存储refresh token
         Cookie refreshTokenCookie = new Cookie("refreshToken", token);
         refreshTokenCookie.setHttpOnly(true);
@@ -98,13 +129,16 @@ public class UserController {
         userInfoCookie.setMaxAge(15 * 60); // 15分钟
         response.addCookie(userInfoCookie);
 
+        // 6. 构建响应
         UserLoginVO userLoginVO = UserLoginVO.builder()
                 .id(user.getId())
                 .username(user.getUsername())
                 .name(user.getName())
+                .userType("regular")
                 .token(token)
                 .build();
 
+        log.info("普通用户登录成功：{}", user.getUsername());
         return Result.success(userLoginVO);
     }
 
