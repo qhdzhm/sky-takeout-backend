@@ -55,7 +55,8 @@ public interface GroupTourMapper {
      * @param tourId 跟团游ID
      * @return 行程安排列表
      */
-    @Select("SELECT * FROM tour_itinerary WHERE group_tour_id = #{tourId} ORDER BY day_number")
+    @Select("SELECT itinerary_id as id, group_tour_id, day_number as day, title, description, meals, accommodation, image_url " +
+            "FROM tour_itinerary WHERE group_tour_id = #{tourId} ORDER BY day_number")
     List<Map<String, Object>> getItinerary(Integer tourId);
 
     /**
@@ -156,7 +157,7 @@ public interface GroupTourMapper {
      * @return 关联的一日游列表
      */
     @Select("SELECT r.id, r.day_tour_id, r.day_number, r.is_optional, " +
-            "dt.name as day_tour_name, dt.location, dt.price, dt.duration " +
+            "dt.name as day_tour_name, dt.location, dt.price, dt.duration, dt.description as day_tour_description " +
             "FROM group_tour_day_tour_relation r " +
             "JOIN day_tours dt ON r.day_tour_id = dt.day_tour_id " +
             "WHERE r.group_tour_id = #{groupTourId} " +
@@ -327,7 +328,7 @@ public interface GroupTourMapper {
             "description = #{description}, " +
             "meals = #{meals}, " +
             "accommodation = #{accommodation} " +
-            "WHERE id = #{id}")
+            "WHERE itinerary_id = #{id}")
     void updateItinerary(@Param("id") Integer id,
                         @Param("tourId") Integer tourId, 
                         @Param("dayNumber") Integer dayNumber,
@@ -343,6 +344,13 @@ public interface GroupTourMapper {
      */
     @Delete("DELETE FROM tour_itinerary WHERE group_tour_id = #{tourId} AND day_number = #{dayNumber}")
     void deleteItineraryByTourIdAndDay(@Param("tourId") Integer tourId, @Param("dayNumber") Integer dayNumber);
+
+    /**
+     * 根据行程ID删除单个行程安排
+     * @param itineraryId 行程ID
+     */
+    @Delete("DELETE FROM tour_itinerary WHERE itinerary_id = #{itineraryId}")
+    void deleteItineraryById(Integer itineraryId);
 
     /**
      * 插入新的团队游基本信息
@@ -361,14 +369,14 @@ public interface GroupTourMapper {
      * @param id 团队游ID
      * @param status 状态（0-下架，1-上架）
      */
-    @Update("UPDATE group_tours SET status = #{status}, updated_at = NOW() WHERE id = #{id}")
+    @Update("UPDATE group_tours SET is_active = #{status}, updated_at = NOW() WHERE group_tour_id = #{id}")
     void updateStatus(@Param("id") Integer id, @Param("status") Integer status);
     
     /**
      * 根据ID删除团队游
      * @param id 团队游ID
      */
-    @Delete("DELETE FROM group_tours WHERE id = #{id}")
+    @Delete("DELETE FROM group_tours WHERE group_tour_id = #{id}")
     void deleteById(Integer id);
     
     /**

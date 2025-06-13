@@ -60,6 +60,17 @@ public class AgentCreditServiceImpl implements AgentCreditService {
         }
         AgentCreditVO vo = new AgentCreditVO();
         BeanUtils.copyProperties(agentCredit, vo);
+        
+        // 计算额度使用百分比
+        if (agentCredit.getTotalCredit() != null && agentCredit.getTotalCredit().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal usedCredit = agentCredit.getUsedCredit() != null ? agentCredit.getUsedCredit() : BigDecimal.ZERO;
+            BigDecimal percentage = usedCredit.divide(agentCredit.getTotalCredit(), 4, BigDecimal.ROUND_HALF_UP)
+                    .multiply(new BigDecimal("100"));
+            vo.setUsagePercentage(percentage);
+        } else {
+            vo.setUsagePercentage(BigDecimal.ZERO);
+        }
+        
         return vo;
     }
 

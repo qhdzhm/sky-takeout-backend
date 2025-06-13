@@ -9,7 +9,9 @@ import org.springframework.util.Base64Utils;
 import org.springframework.util.StreamUtils;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.InputStream;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -23,25 +25,29 @@ public class PdfServiceImpl implements PdfService {
     public byte[] generatePdfFromHtml(String htmlContent) {
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             
-            // 确保HTML内容包含完整的HTML结构
+            // 确保HTML内容包含完整的HTML结构和正确的编码声明
             if (!htmlContent.contains("<!DOCTYPE html>")) {
-                htmlContent = "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n</head>\n<body>\n" 
-                            + htmlContent + "\n</body>\n</html>";
+                htmlContent = "<!DOCTYPE html>\n<html>\n<head>\n" +
+                    "<meta charset=\"UTF-8\">\n" +
+                    "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\">\n" +
+                    "</head>\n<body>\n" + htmlContent + "\n</body>\n</html>";
             }
             
             // 处理logo图片，将占位符替换为实际的base64图片
             htmlContent = processLogoImage(htmlContent);
             
-            PdfRendererBuilder builder = new PdfRendererBuilder();
-            builder.withHtmlContent(htmlContent, null);
+            // 确保HTML内容使用UTF-8编码
+            byte[] htmlBytes = htmlContent.getBytes(StandardCharsets.UTF_8);
+            String processedHtml = new String(htmlBytes, StandardCharsets.UTF_8);
             
-            // 尝试添加中文字体支持
-            try {
-                // 使用系统自带的中文字体
-                addSystemChineseFonts(builder);
-            } catch (Exception fontException) {
-                log.warn("添加中文字体失败，将使用默认字体: {}", fontException.getMessage());
-            }
+            PdfRendererBuilder builder = new PdfRendererBuilder();
+            builder.withHtmlContent(processedHtml, null);
+            
+            // 设置默认字体和字符编码
+            builder.useDefaultPageSize(210, 297, PdfRendererBuilder.PageSizeUnits.MM);
+            
+            // 添加中文字体支持
+            addChineseFontSupport(builder);
             
             builder.toStream(outputStream);
             builder.run();
@@ -87,44 +93,124 @@ public class PdfServiceImpl implements PdfService {
     }
 
     /**
-     * 添加系统中文字体支持
+     * 添加中文字体支持 - 改进版本
      */
-    private void addSystemChineseFonts(PdfRendererBuilder builder) {
+    private void addChineseFontSupport(PdfRendererBuilder builder) {
         try {
-            boolean fontLoaded = false;
+            log.info("开始添加中文字体支持...");
             
-            // Windows系统中文字体路径
-            String[] windowsFonts = {
-                "C:/Windows/Fonts/msyh.ttc",      // 微软雅黑 (优先)
-                "C:/Windows/Fonts/simhei.ttf",    // 黑体
-                "C:/Windows/Fonts/simsun.ttc",    // 宋体
-                "C:/Windows/Fonts/simkai.ttf",    // 楷体
-                "C:/Windows/Fonts/MSYH.TTF",      // 微软雅黑 (备选)
-                "C:/Windows/Fonts/SIMHEI.TTF",    // 黑体 (备选)
-                "C:/Windows/Fonts/SIMSUN.TTC"     // 宋体 (备选)
-            };
+            // 方案1: 尝试加载内置字体资源
+            boolean resourceFontLoaded = loadResourceFonts(builder);
             
-            // 尝试加载Windows字体
-            for (String fontPath : windowsFonts) {
-                try {
-                    java.io.File fontFile = new java.io.File(fontPath);
-                    if (fontFile.exists()) {
-                        builder.useFont(fontFile, "Chinese");
-                        log.info("成功添加中文字体: {}", fontPath);
-                        fontLoaded = true;
-                        break; // 只要有一个字体成功加载就够了
-                    }
-                } catch (Exception e) {
-                    log.debug("字体文件加载失败: {}, 错误: {}", fontPath, e.getMessage());
+            // 方案2: 如果内置字体加载失败，尝试系统字体
+            if (!resourceFontLoaded) {
+                boolean systemFontLoaded = loadSystemFonts(builder);
+                
+                if (!systemFontLoaded) {
+                    log.warn("未能加载任何中文字体，PDF可能出现中文乱码");
+                    // 设置默认后备字体
+                    setFallbackFont(builder);
                 }
             }
             
-            if (!fontLoaded) {
-                log.warn("未能加载任何中文字体，中文字符可能显示为乱码");
-            }
-            
         } catch (Exception e) {
-            log.warn("添加系统中文字体失败: {}", e.getMessage());
+            log.error("添加中文字体支持失败: {}", e.getMessage(), e);
+            setFallbackFont(builder);
         }
     }
-} 
+    
+    /**
+     * 加载资源文件中的字体
+     */
+    private boolean loadResourceFonts(PdfRendererBuilder builder) {
+        try {
+            // 尝试从resources目录加载字体文件
+            String[] resourceFonts = {
+                "fonts/simhei.ttf",
+                "fonts/simsun.ttf", 
+                "fonts/microsoftyahei.ttf",
+                "fonts/NotoSansCJK-Regular.ttc"
+            };
+            
+            for (String fontPath : resourceFonts) {
+                try {
+                    ClassPathResource fontResource = new ClassPathResource(fontPath);
+                    if (fontResource.exists()) {
+                        try (InputStream fontStream = fontResource.getInputStream()) {
+                            byte[] fontBytes = StreamUtils.copyToByteArray(fontStream);
+                            builder.useFont(() -> new java.io.ByteArrayInputStream(fontBytes), "Chinese");
+                            log.info("成功加载资源字体: {}", fontPath);
+                            return true;
+                        }
+                    }
+                } catch (Exception e) {
+                    log.debug("资源字体加载失败: {}, 错误: {}", fontPath, e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("加载资源字体时出错: {}", e.getMessage());
+        }
+        return false;
+    }
+    
+    /**
+     * 加载系统字体
+     */
+    private boolean loadSystemFonts(PdfRendererBuilder builder) {
+        try {
+            // Windows系统字体路径
+            String[] windowsFonts = {
+                "C:/Windows/Fonts/msyh.ttc",      // 微软雅黑
+                "C:/Windows/Fonts/msyhbd.ttc",    // 微软雅黑粗体
+                "C:/Windows/Fonts/simhei.ttf",    // 黑体
+                "C:/Windows/Fonts/simsun.ttc",    // 宋体
+                "C:/Windows/Fonts/simkai.ttf",    // 楷体
+                "C:/Windows/Fonts/MSYH.TTF",      // 微软雅黑备选
+                "C:/Windows/Fonts/SIMHEI.TTF",    // 黑体备选
+                "C:/Windows/Fonts/SIMSUN.TTC"     // 宋体备选
+            };
+            
+            // Linux系统字体路径
+            String[] linuxFonts = {
+                "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+                "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+                "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+                "/System/Library/Fonts/PingFang.ttc",  // macOS
+                "/System/Library/Fonts/STHeiti Light.ttc" // macOS
+            };
+            
+            // 检测操作系统
+            String osName = System.getProperty("os.name").toLowerCase();
+            String[] fontPaths = osName.contains("windows") ? windowsFonts : linuxFonts;
+            
+            for (String fontPath : fontPaths) {
+                try {
+                    File fontFile = new File(fontPath);
+                    if (fontFile.exists() && fontFile.canRead()) {
+                        builder.useFont(fontFile, "Chinese");
+                        log.info("成功加载系统字体: {}", fontPath);
+                        return true;
+                    }
+                } catch (Exception e) {
+                    log.debug("系统字体加载失败: {}, 错误: {}", fontPath, e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("加载系统字体时出错: {}", e.getMessage());
+        }
+        return false;
+    }
+    
+    /**
+     * 设置后备字体配置
+     */
+    private void setFallbackFont(PdfRendererBuilder builder) {
+        try {
+            // 尝试使用Java内置的字体
+            builder.useDefaultPageSize(210, 297, PdfRendererBuilder.PageSizeUnits.MM);
+            log.info("已设置后备字体配置");
+        } catch (Exception e) {
+            log.warn("设置后备字体配置失败: {}", e.getMessage());
+        }
+    }
+}

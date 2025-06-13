@@ -64,4 +64,7 @@ public class AgentCreditVO implements Serializable {
     
     // 创建时间
     private LocalDateTime createdAt;
+    
+    // 额度使用百分比（计算字段）
+    private BigDecimal usagePercentage;
 } 

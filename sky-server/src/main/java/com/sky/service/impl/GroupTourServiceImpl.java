@@ -313,8 +313,8 @@ public class GroupTourServiceImpl implements GroupTourService {
                         Integer existingId = null;
                         
                         for (Map<String, Object> existing : existingItineraries) {
-                            Integer existingDay = (Integer) existing.get("day_number");
-                            if (existingDay.equals(dayNumber)) {
+                            Integer existingDay = (Integer) existing.get("day");
+                            if (existingDay != null && existingDay.equals(dayNumber)) {
                                 dayExists = true;
                                 existingId = (Integer) existing.get("id");
                                 break;
@@ -380,8 +380,8 @@ public class GroupTourServiceImpl implements GroupTourService {
             boolean dayExists = false;
             
             for (Map<String, Object> existing : existingItineraries) {
-                Integer existingDay = (Integer) existing.get("day_number");
-                if (existingDay.equals(dayNumber)) {
+                Integer existingDay = (Integer) existing.get("day");
+                if (existingDay != null && existingDay.equals(dayNumber)) {
                     dayExists = true;
                     break;
                 }
@@ -391,8 +391,8 @@ public class GroupTourServiceImpl implements GroupTourService {
                 log.warn("第{}天的行程已存在，将覆盖现有行程", dayNumber);
                 // 删除现有行程
                 for (Map<String, Object> existing : existingItineraries) {
-                    Integer existingDay = (Integer) existing.get("day_number");
-                    if (existingDay.equals(dayNumber)) {
+                    Integer existingDay = (Integer) existing.get("day");
+                    if (existingDay != null && existingDay.equals(dayNumber)) {
                         Integer itineraryId = (Integer) existing.get("id");
                         groupTourMapper.deleteItineraryByTourIdAndDay(groupTourId, dayNumber);
                     }
@@ -604,6 +604,25 @@ public class GroupTourServiceImpl implements GroupTourService {
     }
 
     /**
+     * 删除团队游行程安排
+     * @param itineraryId 行程ID
+     */
+    @Override
+    @Transactional
+    public void deleteGroupTourItinerary(Integer itineraryId) {
+        log.info("删除团队游行程安排，行程ID：{}", itineraryId);
+        
+        try {
+            // 删除指定的行程安排
+            groupTourMapper.deleteItineraryById(itineraryId);
+            log.info("删除团队游行程安排成功，行程ID：{}", itineraryId);
+        } catch (Exception e) {
+            log.error("删除团队游行程安排失败，错误：{}", e.getMessage(), e);
+            throw new RuntimeException("删除团队游行程安排失败", e);
+        }
+    }
+    
+    /**
      * 获取所有可用的一日游
      * @return 一日游列表
      */
@@ -800,7 +819,7 @@ public class GroupTourServiceImpl implements GroupTourService {
     public void updateProductShowcaseImage(Integer groupTourId, String imageUrl) {
         log.info("更新团体游产品展示图片，ID：{}，图片URL：{}", groupTourId, imageUrl);
         try {
-            String sql = "UPDATE group_tours SET product_showcase_image = ? WHERE id = ?";
+            String sql = "UPDATE group_tours SET product_showcase_image = ? WHERE group_tour_id = ?";
             jdbcTemplate.update(sql, imageUrl, groupTourId);
             log.info("更新团体游产品展示图片成功");
         } catch (Exception e) {

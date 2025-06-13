@@ -3,11 +3,15 @@ package com.sky.controller.user;
 import com.sky.dto.BookingDTO;
 import com.sky.dto.EmailConfirmationDTO;
 import com.sky.dto.EmailInvoiceDTO;
+import com.sky.dto.GroupTourDTO;
 import com.sky.dto.PaymentDTO;
 import com.sky.dto.TourBookingDTO;
 import java.util.concurrent.CompletableFuture;
+import com.sky.entity.DayTour;
 import com.sky.entity.HotelPriceDifference;
 import com.sky.entity.TourBooking;
+import com.sky.mapper.DayTourMapper;
+import com.sky.mapper.GroupTourMapper;
 import com.sky.result.Result;
 import com.sky.service.BookingService;
 import com.sky.service.EmailService;
@@ -50,6 +54,12 @@ public class BookingController {
     
     @Autowired
     private EmailService emailService;
+    
+    @Autowired
+    private GroupTourMapper groupTourMapper;
+    
+    @Autowired
+    private DayTourMapper dayTourMapper;
 
     /**
      * 创建预订
@@ -590,36 +600,24 @@ public class BookingController {
                 log.error("❌ 发票邮件发送失败: orderId={}", orderId, e);
             }
             
-            // 2. 发送确认单邮件给代理商主号
+            // 2. 发送确认单邮件
             try {
                 EmailConfirmationDTO confirmationDTO = new EmailConfirmationDTO();
                 confirmationDTO.setOrderId(orderId);
-                confirmationDTO.setRecipientType("agent");
+                confirmationDTO.setRecipientType(recipientType);
                 confirmationDTO.setAgentId(actualAgentId);
                 confirmationDTO.setOperatorId(actualOperatorId);
                 confirmationDTO.setOrderDetails(orderDetails);
                 
                 emailService.sendConfirmationEmail(confirmationDTO);
-                log.info("✅ 代理商确认单邮件发送成功: orderId={}, agentId={}", orderId, actualAgentId);
-            } catch (Exception e) {
-                log.error("❌ 代理商确认单邮件发送失败: orderId={}", orderId, e);
-            }
-            
-            // 3. 如果是操作员下单，再发送确认单邮件给操作员
-            if ("operator".equals(recipientType) && actualOperatorId != null) {
-                try {
-                    EmailConfirmationDTO operatorConfirmationDTO = new EmailConfirmationDTO();
-                    operatorConfirmationDTO.setOrderId(orderId);
-                    operatorConfirmationDTO.setRecipientType("operator");
-                    operatorConfirmationDTO.setAgentId(actualAgentId);
-                    operatorConfirmationDTO.setOperatorId(actualOperatorId);
-                    operatorConfirmationDTO.setOrderDetails(orderDetails);
-                    
-                    emailService.sendConfirmationEmail(operatorConfirmationDTO);
-                    log.info("✅ 操作员确认单邮件发送成功: orderId={}, operatorId={}", orderId, actualOperatorId);
-                } catch (Exception e) {
-                    log.error("❌ 操作员确认单邮件发送失败: orderId={}", orderId, e);
+                
+                if ("operator".equals(recipientType)) {
+                    log.info("✅ 操作员下单确认单邮件发送成功: orderId={}, 发送给操作员和主号", orderId);
+                } else {
+                    log.info("✅ 主号下单确认单邮件发送成功: orderId={}, 发送给主号", orderId);
                 }
+            } catch (Exception e) {
+                log.error("❌ 确认单邮件发送失败: orderId={}, recipientType={}", orderId, recipientType, e);
             }
             
             log.info("订单邮件发送处理完成: orderId={}, recipientType={}", orderId, recipientType);
@@ -634,7 +632,11 @@ public class BookingController {
      */
     private EmailConfirmationDTO.OrderDetails buildOrderDetails(TourBookingVO bookingVO) {
         EmailConfirmationDTO.OrderDetails orderDetails = new EmailConfirmationDTO.OrderDetails();
-        orderDetails.setTourName(bookingVO.getTourName() != null ? bookingVO.getTourName() : "塔斯马尼亚旅游");
+        
+        // 获取真实的产品名称
+        String actualTourName = getTourNameByIdAndType(bookingVO.getTourId(), bookingVO.getTourType());
+        orderDetails.setTourName(actualTourName != null ? actualTourName : 
+                                (bookingVO.getTourName() != null ? bookingVO.getTourName() : "塔斯马尼亚旅游"));
         orderDetails.setTourType(bookingVO.getTourType());
         orderDetails.setStartDate(bookingVO.getTourStartDate() != null ? bookingVO.getTourStartDate().toString() : null);
         orderDetails.setEndDate(bookingVO.getTourEndDate() != null ? bookingVO.getTourEndDate().toString() : null);
@@ -654,7 +656,11 @@ public class BookingController {
      */
     private EmailInvoiceDTO.InvoiceDetails buildInvoiceDetails(TourBookingVO bookingVO) {
         EmailInvoiceDTO.InvoiceDetails invoiceDetails = new EmailInvoiceDTO.InvoiceDetails();
-        invoiceDetails.setTourName(bookingVO.getTourName() != null ? bookingVO.getTourName() : "塔斯马尼亚旅游");
+        
+        // 获取真实的产品名称
+        String actualTourName = getTourNameByIdAndType(bookingVO.getTourId(), bookingVO.getTourType());
+        invoiceDetails.setTourName(actualTourName != null ? actualTourName : 
+                                  (bookingVO.getTourName() != null ? bookingVO.getTourName() : "塔斯马尼亚旅游"));
         invoiceDetails.setTourType(bookingVO.getTourType());
         invoiceDetails.setStartDate(bookingVO.getTourStartDate() != null ? bookingVO.getTourStartDate().toString() : null);
         invoiceDetails.setEndDate(bookingVO.getTourEndDate() != null ? bookingVO.getTourEndDate().toString() : null);
@@ -662,5 +668,31 @@ public class BookingController {
         invoiceDetails.setChildCount(0); // TourBookingVO中没有单独的childCount字段，暂时设为0
         invoiceDetails.setTotalPrice(bookingVO.getTotalPrice() != null ? bookingVO.getTotalPrice().doubleValue() : 0.0);
         return invoiceDetails;
+    }
+    
+    /**
+     * 根据tourId和tourType获取产品名称
+     * @param tourId 产品ID
+     * @param tourType 产品类型
+     * @return 产品名称
+     */
+    private String getTourNameByIdAndType(Integer tourId, String tourType) {
+        if (tourId == null || tourType == null) {
+            return null;
+        }
+        
+        try {
+            if ("group_tour".equals(tourType)) {
+                GroupTourDTO groupTour = groupTourMapper.getById(tourId);
+                return groupTour != null ? groupTour.getName() : null;
+            } else if ("day_tour".equals(tourType)) {
+                DayTour dayTour = dayTourMapper.getById(tourId);
+                return dayTour != null ? dayTour.getName() : null;
+            }
+        } catch (Exception e) {
+            log.error("获取产品名称失败: tourId={}, tourType={}", tourId, tourType, e);
+        }
+        
+        return null;
     }
 } 

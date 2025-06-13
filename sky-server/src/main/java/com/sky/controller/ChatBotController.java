@@ -1,5 +1,6 @@
 package com.sky.controller;
 
+import com.sky.context.BaseContext;
 import com.sky.dto.ChatRequest;
 import com.sky.entity.ChatMessage;
 import com.sky.result.Result;
@@ -36,6 +37,37 @@ public class ChatBotController {
                                           @RequestHeader(value = "X-Current-URL", required = false) String currentUrl) {
         log.info("收到聊天消息: sessionId={}, userType={}, message={}, currentPage={}", 
                 request.getSessionId(), request.getUserType(), request.getMessage(), currentPage);
+        
+        // 从BaseContext获取当前用户信息（由JWT拦截器设置）
+        try {
+            Long currentUserId = BaseContext.getCurrentId();
+            String currentUserType = BaseContext.getCurrentUserType();
+            Long agentId = BaseContext.getCurrentAgentId();
+            Long operatorId = BaseContext.getCurrentOperatorId();
+            
+            log.info("从JWT获取用户信息: userId={}, userType={}, agentId={}, operatorId={}", 
+                    currentUserId, currentUserType, agentId, operatorId);
+            
+            // 设置真实的用户信息到请求中
+            if (currentUserId != null) {
+                request.setUserId(currentUserId.toString());
+            }
+            
+            // 根据JWT中的用户类型设置正确的userType
+            if ("agent".equals(currentUserType)) {
+                request.setUserType(3); // 代理商主号
+            } else if ("agent_operator".equals(currentUserType)) {
+                request.setUserType(2); // 操作员
+            } else if ("user".equals(currentUserType)) {
+                request.setUserType(1); // 普通用户
+            }
+            
+            log.info("设置后的请求信息: userId={}, userType={}", request.getUserId(), request.getUserType());
+            
+        } catch (Exception e) {
+            log.warn("无法从JWT获取用户信息，使用前端传递的信息: {}", e.getMessage());
+            // 如果无法从JWT获取用户信息，使用前端传递的信息（可能是游客用户）
+        }
         
         // 设置当前页面信息到请求中
         request.setCurrentPage(currentPage);

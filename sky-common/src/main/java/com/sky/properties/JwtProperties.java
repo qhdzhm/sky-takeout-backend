@@ -30,4 +30,13 @@ public class JwtProperties {
     private long agentTtl;
     private String agentTokenName;
 
+    /**
+     * Refresh Token相关配置
+     */
+    private long refreshTokenTtl = 7 * 24 * 60 * 60 * 1000L; // 默认7天
+    
+    /**
+     * Access Token提前刷新时间（分钟）
+     */
+    private int tokenRefreshThreshold = 5; // 默认提前5分钟刷新
 }

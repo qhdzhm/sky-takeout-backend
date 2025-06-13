@@ -152,6 +152,17 @@ public class PassengerServiceImpl implements PassengerService {
         Passenger passenger = new Passenger();
         BeanUtils.copyProperties(passengerDTO, passenger);
         
+        // 处理空字符串字段，将空字符串转换为null
+        if (passenger.getWechatId() != null && passenger.getWechatId().trim().isEmpty()) {
+            passenger.setWechatId(null);
+        }
+        if (passenger.getEmail() != null && passenger.getEmail().trim().isEmpty()) {
+            passenger.setEmail(null);
+        }
+        if (passenger.getChildAge() != null && passenger.getChildAge().trim().isEmpty()) {
+            passenger.setChildAge(null);
+        }
+        
         // 手动检查并设置关键字段，解决字段名不匹配问题
         // 注意：由于前端传入的可能是phoneNumber而不是phone
         try {
@@ -204,9 +215,46 @@ public class PassengerServiceImpl implements PassengerService {
         // 打印整个对象进行调试
         log.info("新增乘客信息: {}", passenger);
         
-        passengerMapper.insert(passenger);
-        log.info("保存乘客成功: passengerId={}", passenger.getPassengerId());
-        return passenger.getPassengerId();
+        try {
+            int result = passengerMapper.insert(passenger);
+            log.info("插入操作影响行数: {}, 生成的passengerId: {}", result, passenger.getPassengerId());
+            
+            if (result > 0) {
+                // 如果主键回填失败，尝试通过护照号查询获取ID
+                if (passenger.getPassengerId() == null && passenger.getPassportNumber() != null) {
+                    log.warn("主键回填失败，尝试通过护照号查询获取ID");
+                    Passenger savedPassenger = passengerMapper.getByPassportNumber(passenger.getPassportNumber());
+                    if (savedPassenger != null) {
+                        passenger.setPassengerId(savedPassenger.getPassengerId());
+                        log.info("通过护照号查询获取到passengerId: {}", passenger.getPassengerId());
+                    }
+                }
+                
+                // 如果还是没有ID，尝试通过姓名和电话查询
+                if (passenger.getPassengerId() == null && passenger.getFullName() != null && passenger.getPhone() != null) {
+                    log.warn("仍然没有获取到ID，尝试通过姓名和电话查询");
+                    Passenger savedPassenger = passengerMapper.getByPhone(passenger.getPhone());
+                    if (savedPassenger != null && savedPassenger.getFullName().equals(passenger.getFullName())) {
+                        passenger.setPassengerId(savedPassenger.getPassengerId());
+                        log.info("通过电话查询获取到passengerId: {}", passenger.getPassengerId());
+                    }
+                }
+                
+                if (passenger.getPassengerId() != null) {
+                    log.info("保存乘客成功: passengerId={}", passenger.getPassengerId());
+                    return passenger.getPassengerId();
+                } else {
+                    log.error("插入乘客后无法获取ID: 影响行数={}, passengerId={}", result, passenger.getPassengerId());
+                    throw new RuntimeException("插入乘客后无法获取ID");
+                }
+            } else {
+                log.error("插入乘客失败: 影响行数={}", result);
+                throw new RuntimeException("插入乘客失败");
+            }
+        } catch (Exception e) {
+            log.error("插入乘客时发生异常: {}", e.getMessage(), e);
+            throw new RuntimeException("插入乘客失败: " + e.getMessage());
+        }
     }
 
     /**

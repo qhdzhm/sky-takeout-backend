@@ -139,6 +139,12 @@ public interface GroupTourService {
     void updateGroupTourItinerary(Integer itineraryId, Integer groupTourId, Integer dayNumber, String title, String description, String meals, String accommodation);
     
     /**
+     * 删除团队游行程安排
+     * @param itineraryId 行程ID
+     */
+    void deleteGroupTourItinerary(Integer itineraryId);
+    
+    /**
      * 获取所有可用的一日游
      * @return 一日游列表
      */

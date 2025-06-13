@@ -56,14 +56,26 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
                 .addPathPatterns("/admin/**")
                 .excludePathPatterns("/admin/employee/login");
 
+        // 代理商接口拦截器
+        registry.addInterceptor(jwtTokenAgentInterceptor)
+                .addPathPatterns("/agent/**")  // 代理商相关接口
+                .excludePathPatterns("/agent/login")  // 排除代理商登录
+                .excludePathPatterns("/agent/discount-rate")  // 排除折扣率查询（可能被公开调用）
+                .excludePathPatterns("/agent/*/discount-rate");  // 排除特定代理商折扣率查询
+
         // 普通用户接口拦截器
         registry.addInterceptor(jwtTokenUserInterceptor)
                 .addPathPatterns("/user/**")
                 .addPathPatterns("/orders/**")  // 添加统一的订单API路径
-                .addPathPatterns("/agent/credit/**")  // 添加代理商信用额度接口，使用用户拦截器处理
+                .addPathPatterns("/api/auth/**")  // 添加认证接口
+                .addPathPatterns("/chatbot/**")  // 添加ChatBot接口（支持多种用户类型）
                 .excludePathPatterns("/user/login")
                 .excludePathPatterns("/user/register")
                 .excludePathPatterns("/user/shop/status")
+                .excludePathPatterns("/user/agent/login")  // 排除代理商登录
+                .excludePathPatterns("/api/auth/csrf-token")  // CSRF token获取不需要认证
+                .excludePathPatterns("/api/auth/logout")      // 登出接口不需要认证
+                .excludePathPatterns("/chatbot/health")       // ChatBot健康检查不需要认证
                 // 微信登录相关接口
                 .excludePathPatterns("/user/wechat/qrcode-url")
                 // 旅游相关API不需要身份验证
@@ -92,30 +104,25 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
                 .excludePathPatterns("/webjars/**")
                 .excludePathPatterns("/swagger-resources/**")
                 .excludePathPatterns("/v2/api-docs");
-                
-        // 代理商接口拦截器
-        registry.addInterceptor(jwtTokenAgentInterceptor)
-                .addPathPatterns("/agent/**")
-                .excludePathPatterns("/agent/login")
-                .excludePathPatterns("/agent/discount-rate")
-                .excludePathPatterns("/agent/calculate-tour-discount")
-                .excludePathPatterns("/agent/credit/**");  // 排除credit接口，让用户拦截器处理
+
     }
     
     /**
-     * 添加跨域支持
+     * 添加跨域支持 - 注释掉，使用CorsFilter Bean代替
      * @param registry
      */
+    /*
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         log.info("配置跨域支持...");
         registry.addMapping("/**")  // 所有接口
-                .allowedOrigins("http://localhost:3000", "http://127.0.0.1:3000", "*")  // 明确指定允许的域名
+                .allowedOriginPatterns("http://localhost:3000", "http://127.0.0.1:3000")  // 使用allowedOriginPatterns支持credentials
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")  // 允许的HTTP方法
                 .allowedHeaders("*")  // 允许所有头
-                .allowCredentials(false)  // 允许携带凭证
+                .allowCredentials(true)  // 允许携带凭证（支持HttpOnly Cookie）
                 .maxAge(3600);  // 预检请求的有效期，单位为秒
     }
+    */
 
     /**
      * 通过knife4j生成接口文档
@@ -164,20 +171,24 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
     public CorsFilter corsFilter() {
         // 初始化cors配置对象
         CorsConfiguration configuration = new CorsConfiguration();
-        // 允许所有来源
-        configuration.addAllowedOriginPattern("*");
-        // 设置不允许携带cookie（当允许所有来源时）
-        configuration.setAllowCredentials(false);
+        // 允许特定来源（支持credentials时不能使用*）
+        configuration.addAllowedOriginPattern("http://localhost:3000");   // 用户端前端
+        configuration.addAllowedOriginPattern("http://localhost:3001");   // 管理后台前端
+        configuration.addAllowedOriginPattern("http://127.0.0.1:3000");   // 用户端前端
+        configuration.addAllowedOriginPattern("http://127.0.0.1:3001");   // 管理后台前端
+        // 设置允许携带cookie（支持HttpOnly Cookie）
+        configuration.setAllowCredentials(true);
         // 设置允许的请求方式
         configuration.addAllowedMethod("*");
         // 设置允许的请求头
         configuration.addAllowedHeader("*");
         
-        // 为折扣计算相关接口单独配置跨域
+        // 暴露安全相关的响应头
         configuration.addExposedHeader("Access-Control-Allow-Origin");
         configuration.addExposedHeader("Access-Control-Allow-Methods");
         configuration.addExposedHeader("Access-Control-Allow-Headers");
         configuration.addExposedHeader("Access-Control-Allow-Credentials");
+        configuration.addExposedHeader("X-CSRF-Token");
         
         // 初始化cors配置源对象
         UrlBasedCorsConfigurationSource configurationSource = new UrlBasedCorsConfigurationSource();
@@ -199,4 +210,5 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
         registrar.setDateTimeFormatter(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         registrar.registerFormatters(registry);
     }
-}
+} 
+

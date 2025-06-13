@@ -29,6 +29,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.Cookie;
 import io.jsonwebtoken.Claims;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -66,7 +68,7 @@ public class AgentClientController {
      * @return 登录结果
      */
     @PostMapping("/login")
-    public Result<UserLoginVO> login(@RequestBody AgentLoginDTO agentLoginDTO) {
+    public Result<UserLoginVO> login(@RequestBody AgentLoginDTO agentLoginDTO, HttpServletResponse response) {
         log.info("代理商登录：{}", agentLoginDTO);
         
         try {
@@ -189,7 +191,53 @@ public class AgentClientController {
             
             log.info("登录成功，用户类型: {}, 折扣率: {}", isOperator ? "操作员" : "代理商主账号", discountRate);
             
-            // 7. 返回结果
+            // 7. 设置HttpOnly Cookie用于安全存储
+            Cookie refreshTokenCookie = new Cookie("refreshToken", token);
+            refreshTokenCookie.setHttpOnly(true);
+            refreshTokenCookie.setSecure(false); // 开发环境设为false，生产环境应设为true
+            refreshTokenCookie.setPath("/");
+            refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60); // 7天
+            response.addCookie(refreshTokenCookie);
+
+            // 设置访问token Cookie
+            Cookie authTokenCookie = new Cookie("authToken", token);
+            authTokenCookie.setHttpOnly(true);
+            authTokenCookie.setSecure(false);
+            authTokenCookie.setPath("/");
+            authTokenCookie.setMaxAge(15 * 60); // 15分钟
+            response.addCookie(authTokenCookie);
+
+            // 设置用户信息Cookie（非HttpOnly，供前端读取）
+            Map<String, Object> userInfo = new HashMap<>();
+            userInfo.put("id", isOperator ? operator.getId() : agent.getId());
+            userInfo.put("username", isOperator ? operator.getUsername() : agent.getUsername());
+            userInfo.put("name", isOperator ? operator.getName() : agent.getCompanyName());
+            userInfo.put("userType", isOperator ? "agent_operator" : "agent");
+            userInfo.put("role", isOperator ? "agent_operator" : "agent");
+            userInfo.put("agentId", agent.getId());
+            if (isOperator) {
+                userInfo.put("operatorId", operator.getId());
+            }
+            userInfo.put("isAuthenticated", true);
+            userInfo.put("discountRate", discountRate.doubleValue());
+            userInfo.put("canSeeDiscount", !isOperator);
+            userInfo.put("canSeeCredit", !isOperator);
+            
+            String userInfoJson = com.alibaba.fastjson.JSON.toJSONString(userInfo);
+            String encodedUserInfo;
+            try {
+                encodedUserInfo = java.net.URLEncoder.encode(userInfoJson, "UTF-8");
+            } catch (Exception e) {
+                log.error("URL编码失败", e);
+                encodedUserInfo = userInfoJson; // 如果编码失败，使用原始值
+            }
+            Cookie userInfoCookie = new Cookie("userInfo", encodedUserInfo);
+            userInfoCookie.setSecure(false);
+            userInfoCookie.setPath("/");
+            userInfoCookie.setMaxAge(15 * 60); // 15分钟
+            response.addCookie(userInfoCookie);
+            
+            // 8. 返回结果
             return Result.success(userLoginVO);
             
         } catch (Exception e) {

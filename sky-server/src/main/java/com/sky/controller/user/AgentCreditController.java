@@ -60,23 +60,42 @@ public class AgentCreditController {
         
         AgentCreditVO creditInfo = agentCreditService.getCreditInfo(targetAgentId);
         
-        // 构建响应数据
+        // 构建响应数据 - 根据用户类型返回不同的数据
         Map<String, Object> responseData = new HashMap<>();
         responseData.put("id", creditInfo.getId());
         responseData.put("agentId", creditInfo.getAgentId());
         responseData.put("agentName", creditInfo.getAgentName());
-        responseData.put("totalCredit", creditInfo.getTotalCredit());
-        responseData.put("usedCredit", creditInfo.getUsedCredit());
-        responseData.put("availableCredit", creditInfo.getAvailableCredit());
-        responseData.put("depositBalance", creditInfo.getDepositBalance());
-        responseData.put("creditRating", creditInfo.getCreditRating());
-        responseData.put("interestRate", creditInfo.getInterestRate());
-        responseData.put("billingCycleDay", creditInfo.getBillingCycleDay());
-        responseData.put("lastSettlementDate", creditInfo.getLastSettlementDate());
-        responseData.put("overdraftCount", creditInfo.getOverdraftCount());
+        responseData.put("usagePercentage", creditInfo.getUsagePercentage());
         responseData.put("isFrozen", creditInfo.getIsFrozen());
         responseData.put("lastUpdated", creditInfo.getLastUpdated());
-        responseData.put("createdAt", creditInfo.getCreatedAt());
+        
+        // 操作员只能看到使用率和基本状态，不能看到具体金额
+        if (!"agent_operator".equals(userType)) {
+            // 代理商主账号可以看到所有信息
+            responseData.put("totalCredit", creditInfo.getTotalCredit());
+            responseData.put("usedCredit", creditInfo.getUsedCredit());
+            responseData.put("availableCredit", creditInfo.getAvailableCredit());
+            responseData.put("depositBalance", creditInfo.getDepositBalance());
+            responseData.put("creditRating", creditInfo.getCreditRating());
+            responseData.put("interestRate", creditInfo.getInterestRate());
+            responseData.put("billingCycleDay", creditInfo.getBillingCycleDay());
+            responseData.put("lastSettlementDate", creditInfo.getLastSettlementDate());
+            responseData.put("overdraftCount", creditInfo.getOverdraftCount());
+            responseData.put("createdAt", creditInfo.getCreatedAt());
+        } else {
+            // 操作员看到的是脱敏数据
+            responseData.put("totalCredit", null);
+            responseData.put("usedCredit", null);
+            responseData.put("availableCredit", null);
+            responseData.put("depositBalance", null);
+            responseData.put("creditRating", null);
+            responseData.put("interestRate", null);
+            responseData.put("billingCycleDay", null);
+            responseData.put("lastSettlementDate", null);
+            responseData.put("overdraftCount", null);
+            responseData.put("createdAt", null);
+            log.info("操作员访问，已脱敏处理金额相关信息");
+        }
         
         // 如果是代理商主账号，添加最近交易记录
         if (!"agent_operator".equals(userType)) {

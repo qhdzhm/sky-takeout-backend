@@ -2,9 +2,13 @@ package com.sky.service.impl;
 
 import com.sky.dto.EmailConfirmationDTO;
 import com.sky.dto.EmailInvoiceDTO;
+import com.sky.dto.GroupTourDTO;
+import com.sky.entity.DayTour;
 import com.sky.entity.TourBooking;
 import com.sky.mapper.AgentMapper;
 import com.sky.mapper.AgentOperatorMapper;
+import com.sky.mapper.DayTourMapper;
+import com.sky.mapper.GroupTourMapper;
 import com.sky.mapper.TourBookingMapper;
 import com.sky.mapper.TourItineraryMapper;
 import com.sky.service.EmailService;
@@ -58,6 +62,12 @@ public class EmailServiceImpl implements EmailService {
 
     @Autowired
     private TourItineraryMapper tourItineraryMapper;
+    
+    @Autowired
+    private GroupTourMapper groupTourMapper;
+    
+    @Autowired
+    private DayTourMapper dayTourMapper;
 
     @Value("${sky.mail.from}")
     private String fromEmail;
@@ -112,7 +122,10 @@ public class EmailServiceImpl implements EmailService {
 
             // 从数据库数据构建完整的订单详情
             EmailConfirmationDTO.OrderDetails orderDetails = new EmailConfirmationDTO.OrderDetails();
-            orderDetails.setTourName("塔斯马尼亚旅游"); // TourBooking中没有tourName，使用默认值或通过tourId查询
+            
+            // 根据tourId和tourType获取真实的产品名称
+            String actualTourName = getTourNameByIdAndType(orderData.getTourId(), orderData.getTourType());
+            orderDetails.setTourName(actualTourName != null ? actualTourName : "塔斯马尼亚旅游");
             orderDetails.setTourType(orderData.getTourType());
             orderDetails.setStartDate(orderData.getTourStartDate() != null ? orderData.getTourStartDate().toString() : null);
             orderDetails.setEndDate(orderData.getTourEndDate() != null ? orderData.getTourEndDate().toString() : null);
@@ -227,7 +240,9 @@ public class EmailServiceImpl implements EmailService {
 
             // 确保其他必要字段也从数据库获取
             if (actualInvoiceDetails.getTourName() == null || actualInvoiceDetails.getTourName().isEmpty()) {
-                // 可以从tourData中获取tourName，这里暂时保持原逻辑
+                // 从数据库获取真实的产品名称
+                String actualTourName = getTourNameByIdAndType(orderData.getTourId(), orderData.getTourType());
+                actualInvoiceDetails.setTourName(actualTourName != null ? actualTourName : "塔斯马尼亚旅游");
             }
             if (actualInvoiceDetails.getAdultCount() == null) {
                 actualInvoiceDetails.setAdultCount(orderData.getAdultCount() != null ? orderData.getAdultCount() : 0);
@@ -410,5 +425,31 @@ public class EmailServiceImpl implements EmailService {
             log.error("❌ 邮件发送失败: 收件人={}, 主题={}, 错误信息={}", to, subject, e.getMessage(), e);
             throw e;
         }
+    }
+    
+    /**
+     * 根据tourId和tourType获取产品名称
+     * @param tourId 产品ID
+     * @param tourType 产品类型
+     * @return 产品名称
+     */
+    private String getTourNameByIdAndType(Integer tourId, String tourType) {
+        if (tourId == null || tourType == null) {
+            return null;
+        }
+        
+        try {
+            if ("group_tour".equals(tourType)) {
+                GroupTourDTO groupTour = groupTourMapper.getById(tourId);
+                return groupTour != null ? groupTour.getName() : null;
+            } else if ("day_tour".equals(tourType)) {
+                DayTour dayTour = dayTourMapper.getById(tourId);
+                return dayTour != null ? dayTour.getName() : null;
+            }
+        } catch (Exception e) {
+            log.error("获取产品名称失败: tourId={}, tourType={}", tourId, tourType, e);
+        }
+        
+        return null;
     }
 } 

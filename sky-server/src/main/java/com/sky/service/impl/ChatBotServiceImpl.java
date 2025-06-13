@@ -533,7 +533,9 @@ public class ChatBotServiceImpl implements ChatBotService {
                 
                 if (isAgent) {
                     // 中介用户（操作员或中介主号）跳转到中介订单页面
-                    redirectUrl = "/agent-booking/group-tours/" + product.getId() + "?" + orderParams;
+                    // 确保URL参数中包含tourId
+                    String agentOrderParams = "tourId=" + product.getId() + "&" + orderParams;
+                    redirectUrl = "/agent-booking/group-tours/" + product.getId() + "?" + agentOrderParams;
                     String userTypeName = (userType == 2) ? "操作员" : (userType == 3) ? "中介主号" : "中介用户";
                     log.info("{}，跳转到中介订单页面: {}", userTypeName, redirectUrl);
                 } else {
@@ -1267,9 +1269,26 @@ public class ChatBotServiceImpl implements ChatBotService {
                 return false;
                 
             } else if (userType == 3) {
-                // 中介主号：可以查询代理商下所有订单
-                log.info("✅ 中介主号权限：允许查看所有订单");
-                return true;
+                // 中介主号：只能查询自己代理商下的订单（agentId = currentUserId）
+                try {
+                    Long currentUserIdLong = Long.parseLong(currentUserId);
+                    log.info("userType=3权限检查详情(hasPermissionToViewBooking) - 订单agentId: {} (类型: {}), 当前userId: {} (类型: {})", 
+                        booking.getAgentId(), 
+                        booking.getAgentId() != null ? booking.getAgentId().getClass().getSimpleName() : "null",
+                        currentUserIdLong, 
+                        currentUserIdLong.getClass().getSimpleName());
+                    
+                    if (booking.getAgentId() != null && booking.getAgentId().longValue() == currentUserIdLong.longValue()) {
+                        log.info("✅ 中介主号权限：允许查看自己代理商的订单 (agentId={}, currentUserId={})", booking.getAgentId(), currentUserIdLong);
+                        return true;
+                    } else {
+                        log.info("❌ 中介主号权限：无权限查看其他代理商订单 (订单agentId={}, 当前userId={})", booking.getAgentId(), currentUserIdLong);
+                        return false;
+                    }
+                } catch (NumberFormatException e) {
+                    log.error("中介主号userId转换失败: {}", currentUserId);
+                    return false;
+                }
             }
             
         } catch (Exception e) {
@@ -3036,7 +3055,13 @@ public class ChatBotServiceImpl implements ChatBotService {
             
             if (orderInfo.getHotelLevel() != null && !orderInfo.getHotelLevel().trim().isEmpty()) {
                 try {
-                    params.append("hotelLevel=").append(java.net.URLEncoder.encode(orderInfo.getHotelLevel().trim(), "UTF-8")).append("&");
+                    String hotelLevel = orderInfo.getHotelLevel().trim();
+                    // 处理酒店星级：3.5星向下取整为3星，其他保持原样
+                    if (hotelLevel.equals("3.5星") || hotelLevel.equals("3.5")) {
+                        hotelLevel = "3星";
+                        log.info("酒店星级3.5向下取整为3星");
+                    }
+                    params.append("hotelLevel=").append(java.net.URLEncoder.encode(hotelLevel, "UTF-8")).append("&");
                 } catch (java.io.UnsupportedEncodingException e) {
                     params.append("hotelLevel=").append(orderInfo.getHotelLevel().trim()).append("&");
                 }
@@ -3460,6 +3485,13 @@ public class ChatBotServiceImpl implements ChatBotService {
     private boolean isOrderQueryRequest(String message) {
         String lowerMessage = message.toLowerCase();
         
+        // 首先检查是否包含订单号（HT开头的14位数字）
+        boolean hasOrderNumber = message.matches(".*\\bHT\\d{14}\\b.*");
+        if (hasOrderNumber) {
+            log.info("检测到订单号查询请求: {}", message);
+            return true;
+        }
+        
         // 检查是否包含订单查询关键词
         boolean hasOrderKeyword = lowerMessage.contains("订单") || 
                                  lowerMessage.contains("预订") || 
@@ -3538,11 +3570,12 @@ public class ChatBotServiceImpl implements ChatBotService {
             List<String> names = extractChineseNames(message);
             List<String> phones = extractPhoneNumbers(message);
             List<String> passports = extractPassportNumbers(message);
+            List<String> orderNumbers = extractOrderNumbers(message);
             
-            log.info("提取的查询信息 - 姓名: {}, 电话: {}, 护照: {}", names, phones, passports);
+            log.info("提取的查询信息 - 姓名: {}, 电话: {}, 护照: {}, 订单号: {}", names, phones, passports, orderNumbers);
             
             // 如果没有提取到有效的查询信息
-            if (names.isEmpty() && phones.isEmpty() && passports.isEmpty()) {
+            if (names.isEmpty() && phones.isEmpty() && passports.isEmpty() && orderNumbers.isEmpty()) {
                 String response = "请提供更具体的查询信息，比如：\n" +
                                "• 联系人姓名（如：张三、李小明、Liu）\n" +
                                "• 联系电话（如：13800138000）\n" +
@@ -3555,6 +3588,73 @@ public class ChatBotServiceImpl implements ChatBotService {
             
             // 查询订单 - 根据用户类型进行权限控制
             List<TourBooking> foundBookings = new ArrayList<>();
+            
+            // 按订单号查询（优先级最高）
+            for (String orderNumber : orderNumbers) {
+                TourBooking booking = tourBookingMapper.getByOrderNumber(orderNumber);
+                if (booking != null) {
+                    log.info("通过订单号 '{}' 查询到订单: bookingId={}, contactPerson={}, userId={}, agentId={}, operatorId={}", 
+                        orderNumber, booking.getBookingId(), booking.getContactPerson(),
+                        booking.getUserId(), booking.getAgentId(), booking.getOperatorId());
+                    
+                    // 根据用户类型进行权限控制
+                    boolean hasPermission = false;
+                    String permissionReason = "";
+                    
+                    if (userType == 1) {
+                        // 普通用户：只能查询自己的订单
+                        if (booking.getUserId() != null && booking.getUserId().equals(currentUserId.intValue())) {
+                            hasPermission = true;
+                            permissionReason = "普通用户查询自己的订单";
+                        } else {
+                            permissionReason = String.format("普通用户无权限查询他人订单 (订单userId=%s, 当前userId=%s)", 
+                                booking.getUserId(), currentUserId);
+                        }
+                    } else if (userType == 2) {
+                        // 操作员：只能查询自己创建的订单（operatorId = currentUserId）
+                        // 首先检查是否是代理商主号 - 如果订单的agentId等于当前userId，说明是代理商主号
+                        if (booking.getAgentId() != null && booking.getAgentId().equals(currentUserId.intValue())) {
+                            hasPermission = true;
+                            permissionReason = "代理商主号查询属下订单";
+                        }
+                        // 然后检查是否是操作员 - 如果订单的operatorId等于当前userId，说明是操作员
+                        else if (booking.getOperatorId() != null && booking.getOperatorId().equals(currentUserId)) {
+                            hasPermission = true;
+                            permissionReason = "操作员查询自己创建的订单";
+                        } else {
+                            permissionReason = String.format("userType=2权限验证失败：既不是代理商主号（订单agentId=%s, 当前userId=%s），也不是操作员（订单operatorId=%s, 当前userId=%s)", 
+                                booking.getAgentId(), currentUserId, booking.getOperatorId(), currentUserId);
+                        }
+                    } else if (userType == 3) {
+                        // 中介主号：可以查询代理商下所有订单（agentId = currentUserId）
+                        log.info("userType=3权限检查详情(按订单号) - 订单agentId: {} (类型: {}), 当前userId: {} (类型: {})", 
+                            booking.getAgentId(), 
+                            booking.getAgentId() != null ? booking.getAgentId().getClass().getSimpleName() : "null",
+                            currentUserId, 
+                            currentUserId.getClass().getSimpleName());
+                        
+                        // 修复：统一转换为Long类型进行比较
+                        if (booking.getAgentId() != null && booking.getAgentId().longValue() == currentUserId.longValue()) {
+                            hasPermission = true;
+                            permissionReason = "中介主号查询所属代理商的所有订单";
+                            log.info("✅ userType=3权限验证通过(按订单号)：订单agentId {} equals currentUserId {}", booking.getAgentId(), currentUserId);
+                        } else {
+                            permissionReason = String.format("中介主号无权限查询其他代理商订单 (订单agentId=%s, 当前agentId=%s)", 
+                                booking.getAgentId(), currentUserId);
+                            log.info("❌ userType=3权限验证失败(按订单号)：订单agentId {} not equals currentUserId {}", booking.getAgentId(), currentUserId);
+                        }
+                    }
+                    
+                    if (hasPermission) {
+                        foundBookings.add(booking);
+                        log.info("✅ 用户{}有权限访问订单{}: {}", currentUserId, booking.getBookingId(), permissionReason);
+                    } else {
+                        log.info("❌ 用户{}无权限访问订单{}: {}", currentUserId, booking.getBookingId(), permissionReason);
+                    }
+                } else {
+                    log.info("订单号 '{}' 未找到对应订单", orderNumber);
+                }
+            }
             
             // 按姓名查询
             for (String name : names) {
@@ -3610,13 +3710,21 @@ public class ChatBotServiceImpl implements ChatBotService {
                         }
                     } else if (userType == 3) {
                         // 中介主号：可以查询代理商下所有订单（agentId = currentUserId）
-                        // 修复：使用Long类型进行比较，不转换为Integer
-                        if (booking.getAgentId() != null && booking.getAgentId().equals(currentUserId)) {
+                        log.info("userType=3权限检查详情 - 订单agentId: {} (类型: {}), 当前userId: {} (类型: {})", 
+                            booking.getAgentId(), 
+                            booking.getAgentId() != null ? booking.getAgentId().getClass().getSimpleName() : "null",
+                            currentUserId, 
+                            currentUserId.getClass().getSimpleName());
+                        
+                        // 修复：统一转换为Long类型进行比较
+                        if (booking.getAgentId() != null && booking.getAgentId().longValue() == currentUserId.longValue()) {
                             hasPermission = true;
                             permissionReason = "中介主号查询所属代理商的所有订单";
+                            log.info("✅ userType=3权限验证通过：订单agentId {} equals currentUserId {}", booking.getAgentId(), currentUserId);
                         } else {
                             permissionReason = String.format("中介主号无权限查询其他代理商订单 (订单agentId=%s, 当前agentId=%s)", 
                                 booking.getAgentId(), currentUserId);
+                            log.info("❌ userType=3权限验证失败：订单agentId {} not equals currentUserId {}", booking.getAgentId(), currentUserId);
                         }
                     }
                     
@@ -3640,16 +3748,40 @@ public class ChatBotServiceImpl implements ChatBotService {
             log.info("最终找到 {} 个有权限的订单", foundBookings.size());
             
             if (foundBookings.isEmpty()) {
-                String response = "没有找到您有权限查看的相关订单信息。\n\n" +
-                               "可能的原因：\n" +
-                               "• 联系人姓名不匹配\n" +
-                               "• 订单不在您的权限范围内\n" +
-                               "• 信息输入有误\n\n" +
-                               "建议：\n" +
-                               "• 确认联系人姓名拼写正确（支持中文和英文）\n" +
-                               "• 提供订单号进行精确查询\n" +
-                               "• 联系客服协助查询\n\n" +
-                               String.format("调试信息：当前用户类型=%d, 用户ID=%d", userType, currentUserId);
+                StringBuilder responseBuilder = new StringBuilder();
+                responseBuilder.append("没有找到您有权限查看的相关订单信息。\n\n");
+                
+                // 如果提供了订单号但没找到，给出更具体的提示
+                if (!orderNumbers.isEmpty()) {
+                    responseBuilder.append("🔍 **订单号查询结果：**\n");
+                    for (String orderNumber : orderNumbers) {
+                        TourBooking booking = tourBookingMapper.getByOrderNumber(orderNumber);
+                        if (booking == null) {
+                            responseBuilder.append(String.format("• 订单号 `%s`：订单不存在\n", orderNumber));
+                        } else {
+                            responseBuilder.append(String.format("• 订单号 `%s`：订单存在但您无权限查看\n", orderNumber));
+                        }
+                    }
+                    responseBuilder.append("\n");
+                }
+                
+                responseBuilder.append("可能的原因：\n");
+                if (!orderNumbers.isEmpty()) {
+                    responseBuilder.append("• 订单号不存在或输入错误\n");
+                }
+                if (!names.isEmpty()) {
+                    responseBuilder.append("• 联系人姓名不匹配\n");
+                }
+                responseBuilder.append("• 订单不在您的权限范围内\n");
+                responseBuilder.append("• 信息输入有误\n\n");
+                
+                responseBuilder.append("建议：\n");
+                responseBuilder.append("• 确认订单号格式正确（如：HT2025061300145）\n");
+                responseBuilder.append("• 确认联系人姓名拼写正确（支持中文和英文）\n");
+                responseBuilder.append("• 联系客服协助查询\n\n");
+                responseBuilder.append(String.format("调试信息：当前用户类型=%d, 用户ID=%d", userType, currentUserId));
+                
+                String response = responseBuilder.toString();
                 
                 saveChatMessage(request, response, 2, null);
                 return ChatResponse.success(response);
@@ -3786,6 +3918,18 @@ public class ChatBotServiceImpl implements ChatBotService {
         
         name = name.trim();
         
+        // 排除订单号：HT开头的16位字符串
+        if (name.matches("HT\\d{14}")) {
+            log.info("'{}' 是订单号，跳过", name);
+            return false;
+        }
+        
+        // 排除订单号的部分：单独的HT
+        if (name.equalsIgnoreCase("HT")) {
+            log.info("'{}' 是订单号前缀，跳过", name);
+            return false;
+        }
+        
         // 长度检查
         if (name.length() < 2 || name.length() > 15) {
             log.info("'{}' 长度不符合要求，跳过", name);
@@ -3855,17 +3999,45 @@ public class ChatBotServiceImpl implements ChatBotService {
         Pattern pattern1 = Pattern.compile("[A-Z]\\d{8}");
         Matcher matcher1 = pattern1.matcher(text);
         while (matcher1.find()) {
-            passports.add(matcher1.group());
+            String passport = matcher1.group();
+            // 排除订单号的部分（如T20250613）
+            if (!passport.matches("T\\d{8}")) {
+                passports.add(passport);
+            }
         }
         
         // 其他国家护照格式：2个字母 + 7位数字
         Pattern pattern2 = Pattern.compile("[A-Z]{2}\\d{7}");
         Matcher matcher2 = pattern2.matcher(text);
         while (matcher2.find()) {
-            passports.add(matcher2.group());
+            String passport = matcher2.group();
+            // 排除订单号的部分（如HT2025061）
+            if (!passport.matches("HT\\d{7}")) {
+                passports.add(passport);
+            }
         }
         
         return passports;
+    }
+
+    /**
+     * 提取订单号（HT开头的订单号）
+     */
+    private List<String> extractOrderNumbers(String text) {
+        List<String> orderNumbers = new ArrayList<>();
+        
+        // 订单号格式：HT + 8位日期 + 4位序列号 + 2位随机数，例如：HT20250613000198
+        // 总长度：HT(2) + 14位数字 = 16位
+        Pattern orderPattern = Pattern.compile("HT\\d{14}");
+        Matcher matcher = orderPattern.matcher(text.toUpperCase());
+        
+        while (matcher.find()) {
+            String orderNumber = matcher.group();
+            orderNumbers.add(orderNumber);
+            log.info("提取到订单号: {}", orderNumber);
+        }
+        
+        return orderNumbers;
     }
     
     /**

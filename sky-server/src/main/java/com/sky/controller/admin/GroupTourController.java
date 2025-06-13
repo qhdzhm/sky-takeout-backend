@@ -186,6 +186,24 @@ public class GroupTourController {
     }
 
     /**
+     * 删除团队游行程安排
+     * @param itineraryId 行程ID
+     * @return 操作结果
+     */
+    @DeleteMapping("/itinerary/{itineraryId}")
+    @ApiOperation("删除团队游行程安排")
+    public Result<String> deleteItinerary(@PathVariable Integer itineraryId) {
+        log.info("删除团队游行程安排：{}", itineraryId);
+        try {
+            groupTourService.deleteGroupTourItinerary(itineraryId);
+            return Result.success("删除行程成功");
+        } catch (Exception e) {
+            log.error("删除行程失败：", e);
+            return Result.error("删除行程失败：" + e.getMessage());
+        }
+    }
+
+    /**
      * 获取团队游可用日期
      * @param tourId 团队游ID
      * @param params 查询参数

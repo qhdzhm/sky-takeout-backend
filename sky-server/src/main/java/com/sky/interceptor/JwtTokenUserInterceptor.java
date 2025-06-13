@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
@@ -70,27 +71,40 @@ public class JwtTokenUserInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        //1、尝试从请求头中获取令牌（多种方式）
+        //1、尝试获取令牌（优先从HttpOnly Cookie，然后从请求头）
         String token = null;
         
-        // 首先尝试从配置的用户token名称中获取
-        token = request.getHeader(jwtProperties.getUserTokenName());
-        
-        // 如果上面方式获取失败，尝试从"token"头获取
-        if (token == null) {
-            token = request.getHeader("token");
+        // 首先尝试从HttpOnly Cookie获取token
+        token = getTokenFromCookie(request);
+        if (token != null) {
+            log.debug("从HttpOnly Cookie获取到token");
         }
         
-        // 如果上面方式获取失败，尝试从"Authentication"头获取
+        // 如果Cookie中没有token，尝试从请求头获取（向后兼容）
         if (token == null) {
-            token = request.getHeader("Authentication");
-        }
-        
-        // 如果上面方式获取失败，尝试从"Authorization"头获取（可能带有Bearer前缀）
-        if (token == null) {
-            String authHeader = request.getHeader("Authorization");
-            if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                token = authHeader.substring(7);
+            // 首先尝试从配置的用户token名称中获取
+            token = request.getHeader(jwtProperties.getUserTokenName());
+            
+            // 如果上面方式获取失败，尝试从"token"头获取
+            if (token == null) {
+                token = request.getHeader("token");
+            }
+            
+            // 如果上面方式获取失败，尝试从"Authentication"头获取
+            if (token == null) {
+                token = request.getHeader("Authentication");
+            }
+            
+            // 如果上面方式获取失败，尝试从"Authorization"头获取（可能带有Bearer前缀）
+            if (token == null) {
+                String authHeader = request.getHeader("Authorization");
+                if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                    token = authHeader.substring(7);
+                }
+            }
+            
+            if (token != null) {
+                log.debug("从请求头获取到token");
             }
         }
         
@@ -190,4 +204,20 @@ public class JwtTokenUserInterceptor implements HandlerInterceptor {
             return false;
         }
     }
-}
+    
+    /**
+     * 从HttpOnly Cookie中获取token
+     */
+    private String getTokenFromCookie(HttpServletRequest request) {
+        if (request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
+                if ("authToken".equals(cookie.getName())) {
+                    log.debug("从Cookie中找到authToken");
+                    return cookie.getValue();
+                }
+            }
+        }
+        return null;
+    }
+} 
+

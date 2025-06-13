@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -49,23 +50,36 @@ public class JwtTokenAgentInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        // 1. 从请求头中获取令牌
-        String token = request.getHeader(jwtProperties.getAgentTokenName());
+        // 1. 尝试获取令牌（优先从HttpOnly Cookie，然后从请求头）
+        String token = null;
         
-        // 尝试从其他可能的地方获取令牌
-        if (token == null) {
-            token = request.getHeader("Authorization");
-            if (token != null && token.startsWith("Bearer ")) {
-                token = token.substring(7);
+        // 首先尝试从HttpOnly Cookie获取token
+        token = getTokenFromCookie(request);
+        if (token != null) {
+            log.debug("从HttpOnly Cookie获取到token");
+        } else {
+            // 如果Cookie中没有token，尝试从请求头获取（向后兼容）
+            token = request.getHeader(jwtProperties.getAgentTokenName());
+            
+            // 尝试从其他可能的地方获取令牌
+            if (token == null) {
+                token = request.getHeader("Authorization");
+                if (token != null && token.startsWith("Bearer ")) {
+                    token = token.substring(7);
+                }
             }
-        }
-        
-        if (token == null) {
-            token = request.getHeader("Authentication");
-        }
-        
-        if (token == null) {
-            token = request.getHeader("token");
+            
+            if (token == null) {
+                token = request.getHeader("Authentication");
+            }
+            
+            if (token == null) {
+                token = request.getHeader("token");
+            }
+            
+            if (token != null) {
+                log.debug("从请求头获取到token");
+            }
         }
         
         // 2. 校验令牌
@@ -152,6 +166,21 @@ public class JwtTokenAgentInterceptor implements HandlerInterceptor {
             writer.write(jsonResponse);
             writer.flush();
         }
+    }
+    
+    /**
+     * 从HttpOnly Cookie中获取token
+     */
+    private String getTokenFromCookie(HttpServletRequest request) {
+        if (request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
+                if ("authToken".equals(cookie.getName())) {
+                    log.debug("从Cookie中找到authToken");
+                    return cookie.getValue();
+                }
+            }
+        }
+        return null;
     }
     
     @Override
