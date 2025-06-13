@@ -176,6 +176,8 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
         configuration.addAllowedOriginPattern("http://localhost:3001");   // 管理后台前端
         configuration.addAllowedOriginPattern("http://127.0.0.1:3000");   // 用户端前端
         configuration.addAllowedOriginPattern("http://127.0.0.1:3001");   // 管理后台前端
+        configuration.addAllowedOriginPattern("https://htas.com.au");     // 生产环境前端
+        configuration.addAllowedOriginPattern("http://htas.com.au");      // 生产环境前端(HTTP)
         // 设置允许携带cookie（支持HttpOnly Cookie）
         configuration.setAllowCredentials(true);
         // 设置允许的请求方式
