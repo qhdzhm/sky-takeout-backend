@@ -76,16 +76,16 @@ sky:
     admin-token-name: token
 
     user-secret-key: itheima
-    user-ttl: 900000  # 15分钟 (15 * 60 * 1000)
+    user-ttl: 3600000  # 60分钟 (60 * 60 * 1000)
     user-token-name: authentication
     
     agent-secret-key: tasmania
-    agent-ttl: 900000  # 15分钟 (15 * 60 * 1000)
+    agent-ttl: 3600000  # 60分钟 (60 * 60 * 1000)
     agent-token-name: agent-token
     
     # Refresh Token配置
     refresh-token-ttl: 604800000  # 7天 (7 * 24 * 60 * 60 * 1000)
-    token-refresh-threshold: 5    # 提前5分钟刷新
+    token-refresh-threshold: 15    # 提前15分钟刷新
     
   alioss:
     endpoint: ${sky.alioss.endpoint}

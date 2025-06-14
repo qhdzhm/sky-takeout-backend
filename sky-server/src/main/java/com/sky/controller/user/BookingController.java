@@ -153,16 +153,17 @@ public class BookingController {
             log.info("💾 保存用户上下文信息用于异步邮件: userType={}, userId={}, agentId={}, operatorId={}", 
                     currentUserType, currentUserId, currentAgentId, currentOperatorId);
             
-            CompletableFuture.runAsync(() -> {
-                try {
-                    log.info("开始异步发送邮件: orderId={}", orderIdLong);
-                    sendEmailsAfterOrderCreation(orderIdLong, bookingVOFinal, 
-                            currentUserType, currentUserId, currentAgentId, currentOperatorId);
-                    log.info("异步邮件发送完成: orderId={}", orderIdLong);
-                } catch (Exception e) {
-                    log.error("异步邮件发送失败: orderId={}", orderIdLong, e);
-                }
-            });
+            // 注释掉订单创建时的邮件发送，改为支付后发送
+            // CompletableFuture.runAsync(() -> {
+            //     try {
+            //         log.info("开始异步发送邮件: orderId={}", orderIdLong);
+            //         sendEmailsAfterOrderCreation(orderIdLong, bookingVOFinal, 
+            //                 currentUserType, currentUserId, currentAgentId, currentOperatorId);
+            //         log.info("异步邮件发送完成: orderId={}", orderIdLong);
+            //     } catch (Exception e) {
+            //         log.error("异步邮件发送失败: orderId={}", orderIdLong, e);
+            //     }
+            // });
             
             Map<String, Object> data = new HashMap<>();
             data.put("bookingId", bookingVO.getBookingId());
