@@ -28,10 +28,10 @@ public class SecurityConfig {
     private static final ConcurrentHashMap<String, String> csrfTokenStore = new ConcurrentHashMap<>();
     
     /**
-     * CORS配置源
+     * CORS配置源 - 临时禁用，使用WebMvcConfiguration中的配置
      */
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    // @Bean
+    public CorsConfigurationSource corsConfigurationSource_disabled() {
         CorsConfiguration configuration = new CorsConfiguration();
         
         // 允许的域名（生产环境应该指定具体域名）
@@ -40,7 +40,10 @@ public class SecurityConfig {
             "http://localhost:3001",  // 管理后台前端
             "http://127.0.0.1:3000",  // 用户端前端
             "http://127.0.0.1:3001",  // 管理后台前端
-            "https://yourdomain.com"
+            "https://htas.com.au",    // 生产环境前端
+            "http://htas.com.au",     // 生产环境前端(HTTP)
+            "https://www.htas.com.au", // 生产环境前端(带www)
+            "http://www.htas.com.au"   // 生产环境前端(带www,HTTP)
         ));
         
         // 允许的HTTP方法

@@ -42,7 +42,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/agent")
 @Slf4j
-@CrossOrigin(origins = {"http://localhost:3000", "http://127.0.0.1:3000"}, allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST})
+// CORS现在由全局CorsFilter处理，移除@CrossOrigin注解
 public class AgentClientController {
 
     @Autowired
@@ -73,7 +73,12 @@ public class AgentClientController {
      */
     @PostMapping("/login")
     public Result<UserLoginVO> login(@RequestBody AgentLoginDTO agentLoginDTO, HttpServletResponse response) {
-        log.info("代理商登录请求：{}", agentLoginDTO.getUsername());
+        String clientIP = request.getRemoteAddr();
+        String userAgent = request.getHeader("User-Agent");
+        String origin = request.getHeader("Origin");
+        
+        log.info("代理商登录请求：用户名={}, IP={}, UserAgent={}, Origin={}", 
+                agentLoginDTO.getUsername(), clientIP, userAgent, origin);
         
         try {
             // 安全检查：防止普通用户通过代理商接口登录
@@ -201,21 +206,12 @@ public class AgentClientController {
             
             log.info("登录成功，用户类型: {}, 折扣率: {}", isOperator ? "操作员" : "代理商主账号", discountRate);
             
-            // 7. 设置HttpOnly Cookie用于安全存储
-            Cookie refreshTokenCookie = new Cookie("refreshToken", token);
-            refreshTokenCookie.setHttpOnly(true);
-            refreshTokenCookie.setSecure(false); // 开发环境设为false，生产环境应设为true
-            refreshTokenCookie.setPath("/");
-            refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60); // 7天
-            response.addCookie(refreshTokenCookie);
-
-            // 设置访问token Cookie
-            Cookie authTokenCookie = new Cookie("authToken", token);
-            authTokenCookie.setHttpOnly(true);
-            authTokenCookie.setSecure(false);
-            authTokenCookie.setPath("/");
-            authTokenCookie.setMaxAge(15 * 60); // 15分钟
-            response.addCookie(authTokenCookie);
+            // 7. 设置HttpOnly Cookie用于安全存储 - 增强跨平台兼容性
+            setCookieWithMultiplePaths(response, "refreshToken", token, true, 7 * 24 * 60 * 60);
+            setCookieWithMultiplePaths(response, "authToken", token, true, 15 * 60);
+            
+            // 设置额外的备用token cookie（用于兼容性）
+            setCookieWithMultiplePaths(response, "agentToken", token, true, 15 * 60);
 
             // 设置用户信息Cookie（非HttpOnly，供前端读取）
             Map<String, Object> userInfo = new HashMap<>();
@@ -407,6 +403,33 @@ public class AgentClientController {
         
         token = request.getHeader(jwtProperties.getAgentTokenName());
         return token;
+    }
+    
+    /**
+     * 设置Cookie到多个路径，增强跨平台兼容性
+     */
+    private void setCookieWithMultiplePaths(HttpServletResponse response, String name, String value, boolean httpOnly, int maxAge) {
+        // 设置到不同路径的Cookie
+        String[] paths = {"/", "/api", "/agent"};
+        
+        for (String path : paths) {
+            Cookie cookie = new Cookie(name, value);
+            cookie.setHttpOnly(httpOnly);
+            cookie.setSecure(false); // 开发环境设为false，生产环境应设为true
+            cookie.setPath(path);
+            cookie.setMaxAge(maxAge);
+            
+            // 设置SameSite属性以提高兼容性
+            if (httpOnly) {
+                // 对于HttpOnly Cookie，使用更宽松的SameSite策略
+                response.addHeader("Set-Cookie", String.format("%s=%s; Path=%s; Max-Age=%d; HttpOnly; SameSite=Lax", 
+                    name, value, path, maxAge));
+            } else {
+                response.addCookie(cookie);
+            }
+        }
+        
+        log.debug("已设置Cookie到多个路径: {} (maxAge: {})", name, maxAge);
     }
     
     /**

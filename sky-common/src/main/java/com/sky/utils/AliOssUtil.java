@@ -29,6 +29,7 @@ public class AliOssUtil {
     private String accessKeyId;
     private String accessKeySecret;
     private String bucketName;
+    private String cdnDomain;
     
     /**
      * 文件上传
@@ -52,11 +53,25 @@ public class AliOssUtil {
             // 上传文件
             ossClient.putObject(bucketName, objectName, new ByteArrayInputStream(bytes), metadata);
             
-            // 设置URL过期时间为100年，相当于永久
-            Date expiration = new Date(System.currentTimeMillis() + 3600L * 1000 * 24 * 365 * 100);
-            // 生成URL
-            URL url = ossClient.generatePresignedUrl(bucketName, objectName, expiration);
-            return url.toString();
+            // 如果配置了CDN域名，返回CDN地址；否则返回OSS地址
+            if (cdnDomain != null && !cdnDomain.isEmpty()) {
+                // 确保CDN域名以https://或http://开头
+                String domain = cdnDomain;
+                if (!domain.startsWith("http://") && !domain.startsWith("https://")) {
+                    domain = "https://" + domain;
+                }
+                // 确保域名末尾没有斜杠
+                if (domain.endsWith("/")) {
+                    domain = domain.substring(0, domain.length() - 1);
+                }
+                return domain + "/" + objectName;
+            } else {
+                // 原有逻辑：设置URL过期时间为100年，相当于永久
+                Date expiration = new Date(System.currentTimeMillis() + 3600L * 1000 * 24 * 365 * 100);
+                // 生成URL
+                URL url = ossClient.generatePresignedUrl(bucketName, objectName, expiration);
+                return url.toString();
+            }
         } catch (Exception e) {
             log.error("上传文件失败，{}", e.getMessage());
         } finally {

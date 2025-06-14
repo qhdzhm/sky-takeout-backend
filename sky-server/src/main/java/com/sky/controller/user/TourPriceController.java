@@ -19,7 +19,7 @@ import java.util.Map;
 @RequestMapping("/user/tour-price")
 @Api(tags = "旅游价格计算相关接口")
 @Slf4j
-@CrossOrigin(origins = {"http://localhost:3000", "http://127.0.0.1:3000"}, allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST})
+// CORS现在由全局CorsFilter处理，移除@CrossOrigin注解
 public class TourPriceController {
 
     @Autowired

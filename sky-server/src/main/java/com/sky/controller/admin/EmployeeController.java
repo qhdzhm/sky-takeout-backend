@@ -24,7 +24,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/admin/employee")
 @Slf4j
-@CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.OPTIONS})
+// CORS现在由全局CorsFilter处理，移除@CrossOrigin注解
 public class EmployeeController {
 
     @Autowired

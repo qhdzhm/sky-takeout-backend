@@ -21,7 +21,7 @@ import java.util.List;
 @RequestMapping("/user/payments")
 @Api(tags = "支付相关接口")
 @Slf4j
-@CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE})
+// CORS现在由全局CorsFilter处理，移除@CrossOrigin注解
 public class PaymentController {
 
     @Autowired

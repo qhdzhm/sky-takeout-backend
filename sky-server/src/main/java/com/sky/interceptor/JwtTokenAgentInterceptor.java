@@ -169,17 +169,33 @@ public class JwtTokenAgentInterceptor implements HandlerInterceptor {
     }
     
     /**
-     * 从HttpOnly Cookie中获取token
+     * 从HttpOnly Cookie中获取token - 增强跨平台兼容性
      */
     private String getTokenFromCookie(HttpServletRequest request) {
         if (request.getCookies() != null) {
+            // 记录所有Cookie用于调试
+            StringBuilder cookieDebug = new StringBuilder("所有Cookie: ");
             for (Cookie cookie : request.getCookies()) {
-                if ("authToken".equals(cookie.getName())) {
-                    log.debug("从Cookie中找到authToken");
-                    return cookie.getValue();
+                cookieDebug.append(cookie.getName()).append("=").append(cookie.getValue().substring(0, Math.min(cookie.getValue().length(), 10))).append("..., ");
+            }
+            log.debug(cookieDebug.toString());
+            
+            // 按优先级查找token
+            String[] tokenCookieNames = {"authToken", "token", "refreshToken", "agentToken"};
+            
+            for (String cookieName : tokenCookieNames) {
+                for (Cookie cookie : request.getCookies()) {
+                    if (cookieName.equals(cookie.getName())) {
+                        String tokenValue = cookie.getValue();
+                        if (tokenValue != null && !tokenValue.trim().isEmpty() && !"null".equals(tokenValue)) {
+                            log.debug("从Cookie中找到有效token: {}", cookieName);
+                            return tokenValue;
+                        }
+                    }
                 }
             }
         }
+        log.debug("未从Cookie中找到有效token");
         return null;
     }
     

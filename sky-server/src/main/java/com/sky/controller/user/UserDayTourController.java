@@ -25,7 +25,7 @@ import java.util.Map;
 @RequestMapping("/user/day-tours")
 @Api(tags = "用户端一日游相关接口")
 @Slf4j
-@CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE})
+// CORS现在由全局CorsFilter处理，移除@CrossOrigin注解
 public class UserDayTourController {
 
     @Autowired

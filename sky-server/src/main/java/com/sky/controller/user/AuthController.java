@@ -28,6 +28,7 @@ import java.util.Map;
 @RequestMapping("/auth")
 @Slf4j
 @Api(tags = "认证相关接口")
+// CORS现在由Nginx处理，移除@CrossOrigin注解
 public class AuthController {
 
     @Autowired
@@ -59,24 +60,66 @@ public class AuthController {
      */
     @PostMapping("/logout")
     @ApiOperation("安全登出")
-    public Result<String> logout(HttpServletResponse response) {
+    public Result<String> logout(HttpServletResponse response, HttpServletRequest request) {
         log.info("执行安全登出");
         
         try {
-            // 清除认证Cookie
-            SecurityConfig.clearSecureCookie(response, "authToken");
+            // 记录请求来源信息
+            String userAgent = request.getHeader("User-Agent");
+            String clientIp = request.getRemoteAddr();
+            log.info("登出请求 - IP: {}, User-Agent: {}", clientIp, userAgent);
             
-            // 清除用户信息Cookie
-            SecurityConfig.clearSecureCookie(response, "userInfo");
+            // 清除认证Cookie - 使用更强的清理策略
+            clearCookieMultipleWays(response, "authToken");
+            clearCookieMultipleWays(response, "userInfo");
+            clearCookieMultipleWays(response, "refreshToken");
             
-            // 清除Refresh Token Cookie
-            SecurityConfig.clearRefreshTokenCookie(response);
+            // 额外清理可能存在的其他认证Cookie
+            String[] cookiesToClear = {
+                "token", "jwt", "session", "auth", "login",
+                "agentToken", "operatorToken", "userToken"
+            };
             
-            log.info("安全登出成功");
+            for (String cookieName : cookiesToClear) {
+                clearCookieMultipleWays(response, cookieName);
+            }
+            
+            log.info("安全登出成功 - 已清理所有认证Cookie");
             return Result.success("登出成功");
         } catch (Exception e) {
             log.error("安全登出失败", e);
             return Result.error("登出失败：" + e.getMessage());
+        }
+    }
+    
+    /**
+     * 使用多种方式清理Cookie，确保跨平台兼容性
+     */
+    private void clearCookieMultipleWays(HttpServletResponse response, String cookieName) {
+        try {
+            // 方式1：标准清理
+            SecurityConfig.clearSecureCookie(response, cookieName);
+            
+            // 方式2：设置多个域名变体
+            String[] domains = {"localhost", "127.0.0.1", ".localhost", ".127.0.0.1"};
+            String[] paths = {"/", "/api", "/agent", "/user"};
+            
+            for (String domain : domains) {
+                for (String path : paths) {
+                    String cookieValue = String.format("%s=; Path=%s; Domain=%s; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0", 
+                        cookieName, path, domain);
+                    response.addHeader("Set-Cookie", cookieValue);
+                    
+                    // 同时设置HttpOnly和Secure变体
+                    String secureCookieValue = String.format("%s=; Path=%s; Domain=%s; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; HttpOnly", 
+                        cookieName, path, domain);
+                    response.addHeader("Set-Cookie", secureCookieValue);
+                }
+            }
+            
+            log.debug("已清理Cookie: {}", cookieName);
+        } catch (Exception e) {
+            log.warn("清理Cookie失败: {} - {}", cookieName, e.getMessage());
         }
     }
 

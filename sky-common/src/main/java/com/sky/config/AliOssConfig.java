@@ -25,6 +25,7 @@ public class AliOssConfig {
                 aliOssProperties.getEndpoint(),
                 aliOssProperties.getAccessKeyId(),
                 aliOssProperties.getAccessKeySecret(),
-                aliOssProperties.getBucketName());
+                aliOssProperties.getBucketName(),
+                aliOssProperties.getCdnDomain());
     }
 } 

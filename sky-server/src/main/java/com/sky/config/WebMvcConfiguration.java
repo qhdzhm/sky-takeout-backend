@@ -164,7 +164,7 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
     }
 
     /**
-     * 配置跨域
+     * 配置跨域 - 重新启用，使用白名单模式
      * @return
      */
     @Bean
@@ -178,6 +178,8 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
         configuration.addAllowedOriginPattern("http://127.0.0.1:3001");   // 管理后台前端
         configuration.addAllowedOriginPattern("https://htas.com.au");     // 生产环境前端
         configuration.addAllowedOriginPattern("http://htas.com.au");      // 生产环境前端(HTTP)
+        configuration.addAllowedOriginPattern("https://www.htas.com.au"); // 生产环境前端(带www)
+        configuration.addAllowedOriginPattern("http://www.htas.com.au");  // 生产环境前端(带www,HTTP)
         // 设置允许携带cookie（支持HttpOnly Cookie）
         configuration.setAllowCredentials(true);
         // 设置允许的请求方式
