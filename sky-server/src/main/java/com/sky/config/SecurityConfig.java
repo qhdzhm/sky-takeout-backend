@@ -85,10 +85,10 @@ public class SecurityConfig {
     }
     
     /**
-     * CSRF保护过滤器
+     * CSRF保护过滤器 - 暂时禁用，因为这是API服务，已有JWT和CORS保护
      */
-    @Bean
-    public FilterRegistrationBean<CsrfProtectionFilter> csrfProtectionFilter() {
+    // @Bean
+    public FilterRegistrationBean<CsrfProtectionFilter> csrfProtectionFilter_disabled() {
         FilterRegistrationBean<CsrfProtectionFilter> registrationBean = new FilterRegistrationBean<>();
         registrationBean.setFilter(new CsrfProtectionFilter());
         registrationBean.addUrlPatterns("/*");
@@ -173,6 +173,9 @@ public class SecurityConfig {
                 "/user/register", 
                 "/user/agent/login",
                 "/agent/login",
+                "/agent/profile",    // 代理商资料接口
+                "/agent/stats",      // 代理商统计接口
+                "/agent/",           // 所有代理商相关接口
                 "/admin/employee/login",
                 "/auth/csrf-token",  // 更新路径
                 "/auth/refresh",     // 更新路径
@@ -182,7 +185,10 @@ public class SecurityConfig {
                 "/user/bookings/tour/calculate-price",  // 价格计算接口
                 "/user/bookings/tour/create",  // 订单创建接口
                 "/user/bookings/",   // 所有订单相关接口
-                "/user/payments/"    // 所有支付相关接口
+                "/user/payments/",   // 所有支付相关接口
+                "/user/day-tours",   // 一日游相关接口
+                "/user/group-tours", // 团体游相关接口
+                "/user/tours"        // 旅游产品相关接口
             };
             
             for (String path : excludedPaths) {
