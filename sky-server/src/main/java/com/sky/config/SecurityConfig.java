@@ -179,7 +179,10 @@ public class SecurityConfig {
                 "/auth/logout",      // 更新路径
                 "/chatbot/message",  // 聊天机器人消息接口
                 "/chatbot/health",   // 聊天机器人健康检查
-                "/user/bookings/tour/calculate-price"  // 价格计算接口
+                "/user/bookings/tour/calculate-price",  // 价格计算接口
+                "/user/bookings/tour/create",  // 订单创建接口
+                "/user/bookings/",   // 所有订单相关接口
+                "/user/payments/"    // 所有支付相关接口
             };
             
             for (String path : excludedPaths) {
