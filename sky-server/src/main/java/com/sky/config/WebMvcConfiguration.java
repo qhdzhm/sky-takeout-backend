@@ -60,7 +60,6 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
         registry.addInterceptor(jwtTokenAgentInterceptor)
                 .addPathPatterns("/agent/**")  // 代理商相关接口
                 .excludePathPatterns("/agent/login")  // 排除代理商登录
-                .excludePathPatterns("/agent/logout")  // 排除代理商退出登录
                 .excludePathPatterns("/agent/discount-rate")  // 排除折扣率查询（可能被公开调用）
                 .excludePathPatterns("/agent/*/discount-rate");  // 排除特定代理商折扣率查询
 
@@ -73,7 +72,7 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
                 .excludePathPatterns("/user/login")
                 .excludePathPatterns("/user/register")
                 .excludePathPatterns("/user/shop/status")
-
+                .excludePathPatterns("/user/agent/login")  // 排除代理商登录
                 .excludePathPatterns("/api/auth/csrf-token")  // CSRF token获取不需要认证
                 .excludePathPatterns("/api/auth/logout")      // 登出接口不需要认证
                 .excludePathPatterns("/chatbot/health")       // ChatBot健康检查不需要认证
@@ -95,10 +94,10 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
                 .excludePathPatterns("/user/group-tours/themes")
                 .excludePathPatterns("/user/tours/suitable-for-options")
                 .excludePathPatterns("/regions")
-                // 酒店价格和价格计算API也不需要身份验证（支持游客模式）
+                // 酒店价格和价格计算API也不需要身份验证
                 .excludePathPatterns("/user/bookings/hotel-prices")
                 .excludePathPatterns("/user/bookings/tour/calculate-price")  // 游客价格计算API不需要认证
-                // 注意：/user/bookings/tour/create 需要认证以支持代理商下单，但也要支持游客模式
+                .excludePathPatterns("/user/bookings/tour/create")  // 游客下单API不需要认证
                 // 静态资源和Swagger文档
                 .excludePathPatterns("/")
                 .excludePathPatterns("/error")
@@ -182,6 +181,7 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
         configuration.addAllowedOriginPattern("http://htas.com.au");      // 生产环境前端(HTTP)
         configuration.addAllowedOriginPattern("https://www.htas.com.au"); // 生产环境前端(带www)
         configuration.addAllowedOriginPattern("http://www.htas.com.au");  // 生产环境前端(带www,HTTP)
+        configuration.addAllowedOriginPattern("https://admin.htas.com.au"); // 管理后台前端
         // 设置允许携带cookie（支持HttpOnly Cookie）
         configuration.setAllowCredentials(true);
         // 设置允许的请求方式
