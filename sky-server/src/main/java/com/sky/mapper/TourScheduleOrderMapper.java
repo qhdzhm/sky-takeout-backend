@@ -86,4 +86,14 @@ public interface TourScheduleOrderMapper {
      * @param bookingId 订单ID
      */
     void deleteByBookingId(Integer bookingId);
+
+    /**
+     * 根据订单ID更新联系人信息
+     * @param bookingId 订单ID
+     * @param contactPerson 联系人姓名
+     * @param contactPhone 联系人电话
+     * @return 更新的记录数
+     */
+    @Update("UPDATE tour_schedule_order SET contact_person=#{contactPerson}, contact_phone=#{contactPhone}, updated_at=NOW() WHERE booking_id=#{bookingId}")
+    int updateContactInfoByBookingId(Integer bookingId, String contactPerson, String contactPhone);
 } 

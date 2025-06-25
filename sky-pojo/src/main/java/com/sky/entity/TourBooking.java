@@ -152,4 +152,7 @@ public class TourBooking implements Serializable {
     
     // 推荐码
     private String referralCode;
-} 
+    
+    // 用户选择的可选项目（JSON字符串）
+    private String selectedOptionalTours;
+}

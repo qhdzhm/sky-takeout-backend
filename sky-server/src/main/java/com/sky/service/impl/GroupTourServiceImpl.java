@@ -13,7 +13,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -167,7 +169,88 @@ public class GroupTourServiceImpl implements GroupTourService {
      */
     @Override
     public List<Map<String, Object>> getGroupTourItinerary(Integer tourId) {
-        return groupTourMapper.getItinerary(tourId);
+        log.info("获取跟团游行程安排，ID：{}", tourId);
+        
+        // 1. 优先获取关联的一日游数据
+        List<Map<String, Object>> dayTourRelations = getGroupTourDayTours(tourId);
+        
+        if (dayTourRelations != null && !dayTourRelations.isEmpty()) {
+            log.info("使用关联一日游生成行程，关联数量：{}", dayTourRelations.size());
+            
+            // 按天数分组
+            Map<Integer, List<Map<String, Object>>> dayToursMap = new HashMap<>();
+            for (Map<String, Object> relation : dayTourRelations) {
+                Integer dayNumber = (Integer) relation.get("day_number");
+                dayToursMap.computeIfAbsent(dayNumber, k -> new ArrayList<>()).add(relation);
+            }
+            
+            // 生成行程列表
+            List<Map<String, Object>> itinerary = new ArrayList<>();
+            for (Map.Entry<Integer, List<Map<String, Object>>> entry : dayToursMap.entrySet()) {
+                Integer dayNumber = entry.getKey();
+                List<Map<String, Object>> dayTours = entry.getValue();
+                
+                Map<String, Object> dayItinerary = new HashMap<>();
+                dayItinerary.put("day", dayNumber);
+                dayItinerary.put("day_number", dayNumber);
+                
+                if (dayTours.size() == 1) {
+                    // 单个一日游
+                    Map<String, Object> dayTour = dayTours.get(0);
+                    dayItinerary.put("title", "第" + dayNumber + "天: " + dayTour.get("day_tour_name"));
+                    dayItinerary.put("description", dayTour.get("day_tour_description"));
+                    dayItinerary.put("location", dayTour.get("location"));
+                    dayItinerary.put("is_optional", dayTour.get("is_optional"));
+                } else {
+                    // 多个一日游（可选）
+                    Map<String, Object> mainTour = dayTours.get(0);
+                    int otherCount = dayTours.size() - 1;
+                    
+                    dayItinerary.put("title", "第" + dayNumber + "天: " + mainTour.get("day_tour_name") + 
+                                           " (含" + otherCount + "个其他可选项目)");
+                    
+                    // 构建描述，包含所有选项
+                    StringBuilder description = new StringBuilder();
+                    description.append("🎯 主要选项：").append(mainTour.get("day_tour_description")).append("\n\n");
+                    description.append("🔄 其他可选项目：\n");
+                    
+                    for (int i = 1; i < dayTours.size(); i++) {
+                        Map<String, Object> tour = dayTours.get(i);
+                        description.append("• ").append(tour.get("day_tour_name")).append("\n");
+                    }
+                    
+                    dayItinerary.put("description", description.toString());
+                    dayItinerary.put("location", mainTour.get("location"));
+                    dayItinerary.put("is_optional", true);
+                    dayItinerary.put("optional_tours", dayTours); // 包含所有可选项目
+                }
+                
+                // 默认餐食和住宿
+                dayItinerary.put("meals", "早餐");
+                dayItinerary.put("accommodation", "酒店");
+                
+                itinerary.add(dayItinerary);
+            }
+            
+            // 按天数排序
+            itinerary.sort((a, b) -> Integer.compare((Integer) a.get("day_number"), (Integer) b.get("day_number")));
+            
+            log.info("基于关联一日游生成行程完成，天数：{}", itinerary.size());
+            return itinerary;
+        }
+        
+        // 2. 回退到标准行程
+        log.info("没有关联一日游，使用标准行程");
+        List<Map<String, Object>> standardItinerary = groupTourMapper.getItinerary(tourId);
+        
+        if (standardItinerary != null && !standardItinerary.isEmpty()) {
+            log.info("使用标准行程，天数：{}", standardItinerary.size());
+            return standardItinerary;
+        }
+        
+        // 3. 如果都没有，返回空列表
+        log.warn("跟团游{}没有任何行程数据", tourId);
+        return new ArrayList<>();
     }
 
     /**
@@ -291,79 +374,43 @@ public class GroupTourServiceImpl implements GroupTourService {
 
     @Override
     @Transactional
-    public void saveGroupTourDayTours(Integer groupTourId, List<Map<String, Object>> dayTours) {
-        log.info("保存团队游关联的一日游，ID：{}，数据数量：{}", groupTourId, dayTours != null ? dayTours.size() : 0);
+    public void saveGroupTourDayTours(Integer groupTourId, List<Map<String, Object>> dayTourData) {
+        log.info("保存团队游关联的一日游，ID：{}，数据数量：{}", groupTourId, dayTourData.size());
         
-        try {
-            // 先删除原有关联
-            groupTourMapper.deleteGroupTourDayTours(groupTourId);
+        // 先删除现有关联
+        groupTourMapper.deleteGroupTourDayTours(groupTourId);
+        
+        // 保存新的关联
+        for (Map<String, Object> data : dayTourData) {
+            Integer dayTourId = Integer.valueOf(data.get("dayTourId").toString());
+            Integer dayNumber = Integer.valueOf(data.get("dayNumber").toString());
             
-            // 批量插入新关联
-            if (dayTours != null && !dayTours.isEmpty()) {
-                for (Map<String, Object> item : dayTours) {
-                    Integer dayTourId = Integer.parseInt(item.get("dayTourId").toString());
-                    Integer dayNumber = Integer.parseInt(item.get("dayNumber").toString());
-                    Boolean isOptional = Boolean.parseBoolean(item.get("isOptional").toString());
-                    
-                    // 如果有行程信息，同时更新行程表
-                    if (item.containsKey("itineraryTitle") && item.containsKey("itineraryDescription")) {
-                        // 检查该天是否已有行程
-                        List<Map<String, Object>> existingItineraries = groupTourMapper.getItinerary(groupTourId);
-                        boolean dayExists = false;
-                        Integer existingId = null;
-                        
-                        for (Map<String, Object> existing : existingItineraries) {
-                            Integer existingDay = (Integer) existing.get("day");
-                            if (existingDay != null && existingDay.equals(dayNumber)) {
-                                dayExists = true;
-                                existingId = (Integer) existing.get("id");
-                                break;
-                            }
-                        }
-                        
-                        String title = (String) item.get("itineraryTitle");
-                        String description = (String) item.get("itineraryDescription");
-                        String meals = item.containsKey("meals") ? (String) item.get("meals") : "早餐";
-                        String accommodation = item.containsKey("accommodation") ? (String) item.get("accommodation") : "酒店";
-                        
-                        if (dayExists && existingId != null) {
-                            // 更新现有行程
-                            groupTourMapper.updateItinerary(
-                                existingId,
-                                groupTourId,
-                                dayNumber,
-                                title,
-                                description,
-                                meals,
-                                accommodation
-                            );
-                        } else {
-                            // 添加新行程
-                            groupTourMapper.insertItinerary(
-                                groupTourId,
-                                dayNumber,
-                                title,
-                                description,
-                                meals,
-                                accommodation
-                            );
+            // 处理价格差异
+            BigDecimal priceDifference = BigDecimal.ZERO;
+            if (data.get("priceDifference") != null) {
+                try {
+                    Object priceDiffObj = data.get("priceDifference");
+                    if (priceDiffObj instanceof Number) {
+                        priceDifference = new BigDecimal(priceDiffObj.toString());
+                    } else if (priceDiffObj instanceof String) {
+                        String priceDiffStr = (String) priceDiffObj;
+                        if (!priceDiffStr.isEmpty()) {
+                            priceDifference = new BigDecimal(priceDiffStr);
                         }
                     }
-                    
-                    groupTourMapper.saveGroupTourDayTour(
-                        groupTourId,
-                        dayTourId,
-                        dayNumber,
-                        isOptional ? 1 : 0
-                    );
+                } catch (NumberFormatException e) {
+                    log.warn("价格差异格式错误，使用默认值0: {}", data.get("priceDifference"));
+                    priceDifference = BigDecimal.ZERO;
                 }
             }
             
-            log.info("保存团队游关联的一日游成功");
-        } catch (Exception e) {
-            log.error("保存团队游关联的一日游失败，错误：{}", e.getMessage());
-            throw new RuntimeException("保存团队游关联的一日游失败", e);
+            log.info("保存一日游关联 - 团队游ID: {}, 一日游ID: {}, 天数: {}, 价格差异: {}", 
+                    groupTourId, dayTourId, dayNumber, priceDifference);
+            
+            groupTourMapper.saveGroupTourDayTourWithPriceOnly(groupTourId, dayTourId, dayNumber, priceDifference);
         }
+        
+        log.info("团队游关联一日游保存完成");
     }
 
     /**

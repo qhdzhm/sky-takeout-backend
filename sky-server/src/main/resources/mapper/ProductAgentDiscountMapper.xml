@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.ProductAgentDiscountMapper">
+
+    <resultMap id="BaseResultMap" type="com.sky.entity.ProductAgentDiscount">
+        <id column="id" property="id"/>
+        <result column="product_type" property="productType"/>
+        <result column="product_id" property="productId"/>
+        <result column="level_id" property="levelId"/>
+        <result column="discount_rate" property="discountRate"/>
+        <result column="min_order_amount" property="minOrderAmount"/>
+        <result column="max_discount_amount" property="maxDiscountAmount"/>
+        <result column="valid_from" property="validFrom"/>
+        <result column="valid_until" property="validUntil"/>
+        <result column="is_active" property="isActive"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, product_type, product_id, level_id, discount_rate, min_order_amount, 
+        max_discount_amount, valid_from, valid_until, is_active, created_at, updated_at
+    </sql>
+
+    <!-- 根据代理商ID、产品类型和产品ID查询折扣配置 -->
+    <select id="findByAgentAndProduct" resultMap="BaseResultMap">
+        SELECT pad.*
+        FROM product_agent_discount pad
+        LEFT JOIN agents a ON a.discount_level_id = pad.level_id
+        WHERE a.id = #{agentId}
+          AND pad.product_type = #{productType}
+          AND pad.product_id = #{productId}
+          AND pad.is_active = 1
+          AND (pad.valid_from IS NULL OR pad.valid_from &lt;= NOW())
+          AND (pad.valid_until IS NULL OR pad.valid_until &gt; NOW())
+    </select>
+
+    <!-- 根据等级ID、产品类型和产品ID查询折扣配置 -->
+    <select id="findByLevelAndProduct" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM product_agent_discount
+        WHERE level_id = #{levelId}
+          AND product_type = #{productType}
+          AND product_id = #{productId}
+          AND is_active = 1
+          AND (valid_from IS NULL OR valid_from &lt;= NOW())
+          AND (valid_until IS NULL OR valid_until &gt; NOW())
+    </select>
+
+    <!-- 根据代理商ID查询所有可用的折扣配置 -->
+    <select id="findByAgentId" resultMap="BaseResultMap">
+        SELECT pad.*
+        FROM product_agent_discount pad
+        LEFT JOIN agents a ON a.discount_level_id = pad.level_id
+        WHERE a.id = #{agentId}
+          AND pad.is_active = 1
+          AND (pad.valid_from IS NULL OR pad.valid_from &lt;= NOW())
+          AND (pad.valid_until IS NULL OR pad.valid_until &gt; NOW())
+        ORDER BY pad.product_type, pad.product_id
+    </select>
+
+    <!-- 根据等级ID查询所有折扣配置 -->
+    <select id="findByLevelId" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM product_agent_discount
+        WHERE level_id = #{levelId}
+        ORDER BY product_type, product_id
+    </select>
+
+    <!-- 根据产品查询所有折扣配置 -->
+    <select id="findByProduct" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM product_agent_discount
+        WHERE product_type = #{productType}
+          AND product_id = #{productId}
+        ORDER BY level_id
+    </select>
+
+    <!-- 根据ID查询折扣配置 -->
+    <select id="findById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM product_agent_discount
+        WHERE id = #{id}
+    </select>
+
+    <!-- 插入折扣配置 -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO product_agent_discount
+        (product_type, product_id, level_id, discount_rate, min_order_amount, 
+         max_discount_amount, valid_from, valid_until, is_active, created_at, updated_at)
+        VALUES
+        (#{productType}, #{productId}, #{levelId}, #{discountRate}, #{minOrderAmount}, 
+         #{maxDiscountAmount}, #{validFrom}, #{validUntil}, #{isActive}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <!-- 更新折扣配置 -->
+    <update id="update">
+        UPDATE product_agent_discount
+        SET discount_rate = #{discountRate},
+            <if test="minOrderAmount != null">
+                min_order_amount = #{minOrderAmount},
+            </if>
+            <if test="maxDiscountAmount != null">
+                max_discount_amount = #{maxDiscountAmount},
+            </if>
+            <if test="validFrom != null">
+                valid_from = #{validFrom},
+            </if>
+            <if test="validUntil != null">
+                valid_until = #{validUntil},
+            </if>
+            is_active = #{isActive},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <!-- 删除折扣配置 -->
+    <delete id="deleteById">
+        DELETE FROM product_agent_discount WHERE id = #{id}
+    </delete>
+
+    <!-- 批量更新某个等级的折扣率 -->
+    <update id="batchUpdateDiscountRate">
+        UPDATE product_agent_discount
+        SET discount_rate = #{discountRate},
+            updated_at = NOW()
+        WHERE level_id = #{levelId}
+        <if test="productType != null and productType != ''">
+            AND product_type = #{productType}
+        </if>
+    </update>
+
+    <!-- 批量插入产品折扣配置 -->
+    <insert id="batchInsert">
+        INSERT INTO product_agent_discount
+        (product_type, product_id, level_id, discount_rate, min_order_amount, 
+         max_discount_amount, valid_from, valid_until, is_active, created_at, updated_at)
+        VALUES
+        <foreach collection="discounts" item="item" separator=",">
+            (#{item.productType}, #{item.productId}, #{item.levelId}, #{item.discountRate}, 
+             #{item.minOrderAmount}, #{item.maxDiscountAmount}, #{item.validFrom}, 
+             #{item.validUntil}, #{item.isActive}, #{item.createdAt}, #{item.updatedAt})
+        </foreach>
+    </insert>
+
+</mapper> 

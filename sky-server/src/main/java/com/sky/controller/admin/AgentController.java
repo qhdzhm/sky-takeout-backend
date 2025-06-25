@@ -122,6 +122,20 @@ public class AgentController {
     }
 
     /**
+     * 更新代理商折扣等级
+     * @param agentId 代理商ID
+     * @param discountLevelId 折扣等级ID
+     * @return 结果
+     */
+    @PutMapping("/{agentId}/discount-level/{discountLevelId}")
+    @ApiOperation("更新代理商折扣等级")
+    public Result<String> updateDiscountLevel(@PathVariable Long agentId, @PathVariable Long discountLevelId) {
+        log.info("更新代理商折扣等级：agentId={}, discountLevelId={}", agentId, discountLevelId);
+        agentService.updateDiscountLevel(agentId, discountLevelId);
+        return Result.success();
+    }
+
+    /**
      * 获取代理商列表（下拉选择使用）
      * @param name 代理商名称（可选，用于搜索）
      * @param id 代理商ID（可选，精确查询）

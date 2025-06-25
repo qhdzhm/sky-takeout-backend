@@ -89,4 +89,11 @@ public interface AgentService {
      * @param passwordChangeDTO 密码修改信息
      */
     void changePassword(Long agentId, PasswordChangeDTO passwordChangeDTO);
+    
+    /**
+     * 更新代理商折扣等级
+     * @param agentId 代理商ID
+     * @param discountLevelId 折扣等级ID
+     */
+    void updateDiscountLevel(Long agentId, Long discountLevelId);
 } 

@@ -204,6 +204,19 @@ public class UserGroupTourController {
         List<String> tips = groupTourService.getGroupTourTips(tourId);
         return Result.success(tips);
     }
+
+    /**
+     * 获取跟团游关联的一日游
+     * @param tourId 跟团游ID
+     * @return 一日游关联列表
+     */
+    @GetMapping("/{id}/day-tours")
+    @ApiOperation("获取跟团游关联的一日游")
+    public Result<List<Map<String, Object>>> getGroupTourDayTours(@PathVariable("id") Integer tourId) {
+        log.info("获取跟团游关联的一日游，ID：{}", tourId);
+        List<Map<String, Object>> dayTours = groupTourService.getGroupTourDayTours(tourId);
+        return Result.success(dayTours);
+    }
     
     /**
      * 为旅游列表应用折扣

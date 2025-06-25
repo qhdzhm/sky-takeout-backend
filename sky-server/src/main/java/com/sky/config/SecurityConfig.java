@@ -171,7 +171,7 @@ public class SecurityConfig {
             String[] excludedPaths = {
                 "/user/login",
                 "/user/register", 
-                "/user/agent/login",
+
                 "/agent/login",
                 "/agent/profile",    // 代理商资料接口
                 "/agent/stats",      // 代理商统计接口
@@ -229,72 +229,7 @@ public class SecurityConfig {
     }
     
     /**
-     * 设置安全Cookie（HttpOnly）
-     */
-    public static void setSecureCookie(HttpServletResponse response, String name, String value, int maxAge) {
-        Cookie cookie = new Cookie(name, value);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false); // 开发环境设为false，生产环境设为true
-        cookie.setPath("/");
-        cookie.setMaxAge(maxAge);
-        // cookie.setSameSite(Cookie.SameSite.STRICT); // Java 8不支持，需要手动设置
-        
-        // 手动设置SameSite属性
-        String cookieHeader = String.format("%s=%s; Path=/; Max-Age=%d; HttpOnly; SameSite=Strict", 
-            name, value, maxAge);
-        response.addHeader("Set-Cookie", cookieHeader);
-    }
-    
-    /**
-     * 设置普通Cookie（非HttpOnly，可被JavaScript访问）
-     */
-    public static void setRegularCookie(HttpServletResponse response, String name, String value, int maxAge) {
-        Cookie cookie = new Cookie(name, value);
-        cookie.setHttpOnly(false); // 允许JavaScript访问
-        cookie.setSecure(false); // 开发环境设为false，生产环境设为true
-        cookie.setPath("/");
-        cookie.setMaxAge(maxAge);
-        
-        // 手动设置SameSite属性（不包含HttpOnly）
-        String cookieHeader = String.format("%s=%s; Path=/; Max-Age=%d; SameSite=Strict", 
-            name, value, maxAge);
-        response.addHeader("Set-Cookie", cookieHeader);
-    }
-    
-    /**
-     * 清除安全Cookie
-     */
-    public static void clearSecureCookie(HttpServletResponse response, String name) {
-        Cookie cookie = new Cookie(name, "");
-        cookie.setHttpOnly(true);
-        cookie.setPath("/");
-        cookie.setMaxAge(0);
-        
-        // 手动设置清除Cookie的头部
-        String cookieHeader = String.format("%s=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict", name);
-        response.addHeader("Set-Cookie", cookieHeader);
-    }
-
-    /**
-     * 设置Refresh Token Cookie（HttpOnly，长期有效）
-     */
-    public static void setRefreshTokenCookie(HttpServletResponse response, String refreshToken, int maxAge) {
-        // 手动设置HttpOnly Cookie，确保安全性
-        String cookieHeader = String.format("refreshToken=%s; Path=/; Max-Age=%d; HttpOnly; SameSite=Strict; Secure=false", 
-            refreshToken, maxAge);
-        response.addHeader("Set-Cookie", cookieHeader);
-    }
-
-    /**
-     * 清除Refresh Token Cookie
-     */
-    public static void clearRefreshTokenCookie(HttpServletResponse response) {
-        String cookieHeader = "refreshToken=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict";
-        response.addHeader("Set-Cookie", cookieHeader);
-    }
-
-    /**
-     * 从请求中获取Cookie值
+     * 从请求中获取Cookie值 - 保留此方法用于获取refresh token
      */
     public static String getCookieValue(javax.servlet.http.HttpServletRequest request, String cookieName) {
         if (request.getCookies() != null) {

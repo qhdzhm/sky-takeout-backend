@@ -83,18 +83,18 @@ public class AgentCreditController {
             responseData.put("overdraftCount", creditInfo.getOverdraftCount());
             responseData.put("createdAt", creditInfo.getCreatedAt());
         } else {
-            // 操作员看到的是脱敏数据
-            responseData.put("totalCredit", null);
-            responseData.put("usedCredit", null);
-            responseData.put("availableCredit", null);
-            responseData.put("depositBalance", null);
-            responseData.put("creditRating", null);
-            responseData.put("interestRate", null);
-            responseData.put("billingCycleDay", null);
-            responseData.put("lastSettlementDate", null);
-            responseData.put("overdraftCount", null);
-            responseData.put("createdAt", null);
-            log.info("操作员访问，已脱敏处理金额相关信息");
+            // 操作员可以看到基本信用信息以支持支付功能，但隐藏敏感的财务详情
+            responseData.put("totalCredit", creditInfo.getTotalCredit());     // 显示总额度
+            responseData.put("availableCredit", creditInfo.getAvailableCredit()); // 显示可用额度（支付功能需要）
+            responseData.put("usedCredit", null);                            // 隐藏已用额度
+            responseData.put("depositBalance", null);                        // 隐藏押金余额
+            responseData.put("creditRating", null);                          // 隐藏信用评级
+            responseData.put("interestRate", null);                          // 隐藏利率
+            responseData.put("billingCycleDay", null);                       // 隐藏账单周期
+            responseData.put("lastSettlementDate", null);                    // 隐藏结算日期
+            responseData.put("overdraftCount", null);                        // 隐藏透支次数
+            responseData.put("createdAt", null);                             // 隐藏创建时间
+            log.info("操作员访问，显示基本额度信息以支持支付功能，已隐藏敏感财务详情");
         }
         
         // 如果是代理商主账号，添加最近交易记录

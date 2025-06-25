@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -219,151 +220,188 @@ public class PaymentServiceImpl implements PaymentService {
     public boolean processCreditPayment(CreditPaymentDTO creditPaymentDTO) {
         log.info("代理商信用额度支付：{}", creditPaymentDTO);
         
-        // 获取当前用户信息
-        Long currentId = BaseContext.getCurrentId();
-        String userType = BaseContext.getCurrentUserType();
-        Long agentId = BaseContext.getCurrentAgentId();
-        Long operatorId = BaseContext.getCurrentOperatorId();
-        
         // 获取订单信息
         Integer bookingId = creditPaymentDTO.getBookingId().intValue();
         
-        // 获取订单实际金额 - 需要根据用户类型决定使用哪个价格
-        BigDecimal actualOrderAmount;
-        
-        if ("agent_operator".equals(userType)) {
-            // 操作员支付：使用实际折扣价格（actualPaymentPrice）
-            // 这里需要重新计算价格，获取actualPaymentPrice
-            // 从订单中获取基本信息
-            TourBooking booking = tourBookingMapper.getById(bookingId);
-            if (booking == null) {
-                log.error("订单ID {} 不存在", bookingId);
-                throw new CustomException("订单不存在，请联系客服");
+        // 🔒 添加分布式锁，防止同一订单的并发支付
+        String lockKey = "payment_lock_" + bookingId;
+        synchronized (lockKey.intern()) {
+            // 首先检查订单是否已经支付
+            TourBooking existingBooking = tourBookingMapper.getById(bookingId);
+            if (existingBooking == null) {
+                log.error("订单不存在，订单ID: {}", bookingId);
+                throw new CustomException("订单不存在");
             }
             
-            // 重新计算价格详情，获取实际支付价格
-            PriceDetailVO priceDetail = tourBookingService.calculatePriceDetail(
-                booking.getTourId(), 
-                booking.getTourType(), 
-                agentId, 
-                booking.getAdultCount(), 
-                booking.getChildCount(), 
-                booking.getHotelLevel(), 
-                booking.getHotelRoomCount(),
-                null  // userId参数
-            );
-            
-            actualOrderAmount = priceDetail.getActualPaymentPrice();
-            log.info("操作员支付，使用实际折扣价格: {}", actualOrderAmount);
-        } else {
-            // 代理商主账号或普通用户：使用订单中记录的价格
-            actualOrderAmount = tourBookingMapper.getOrderAmount(bookingId);
-            log.info("代理商主账号支付，使用订单价格: {}", actualOrderAmount);
-        }
-        
-        if (actualOrderAmount == null) {
-            log.error("订单ID {} 不存在或未找到金额信息", bookingId);
-            throw new CustomException("订单不存在或金额异常，请联系客服");
-        }
-        
-        // 确定使用哪个代理商的credit
-        Integer targetAgentId;
-        if ("agent_operator".equals(userType)) {
-            // 操作员：使用所属代理商的credit
-            if (agentId == null) {
-                log.error("操作员用户 {} 没有关联的代理商ID", currentId);
-                throw new CustomException("操作员账号配置异常，请联系管理员");
+            if ("paid".equals(existingBooking.getPaymentStatus())) {
+                log.warn("⚠️ 订单已支付，拒绝重复支付请求，订单ID: {}", bookingId);
+                return true; // 返回true表示支付成功（因为订单已经是支付状态）
             }
-            targetAgentId = agentId.intValue();
-            log.info("操作员 {} 使用代理商 {} 的信用额度支付", operatorId, agentId);
-        } else {
-            // 代理商主账号：使用自己的credit
-            targetAgentId = getAgentIdByUserId(currentId.intValue());
-            if (targetAgentId == null) {
-                log.error("无法获取用户ID为 {} 的代理商ID", currentId);
-                throw new CustomException("无法获取代理商信息，请联系管理员");
-            }
-            log.info("代理商主账号 {} 使用自己的信用额度支付", targetAgentId);
-        }
             
-        // 使用AgentCreditService处理信用额度支付
-        try {
-            // 准备支付信息
-            creditPaymentDTO.setAmount(actualOrderAmount);
+            log.info("🔒 获取支付锁成功，开始处理订单 {} 的支付", bookingId);
             
-            // 调用统一的信用额度支付方法
-            CreditPaymentResultVO result = agentCreditService.payWithCredit(
-                Long.valueOf(targetAgentId), 
-                creditPaymentDTO
-            );
+            // 获取当前用户信息
+            Long currentId = BaseContext.getCurrentId();
+            String userType = BaseContext.getCurrentUserType();
+            Long agentId = BaseContext.getCurrentAgentId();
+            Long operatorId = BaseContext.getCurrentOperatorId();
             
-            if (result == null || !"paid".equals(result.getPaymentStatus())) {
-                log.error("信用额度支付失败，订单ID: {}", bookingId);
-                return false;
-            }
-        
-        // 创建支付记录
-        PaymentDTO paymentDTO = new PaymentDTO();
-        paymentDTO.setBookingId(bookingId);
-            paymentDTO.setAmount(actualOrderAmount);
-        paymentDTO.setPaymentMethod("agent_credit");
-        paymentDTO.setStatus("completed");
-        paymentDTO.setUserId(currentId.intValue());
-        paymentDTO.setType("payment");
-        paymentDTO.setPaymentTime(LocalDateTime.now());
-        paymentDTO.setCreateTime(LocalDateTime.now());
-        paymentDTO.setPaymentOrderNo(generatePaymentOrderNo());
-        
-        // 设置信用交易相关字段
-            paymentDTO.setTransactionId(result.getTransactionId().toString());
-            paymentDTO.setIsCreditPayment(true);
-            paymentDTO.setCreditTransactionId(result.getTransactionId().intValue());
-        
-        // 插入支付记录
-        paymentMapper.insert(paymentDTO);
-        
-        // 更新预订支付状态为已支付
-        paymentMapper.updateBookingPaymentStatus(bookingId, "paid");
-        
-        // 更新预订状态为已确认
-        bookingMapper.updateStatus(bookingId, "confirmed");
-        
-        // 🔔 发送支付成功通知
-        try {
-            // 获取订单信息
-            TourBooking booking = tourBookingMapper.getById(bookingId);
-            if (booking != null) {
-                // 获取操作者信息
-                String[] operatorInfo = getCurrentOperatorInfo();
-                String operatorName = operatorInfo[0];
-                String operatorType = operatorInfo[1];
+            // 获取订单实际金额 - 需要根据用户类型决定使用哪个价格
+            BigDecimal actualOrderAmount;
+            
+            if ("agent_operator".equals(userType)) {
+                // 操作员支付：使用实际折扣价格（actualPaymentPrice）
+                // 这里需要重新计算价格，获取actualPaymentPrice
+                // 从订单中获取基本信息
+                TourBooking booking = tourBookingMapper.getById(bookingId);
+                if (booking == null) {
+                    log.error("订单ID {} 不存在", bookingId);
+                    throw new CustomException("订单不存在，请联系客服");
+                }
                 
-                String contactPerson = booking.getContactPerson();
-                String orderNumber = booking.getOrderNumber();
-                String actionDetail = String.format("支付金额: $%.2f", actualOrderAmount);
-                
-                notificationService.createDetailedOrderNotification(
-                    Long.valueOf(bookingId),
-                    operatorName,
-                    operatorType,
-                    contactPerson,
-                    orderNumber,
-                    "payment",
-                    actionDetail
+                // 使用统一价格计算方法重新计算价格详情，获取实际支付价格
+                Map<String, Object> priceResult = tourBookingService.calculateUnifiedPrice(
+                    booking.getTourId(), 
+                    booking.getTourType(), 
+                    agentId, 
+                    booking.getAdultCount(), 
+                    booking.getChildCount(), 
+                    booking.getHotelLevel(), 
+                    booking.getHotelRoomCount(),
+                    null,  // userId参数
+                    null,  // roomTypes
+                    null,  // childrenAges
+                    null   // selectedOptionalTours
                 );
                 
-                log.info("🔔 已发送支付成功通知: 订单ID={}, 操作者={} ({}), 金额={}", 
-                        bookingId, operatorName, operatorType, actualOrderAmount);
+                actualOrderAmount = BigDecimal.ZERO;
+                if (priceResult != null && priceResult.get("data") != null) {
+                    Map<String, Object> data = (Map<String, Object>) priceResult.get("data");
+                    actualOrderAmount = (BigDecimal) data.get("totalPrice");
+                }
+                log.info("操作员支付，使用实际折扣价格: {}", actualOrderAmount);
+            } else {
+                // 代理商主账号或普通用户：使用订单中记录的价格
+                actualOrderAmount = tourBookingMapper.getOrderAmount(bookingId);
+                log.info("代理商主账号支付，使用订单价格: {}", actualOrderAmount);
             }
-        } catch (Exception e) {
-            log.error("❌ 发送支付成功通知失败: {}", e.getMessage(), e);
-        }
-        
-        return true;
-        } catch (Exception e) {
-            log.error("信用额度支付处理过程中发生错误: {}", e.getMessage(), e);
-            throw new CustomException("支付处理失败: " + e.getMessage());
-        }
+            
+            if (actualOrderAmount == null) {
+                log.error("订单ID {} 不存在或未找到金额信息", bookingId);
+                throw new CustomException("订单不存在或金额异常，请联系客服");
+            }
+            
+            // 确定使用哪个代理商的credit
+            Integer targetAgentId;
+            if ("agent_operator".equals(userType)) {
+                // 操作员：使用所属代理商的credit
+                if (agentId == null) {
+                    log.error("操作员用户 {} 没有关联的代理商ID", currentId);
+                    throw new CustomException("操作员账号配置异常，请联系管理员");
+                }
+                targetAgentId = agentId.intValue();
+                log.info("操作员 {} 使用代理商 {} 的信用额度支付", operatorId, agentId);
+            } else {
+                // 代理商主账号：使用自己的credit
+                targetAgentId = getAgentIdByUserId(currentId.intValue());
+                if (targetAgentId == null) {
+                    log.error("无法获取用户ID为 {} 的代理商ID", currentId);
+                    throw new CustomException("无法获取代理商信息，请联系管理员");
+                }
+                log.info("代理商主账号 {} 使用自己的信用额度支付", targetAgentId);
+            }
+                
+            // 使用AgentCreditService处理信用额度支付
+            try {
+                // 准备支付信息
+                creditPaymentDTO.setAmount(actualOrderAmount);
+                
+                // 调用统一的信用额度支付方法
+                CreditPaymentResultVO result = agentCreditService.payWithCredit(
+                    Long.valueOf(targetAgentId), 
+                    creditPaymentDTO
+                );
+                
+                if (result == null || !"paid".equals(result.getPaymentStatus())) {
+                    log.error("信用额度支付失败，订单ID: {}", bookingId);
+                    return false;
+                }
+            
+                // 创建支付记录
+                PaymentDTO paymentDTO = new PaymentDTO();
+                paymentDTO.setBookingId(bookingId);
+                paymentDTO.setAmount(actualOrderAmount);
+                paymentDTO.setPaymentMethod("agent_credit");
+                paymentDTO.setStatus("completed");
+                paymentDTO.setUserId(currentId.intValue());
+                paymentDTO.setType("payment");
+                paymentDTO.setPaymentTime(LocalDateTime.now());
+                paymentDTO.setCreateTime(LocalDateTime.now());
+                paymentDTO.setPaymentOrderNo(generatePaymentOrderNo());
+                
+                // 设置信用交易相关字段
+                paymentDTO.setTransactionId(result.getTransactionId().toString());
+                paymentDTO.setIsCreditPayment(true);
+                paymentDTO.setCreditTransactionId(result.getTransactionId().intValue());
+                
+                // 插入支付记录
+                paymentMapper.insert(paymentDTO);
+                
+                // 🔥 重要：调用统一的支付成功处理逻辑（包括同步到排团表）
+                PaymentDTO paymentDTOForBooking = new PaymentDTO();
+                paymentDTOForBooking.setAmount(actualOrderAmount);
+                paymentDTOForBooking.setPaymentMethod("agent_credit");
+                paymentDTOForBooking.setStatus("completed");
+                paymentDTOForBooking.setPaymentTime(LocalDateTime.now());
+                
+                try {
+                    // 调用TourBookingService的payBooking方法，这会触发支付后同步到排团表
+                    tourBookingService.payBooking(bookingId, paymentDTOForBooking);
+                    log.info("✅ 信用额度支付成功，已调用统一支付处理逻辑，订单ID: {}", bookingId);
+                } catch (Exception e) {
+                    log.error("❌ 调用统一支付处理逻辑失败: 订单ID={}, 错误: {}", bookingId, e.getMessage(), e);
+                    // 如果统一处理失败，则手动更新状态
+                    paymentMapper.updateBookingPaymentStatus(bookingId, "paid");
+                    bookingMapper.updateStatus(bookingId, "confirmed");
+                }
+                
+                // 🔔 发送支付成功通知
+                try {
+                    // 获取订单信息
+                    TourBooking booking = tourBookingMapper.getById(bookingId);
+                    if (booking != null) {
+                        // 获取操作者信息
+                        String[] operatorInfo = getCurrentOperatorInfo();
+                        String operatorName = operatorInfo[0];
+                        String operatorType = operatorInfo[1];
+                        
+                        String contactPerson = booking.getContactPerson();
+                        String orderNumber = booking.getOrderNumber();
+                        String actionDetail = String.format("支付金额: $%.2f", actualOrderAmount);
+                        
+                        notificationService.createDetailedOrderNotification(
+                            Long.valueOf(bookingId),
+                            operatorName,
+                            operatorType,
+                            contactPerson,
+                            orderNumber,
+                            "payment",
+                            actionDetail
+                        );
+                        
+                        log.info("🔔 已发送支付成功通知: 订单ID={}, 操作者={} ({}), 金额={}", 
+                                bookingId, operatorName, operatorType, actualOrderAmount);
+                    }
+                } catch (Exception e) {
+                    log.error("❌ 发送支付成功通知失败: {}", e.getMessage(), e);
+                }
+                
+                return true;
+            } catch (Exception e) {
+                log.error("信用额度支付处理过程中发生错误: {}", e.getMessage(), e);
+                throw new CustomException("支付处理失败: " + e.getMessage());
+            }
+        } // synchronized块结束
     }
     
     /**

@@ -315,12 +315,32 @@ public class PassengerServiceImpl implements PassengerService {
         // 打印原始DTO数据以便调试
         log.info("添加乘客到订单的原始DTO数据: {}", passengerDTO);
         
-        // 检查乘客是否有效 - 修改判断逻辑，允许儿童只有isChild和childAge
+        // 检查乘客是否有效 - 修改判断逻辑，允许只有联系方式的乘客
         boolean isValidPassenger = false;
         
         // 如果有姓名，则视为有效
         if (passengerDTO.getFullName() != null && !passengerDTO.getFullName().trim().isEmpty()) {
             isValidPassenger = true;
+        }
+        
+        // 如果有电话号码，则视为有效（用于首次更新乘客信息的场景）
+        if (passengerDTO.getPhone() != null && !passengerDTO.getPhone().trim().isEmpty()) {
+            isValidPassenger = true;
+            // 如果没有姓名，设置一个默认姓名，避免数据库约束问题
+            if (passengerDTO.getFullName() == null || passengerDTO.getFullName().trim().isEmpty()) {
+                passengerDTO.setFullName("乘客-" + passengerDTO.getPhone());
+                log.info("为只有电话号码的乘客设置默认姓名: {}", passengerDTO.getFullName());
+            }
+        }
+        
+        // 如果有微信号，则视为有效
+        if (passengerDTO.getWechatId() != null && !passengerDTO.getWechatId().trim().isEmpty()) {
+            isValidPassenger = true;
+            // 如果没有姓名，设置一个默认姓名
+            if (passengerDTO.getFullName() == null || passengerDTO.getFullName().trim().isEmpty()) {
+                passengerDTO.setFullName("乘客-" + passengerDTO.getWechatId());
+                log.info("为只有微信号的乘客设置默认姓名: {}", passengerDTO.getFullName());
+            }
         }
         
         // 如果是儿童并且有年龄，则视为有效
@@ -335,7 +355,7 @@ public class PassengerServiceImpl implements PassengerService {
         
         // 如果乘客信息无效，则跳过
         if (!isValidPassenger) {
-            log.info("乘客信息无效，跳过录入");
+            log.info("乘客信息无效，跳过录入。需要至少提供：姓名、电话号码、微信号或儿童年龄中的任意一项");
             return false;
         }
         

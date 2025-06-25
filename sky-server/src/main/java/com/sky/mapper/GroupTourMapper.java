@@ -9,6 +9,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Update;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -156,7 +157,7 @@ public interface GroupTourMapper {
      * @param groupTourId 团队游ID
      * @return 关联的一日游列表
      */
-    @Select("SELECT r.id, r.day_tour_id, r.day_number, r.is_optional, " +
+    @Select("SELECT r.id, r.day_tour_id, r.day_number, r.price_difference, " +
             "dt.name as day_tour_name, dt.location, dt.price, dt.duration, dt.description as day_tour_description " +
             "FROM group_tour_day_tour_relation r " +
             "JOIN day_tours dt ON r.day_tour_id = dt.day_tour_id " +
@@ -178,14 +179,50 @@ public interface GroupTourMapper {
      * @param dayTourId 一日游ID
      * @param dayNumber 天数
      * @param isOptional 是否可选
+     * @param isDefault 是否为默认选择
      * @return 影响的行数
      */
-    @Insert("INSERT INTO group_tour_day_tour_relation (group_tour_id, day_tour_id, day_number, is_optional) " +
-            "VALUES (#{groupTourId}, #{dayTourId}, #{dayNumber}, #{isOptional})")
+    @Insert("INSERT INTO group_tour_day_tour_relation (group_tour_id, day_tour_id, day_number, is_optional, is_default, price_difference) " +
+            "VALUES (#{groupTourId}, #{dayTourId}, #{dayNumber}, #{isOptional}, #{isDefault}, 0.00)")
     int saveGroupTourDayTour(@Param("groupTourId") Integer groupTourId, 
                             @Param("dayTourId") Integer dayTourId,
                             @Param("dayNumber") Integer dayNumber,
-                            @Param("isOptional") Integer isOptional);
+                            @Param("isOptional") Integer isOptional,
+                            @Param("isDefault") Integer isDefault);
+
+    /**
+     * 保存团队游关联的一日游（包含价格差异）
+     * @param groupTourId 团队游ID
+     * @param dayTourId 一日游ID
+     * @param dayNumber 天数
+     * @param isOptional 是否可选
+     * @param isDefault 是否为默认选择
+     * @param priceDifference 价格差异
+     * @return 影响的行数
+     */
+    @Insert("INSERT INTO group_tour_day_tour_relation (group_tour_id, day_tour_id, day_number, is_optional, is_default, price_difference) " +
+            "VALUES (#{groupTourId}, #{dayTourId}, #{dayNumber}, #{isOptional}, #{isDefault}, #{priceDifference})")
+    int saveGroupTourDayTourWithPrice(@Param("groupTourId") Integer groupTourId, 
+                                     @Param("dayTourId") Integer dayTourId,
+                                     @Param("dayNumber") Integer dayNumber,
+                                     @Param("isOptional") Integer isOptional,
+                                     @Param("isDefault") Integer isDefault,
+                                     @Param("priceDifference") BigDecimal priceDifference);
+
+    /**
+     * 保存团队游关联的一日游（只包含价格差异）
+     * @param groupTourId 团队游ID
+     * @param dayTourId 一日游ID
+     * @param dayNumber 天数
+     * @param priceDifference 价格差异
+     * @return 影响的行数
+     */
+    @Insert("INSERT INTO group_tour_day_tour_relation (group_tour_id, day_tour_id, day_number, price_difference) " +
+            "VALUES (#{groupTourId}, #{dayTourId}, #{dayNumber}, #{priceDifference})")
+    int saveGroupTourDayTourWithPriceOnly(@Param("groupTourId") Integer groupTourId, 
+                                         @Param("dayTourId") Integer dayTourId,
+                                         @Param("dayNumber") Integer dayNumber,
+                                         @Param("priceDifference") BigDecimal priceDifference);
 
     /**
      * 更新跟团游信息

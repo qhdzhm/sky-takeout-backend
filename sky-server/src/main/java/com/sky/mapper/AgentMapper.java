@@ -102,4 +102,11 @@ public interface AgentMapper {
      * @return 邮箱地址
      */
     String getEmailById(@Param("agentId") Long agentId);
+    
+    /**
+     * 更新代理商折扣等级
+     * @param agentId 代理商ID
+     * @param discountLevelId 折扣等级ID
+     */
+    void updateDiscountLevel(@Param("agentId") Long agentId, @Param("discountLevelId") Long discountLevelId);
 } 

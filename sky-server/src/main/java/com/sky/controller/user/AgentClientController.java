@@ -35,6 +35,7 @@ import javax.servlet.http.Cookie;
 import io.jsonwebtoken.Claims;
 import java.time.LocalDateTime;
 import java.util.Map;
+import com.sky.utils.CookieUtil;
 
 /**
  * 代理商客户端Controller
@@ -206,12 +207,24 @@ public class AgentClientController {
             
             log.info("登录成功，用户类型: {}, 折扣率: {}", isOperator ? "操作员" : "代理商主账号", discountRate);
             
-            // 7. 设置HttpOnly Cookie用于安全存储 - 增强跨平台兼容性
-            setCookieWithMultiplePaths(response, "refreshToken", token, true, 7 * 24 * 60 * 60);
-            setCookieWithMultiplePaths(response, "authToken", token, true, 15 * 60);
+            // 7. 设置HttpOnly Cookie用于安全存储 - 正确的双Token模式
+            // Access Token（短期，15分钟）
+            CookieUtil.setCookieWithMultiplePaths(response, "authToken", token, true, 15 * 60);
             
-            // 设置额外的备用token cookie（用于兼容性）
-            setCookieWithMultiplePaths(response, "agentToken", token, true, 15 * 60);
+            // Refresh Token（长期，7天）- 生成不同的Token
+            Map<String, Object> refreshClaims = new HashMap<>();
+            refreshClaims.put(JwtClaimsConstant.USER_ID, isOperator ? operator.getId() : agent.getId());
+            refreshClaims.put(JwtClaimsConstant.AGENT_ID, agent.getId());
+            refreshClaims.put(JwtClaimsConstant.USERNAME, isOperator ? operator.getUsername() : agent.getUsername());
+            refreshClaims.put(JwtClaimsConstant.USER_TYPE, isOperator ? "agent_operator" : "agent");
+            
+            String refreshToken = JwtUtil.createRefreshJWT(
+                jwtProperties.getAgentSecretKey(),
+                jwtProperties.getRefreshTokenTtl(),
+                refreshClaims
+            );
+            
+            CookieUtil.setCookieWithMultiplePaths(response, "refreshToken", refreshToken, true, 7 * 24 * 60 * 60);
 
             // 设置用户信息Cookie（非HttpOnly，供前端读取）
             Map<String, Object> userInfo = new HashMap<>();
@@ -230,18 +243,7 @@ public class AgentClientController {
             userInfo.put("canSeeCredit", !isOperator);
             
             String userInfoJson = com.alibaba.fastjson.JSON.toJSONString(userInfo);
-            String encodedUserInfo;
-            try {
-                encodedUserInfo = java.net.URLEncoder.encode(userInfoJson, "UTF-8");
-            } catch (Exception e) {
-                log.error("URL编码失败", e);
-                encodedUserInfo = userInfoJson; // 如果编码失败，使用原始值
-            }
-            Cookie userInfoCookie = new Cookie("userInfo", encodedUserInfo);
-            userInfoCookie.setSecure(false);
-            userInfoCookie.setPath("/");
-            userInfoCookie.setMaxAge(15 * 60); // 15分钟
-            response.addCookie(userInfoCookie);
+            CookieUtil.setUserInfoCookie(response, userInfoJson, 15 * 60);
             
             // 8. 返回结果
             return Result.success(userLoginVO);
@@ -406,30 +408,22 @@ public class AgentClientController {
     }
     
     /**
-     * 设置Cookie到多个路径，增强跨平台兼容性
+     * 代理商退出登录 - 清理所有路径下的Cookie
      */
-    private void setCookieWithMultiplePaths(HttpServletResponse response, String name, String value, boolean httpOnly, int maxAge) {
-        // 设置到不同路径的Cookie
-        String[] paths = {"/", "/api", "/agent"};
+    @PostMapping("/logout")
+    public Result<String> logout(HttpServletResponse response) {
+        log.info("代理商退出登录（多路径清理）");
         
-        for (String path : paths) {
-            Cookie cookie = new Cookie(name, value);
-            cookie.setHttpOnly(httpOnly);
-            cookie.setSecure(false); // 开发环境设为false，生产环境应设为true
-            cookie.setPath(path);
-            cookie.setMaxAge(maxAge);
+        try {
+            // 使用统一的Cookie工具类清理所有代理商相关Cookie
+            CookieUtil.clearAllAgentCookies(response);
             
-            // 设置SameSite属性以提高兼容性
-            if (httpOnly) {
-                // 对于HttpOnly Cookie，使用更宽松的SameSite策略
-                response.addHeader("Set-Cookie", String.format("%s=%s; Path=%s; Max-Age=%d; HttpOnly; SameSite=Lax", 
-                    name, value, path, maxAge));
-            } else {
-                response.addCookie(cookie);
-            }
+            log.info("代理商退出登录成功，已清理所有路径下的Cookie");
+            return Result.success("退出登录成功");
+        } catch (Exception e) {
+            log.error("代理商退出登录失败", e);
+            return Result.error("退出登录失败：" + e.getMessage());
         }
-        
-        log.debug("已设置Cookie到多个路径: {} (maxAge: {})", name, maxAge);
     }
     
     /**

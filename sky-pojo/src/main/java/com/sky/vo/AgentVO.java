@@ -44,6 +44,9 @@ public class AgentVO implements Serializable {
     @ApiModelProperty("折扣率")
     private BigDecimal discountRate;
     
+    @ApiModelProperty("折扣等级ID")
+    private Long discountLevelId;
+    
     @ApiModelProperty("账号状态：1-活跃，0-禁用")
     private Integer status;
     

@@ -2,12 +2,13 @@ package com.sky.controller.user;
 
 import com.sky.config.SecurityConfig;
 import com.sky.constant.JwtClaimsConstant;
-import com.sky.dto.RefreshTokenDTO;
+
 import com.sky.entity.User;
 import com.sky.properties.JwtProperties;
 import com.sky.result.Result;
 import com.sky.service.UserService;
 import com.sky.utils.JwtUtil;
+import com.sky.utils.CookieUtil;
 import com.sky.vo.TokenRefreshVO;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -69,19 +70,8 @@ public class AuthController {
             String clientIp = request.getRemoteAddr();
             log.info("登出请求 - IP: {}, User-Agent: {}", clientIp, userAgent);
             
-            // 清除认证Cookie - 使用更强的清理策略
-            clearCookieMultipleWays(response, "authToken");
-            clearCookieMultipleWays(response, "userInfo");
-            clearCookieMultipleWays(response, "refreshToken");
-            
-            // 额外清理最重要的认证Cookie（减少数量避免响应头过大）
-            String[] cookiesToClear = {
-                "token", "jwt", "agentToken"
-            };
-            
-            for (String cookieName : cookiesToClear) {
-                clearCookieMultipleWays(response, cookieName);
-            }
+            // 使用统一的Cookie工具类清理所有用户相关Cookie
+            CookieUtil.clearAllUserCookies(response);
             
             log.info("安全登出成功 - 已清理所有认证Cookie");
             return Result.success("登出成功");
@@ -92,30 +82,6 @@ public class AuthController {
     }
     
     /**
-     * 简化的Cookie清理方法，避免响应头过大
-     */
-    private void clearCookieMultipleWays(HttpServletResponse response, String cookieName) {
-        try {
-            // 方式1：标准清理
-            SecurityConfig.clearSecureCookie(response, cookieName);
-            
-            // 方式2：只清理关键路径，避免响应头过大
-            String[] paths = {"/", "/api"};
-            
-            for (String path : paths) {
-                // 清理localhost域名下的Cookie
-                String cookieValue = String.format("%s=; Path=%s; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; HttpOnly", 
-                    cookieName, path);
-                response.addHeader("Set-Cookie", cookieValue);
-            }
-            
-            log.debug("已清理Cookie: {}", cookieName);
-        } catch (Exception e) {
-            log.warn("清理Cookie失败: {} - {}", cookieName, e.getMessage());
-        }
-    }
-
-    /**
      * 刷新Token - 使用Refresh Token获取新的Access Token
      */
     @PostMapping("/refresh")
@@ -125,25 +91,41 @@ public class AuthController {
         
         try {
             // 从HttpOnly Cookie中获取refresh token
-            String refreshToken = SecurityConfig.getCookieValue(request, "refreshToken");
+            String refreshToken = CookieUtil.getCookieValue(request, "refreshToken");
             
             if (refreshToken == null || refreshToken.isEmpty()) {
                 log.warn("Refresh Token为空");
                 return Result.error("Refresh Token不存在，请重新登录");
             }
 
-            // 验证refresh token的有效性
-            if (!JwtUtil.isRefreshTokenValid(jwtProperties.getUserSecretKey(), refreshToken)) {
-                log.warn("Refresh Token无效或已过期");
+            // 尝试用不同的密钥验证refresh token（支持普通用户和代理商）
+            String secretKey = null;
+            Long userId = null;
+            String username = null;
+            String userType = null;
+            
+            // 首先尝试用户密钥
+            if (JwtUtil.isRefreshTokenValid(jwtProperties.getUserSecretKey(), refreshToken)) {
+                secretKey = jwtProperties.getUserSecretKey();
+                userId = JwtUtil.extractUserId(secretKey, refreshToken);
+                username = JwtUtil.extractUsername(secretKey, refreshToken);
+                userType = JwtUtil.extractUserType(secretKey, refreshToken);
+                log.debug("使用用户密钥验证refresh token成功");
+            }
+            // 如果用户密钥验证失败，尝试代理商密钥
+            else if (JwtUtil.isRefreshTokenValid(jwtProperties.getAgentSecretKey(), refreshToken)) {
+                secretKey = jwtProperties.getAgentSecretKey();
+                userId = JwtUtil.extractUserId(secretKey, refreshToken);
+                username = JwtUtil.extractUsername(secretKey, refreshToken);
+                userType = JwtUtil.extractUserType(secretKey, refreshToken);
+                log.debug("使用代理商密钥验证refresh token成功");
+            }
+            else {
+                log.warn("Refresh Token无效或已过期（尝试了用户密钥和代理商密钥）");
                 // 清除无效的refresh token cookie
-                SecurityConfig.clearRefreshTokenCookie(response);
+                CookieUtil.clearCookieAllPaths(response, "refreshToken");
                 return Result.error("Refresh Token无效或已过期，请重新登录");
             }
-
-            // 从refresh token中提取用户信息
-            Long userId = JwtUtil.extractUserId(jwtProperties.getUserSecretKey(), refreshToken);
-            String username = JwtUtil.extractUsername(jwtProperties.getUserSecretKey(), refreshToken);
-            String userType = JwtUtil.extractUserType(jwtProperties.getUserSecretKey(), refreshToken);
 
             if (userId == null || username == null) {
                 log.warn("无法从Refresh Token中提取用户信息");
@@ -158,7 +140,7 @@ public class AuthController {
                 user = userService.getById(userId);
                 if (user == null) {
                     log.warn("普通用户不存在: {}", userId);
-                    SecurityConfig.clearRefreshTokenCookie(response);
+                    CookieUtil.clearCookieAllPaths(response, "refreshToken");
                     return Result.error("用户不存在，请重新登录");
                 }
                 displayName = user.getName();
@@ -169,25 +151,38 @@ public class AuthController {
                 displayName = username; // 代理商用户使用用户名作为显示名
             } else {
                 log.warn("未知用户类型: {}", userType);
-                SecurityConfig.clearRefreshTokenCookie(response);
+                CookieUtil.clearCookieAllPaths(response, "refreshToken");
                 return Result.error("用户类型无效，请重新登录");
             }
+
+            // 根据用户类型确定使用的密钥和TTL
+            String accessSecretKey = secretKey;
+            long accessTtl = ("agent".equals(userType) || "agent_operator".equals(userType)) ? 
+                jwtProperties.getAgentTtl() : jwtProperties.getUserTtl();
 
             // 生成新的access token
             Map<String, Object> claims = new HashMap<>();
             claims.put(JwtClaimsConstant.USER_ID, userId);
             claims.put(JwtClaimsConstant.USERNAME, username);
             claims.put(JwtClaimsConstant.USER_TYPE, userType != null ? userType : "regular");
+            
+            // 代理商用户需要额外的claims
+            if ("agent".equals(userType) || "agent_operator".equals(userType)) {
+                claims.put(JwtClaimsConstant.AGENT_ID, userId); // 对于代理商主账号，agentId就是userId
+                if ("agent_operator".equals(userType)) {
+                    claims.put(JwtClaimsConstant.OPERATOR_ID, userId);
+                }
+            }
 
             String newAccessToken = JwtUtil.createJWT(
-                jwtProperties.getUserSecretKey(), 
-                jwtProperties.getUserTtl(), 
+                accessSecretKey, 
+                accessTtl, 
                 claims
             );
 
             // 检查refresh token是否即将过期（提前1天刷新）
             boolean refreshTokenExpiringSoon = JwtUtil.isTokenExpiringSoon(
-                jwtProperties.getUserSecretKey(), 
+                secretKey, 
                 refreshToken, 
                 24 * 60 // 提前24小时
             );
@@ -201,15 +196,23 @@ public class AuthController {
                 refreshClaims.put(JwtClaimsConstant.USER_ID, userId);
                 refreshClaims.put(JwtClaimsConstant.USERNAME, username);
                 refreshClaims.put(JwtClaimsConstant.USER_TYPE, userType != null ? userType : "regular");
+                
+                // 代理商用户需要额外的claims
+                if ("agent".equals(userType) || "agent_operator".equals(userType)) {
+                    refreshClaims.put(JwtClaimsConstant.AGENT_ID, userId);
+                    if ("agent_operator".equals(userType)) {
+                        refreshClaims.put(JwtClaimsConstant.OPERATOR_ID, userId);
+                    }
+                }
 
                 newRefreshToken = JwtUtil.createRefreshJWT(
-                    jwtProperties.getUserSecretKey(),
+                    secretKey,
                     jwtProperties.getRefreshTokenTtl(),
                     refreshClaims
                 );
 
                 // 设置新的refresh token cookie
-                SecurityConfig.setRefreshTokenCookie(response, newRefreshToken, 
+                CookieUtil.setCookieWithMultiplePaths(response, "refreshToken", newRefreshToken, true,
                     (int) (jwtProperties.getRefreshTokenTtl() / 1000));
                 
                 refreshTokenUpdated = true;
@@ -217,8 +220,8 @@ public class AuthController {
             }
 
             // 设置新的access token cookie
-            SecurityConfig.setSecureCookie(response, "authToken", newAccessToken, 
-                (int) (jwtProperties.getUserTtl() / 1000));
+            CookieUtil.setCookieWithMultiplePaths(response, "authToken", newAccessToken, true,
+                (int) (accessTtl / 1000));
 
             // 更新用户信息cookie
             String userInfo;
@@ -229,8 +232,7 @@ public class AuthController {
                 userInfo = String.format("{\"id\":%d,\"username\":\"%s\",\"userType\":\"%s\",\"name\":\"%s\"}", 
                     userId, username, userType, displayName);
             }
-            SecurityConfig.setRegularCookie(response, "userInfo", userInfo, 
-                (int) (jwtProperties.getUserTtl() / 1000));
+            CookieUtil.setUserInfoCookie(response, userInfo, (int) (accessTtl / 1000));
 
             // 构建响应
             TokenRefreshVO tokenRefreshVO = TokenRefreshVO.builder()
@@ -239,7 +241,7 @@ public class AuthController {
                     .userId(userId)
                     .username(username)
                     .userType(userType != null ? userType : "regular")
-                    .accessTokenExpiry(System.currentTimeMillis() + jwtProperties.getUserTtl())
+                    .accessTokenExpiry(System.currentTimeMillis() + accessTtl)
                     .refreshTokenExpiry(System.currentTimeMillis() + jwtProperties.getRefreshTokenTtl())
                     .refreshTokenUpdated(refreshTokenUpdated)
                     .build();
@@ -250,8 +252,8 @@ public class AuthController {
         } catch (Exception e) {
             log.error("Token刷新失败", e);
             // 清除可能有问题的cookies
-            SecurityConfig.clearRefreshTokenCookie(response);
-            SecurityConfig.clearSecureCookie(response, "authToken");
+            CookieUtil.clearCookieAllPaths(response, "refreshToken");
+            CookieUtil.clearCookieAllPaths(response, "authToken");
             return Result.error("Token刷新失败：" + e.getMessage());
         }
     }

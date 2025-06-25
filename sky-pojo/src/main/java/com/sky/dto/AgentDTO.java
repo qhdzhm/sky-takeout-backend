@@ -40,6 +40,9 @@ public class AgentDTO implements Serializable {
     @ApiModelProperty("折扣率，范围0-1，默认1.00（无折扣）")
     private BigDecimal discountRate;
 
+    @ApiModelProperty("折扣等级ID（新系统使用）")
+    private Long discountLevelId;
+
     @ApiModelProperty("账号状态，默认1（活跃）")
     private Integer status;
 } 

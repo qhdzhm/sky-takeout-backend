@@ -3,6 +3,7 @@ package com.sky.dto;
 import lombok.Data;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -37,22 +38,29 @@ public class TourBookingDTO implements Serializable {
     @ApiModelProperty("代理商ID")
     private Integer agentId;
     
+    @ApiModelProperty("操作员ID")
+    private Long operatorId;
+    
     @ApiModelProperty("航班号")
     private String flightNumber;
     
     @ApiModelProperty("到达航班起飞时间")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm")
     private LocalDateTime arrivalDepartureTime;
     
     @ApiModelProperty("到达航班降落时间")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm")
     private LocalDateTime arrivalLandingTime;
     
     @ApiModelProperty("返程航班号")
     private String returnFlightNumber;
     
     @ApiModelProperty("返程航班起飞时间")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm")
     private LocalDateTime departureDepartureTime;
     
     @ApiModelProperty("返程航班降落时间")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm")
     private LocalDateTime departureLandingTime;
     
     @ApiModelProperty("行程开始日期")
@@ -130,6 +138,9 @@ public class TourBookingDTO implements Serializable {
     @ApiModelProperty("总价")
     private BigDecimal totalPrice;
     
+    @ApiModelProperty("用户选择的可选项目（JSON字符串）")
+    private String selectedOptionalTours;
+    
     @ApiModelProperty("乘客列表")
     private List<PassengerDTO> passengers;
-} 
+}

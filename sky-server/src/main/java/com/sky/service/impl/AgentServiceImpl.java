@@ -305,4 +305,23 @@ public class AgentServiceImpl implements AgentService {
         String encryptedPassword = DigestUtils.md5DigestAsHex(newPassword.getBytes());
         agentMapper.resetPassword(agentId, encryptedPassword);
     }
+
+    /**
+     * 更新代理商折扣等级
+     * @param agentId 代理商ID
+     * @param discountLevelId 折扣等级ID
+     */
+    @Override
+    public void updateDiscountLevel(Long agentId, Long discountLevelId) {
+        log.info("更新代理商折扣等级：agentId={}, discountLevelId={}", agentId, discountLevelId);
+        
+        // 1. 验证代理商是否存在
+        Agent agent = agentMapper.getById(agentId);
+        if (agent == null) {
+            throw new BusinessException("代理商不存在");
+        }
+        
+        // 2. 更新折扣等级ID
+        agentMapper.updateDiscountLevel(agentId, discountLevelId);
+    }
 } 

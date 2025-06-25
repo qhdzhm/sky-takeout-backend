@@ -72,113 +72,26 @@ public interface TourBookingService {
     Boolean complete(Integer bookingId);
     
     /**
-     * 计算订单总价
+     * 统一的价格计算方法（支持所有功能）
      * 
      * @param tourId 旅游产品ID
      * @param tourType 旅游产品类型 (day_tour/group_tour)
      * @param agentId 代理商ID，如果是普通用户则为null
-     * @param groupSize 团队人数
-     * @return 计算得到的总价
-     */
-    BigDecimal calculateTotalPrice(Integer tourId, String tourType, Long agentId, Integer groupSize);
-    
-    /**
-     * 计算订单总价（带酒店等级参数）
-     * 
-     * @param tourId 旅游产品ID
-     * @param tourType 旅游产品类型 (day_tour/group_tour)
-     * @param agentId 代理商ID，如果是普通用户则为null
-     * @param groupSize 团队人数
-     * @param hotelLevel 酒店等级
-     * @return 计算得到的总价
-     */
-    BigDecimal calculateTotalPrice(Integer tourId, String tourType, Long agentId, Integer groupSize, String hotelLevel);
-    
-    /**
-     * 计算订单总价（带酒店等级、房间数量和用户ID参数）
-     * 
-     * @param tourId 旅游产品ID
-     * @param tourType 旅游产品类型 (day_tour/group_tour)
-     * @param agentId 代理商ID，如果是普通用户则为null
-     * @param groupSize 团队人数
+     * @param adultCount 成人数量
+     * @param childCount 儿童数量
      * @param hotelLevel 酒店等级
      * @param roomCount 房间数量
      * @param userId 用户ID
-     * @return 计算得到的总价
+     * @param roomTypes 房间类型数组（JSON字符串格式，如：["大床房","双人间"]，单房型可传单个字符串）
+     * @param childrenAges 儿童年龄数组（逗号分隔，如："3,5,8"）
+     * @param selectedOptionalTours 用户选择的可选项目（JSON字符串，如：{"1":25,"2":26}）
+     * @return 统一的价格计算结果
      */
-    BigDecimal calculateTotalPrice(Integer tourId, String tourType, Long agentId, Integer groupSize, 
-                                  String hotelLevel, Integer roomCount, Long userId);
+    Map<String, Object> calculateUnifiedPrice(Integer tourId, String tourType, Long agentId, 
+                                            Integer adultCount, Integer childCount, String hotelLevel, 
+                                            Integer roomCount, Long userId, String roomTypes, 
+                                            String childrenAges, String selectedOptionalTours);
 
-    /**
-     * 计算订单总价（带成人数、儿童数、酒店等级、房间数量和用户ID参数）
-     * 
-     * @param tourId 旅游产品ID
-     * @param tourType 旅游产品类型 (day_tour/group_tour)
-     * @param agentId 代理商ID，如果是普通用户则为null
-     * @param adultCount 成人数量
-     * @param childCount 儿童数量
-     * @param hotelLevel 酒店等级
-     * @param roomCount 房间数量
-     * @param userId 用户ID
-     * @return 计算得到的总价
-     */
-    BigDecimal calculateTotalPrice(Integer tourId, String tourType, Long agentId, Integer adultCount, 
-                                  Integer childCount, String hotelLevel, Integer roomCount, Long userId);
-    
-    /**
-     * 计算价格明细
-     * 
-     * @param tourId 旅游产品ID
-     * @param tourType 旅游产品类型 (day_tour/group_tour)
-     * @param agentId 代理商ID，如果是普通用户则为null
-     * @param adultCount 成人数量
-     * @param childCount 儿童数量
-     * @param hotelLevel 酒店等级
-     * @param roomCount 房间数量
-     * @param userId 用户ID
-     * @return 价格明细
-     */
-    PriceDetailVO calculatePriceDetail(Integer tourId, String tourType, Long agentId, Integer adultCount, 
-                                   Integer childCount, String hotelLevel, Integer roomCount, Long userId);
-    
-    /**
-     * 计算价格明细（带房型参数）
-     * 
-     * @param tourId 旅游产品ID
-     * @param tourType 旅游产品类型 (day_tour/group_tour)
-     * @param agentId 代理商ID，如果是普通用户则为null
-     * @param adultCount 成人数量
-     * @param childCount 儿童数量
-     * @param hotelLevel 酒店等级
-     * @param roomCount 房间数量
-     * @param userId 用户ID
-     * @param roomType 房间类型
-     * @return 价格明细
-     */
-    PriceDetailVO calculatePriceDetail(Integer tourId, String tourType, Long agentId, Integer adultCount, 
-                                   Integer childCount, String hotelLevel, Integer roomCount, Long userId, 
-                                   String roomType);
-    
-    /**
-     * 计算价格明细（带儿童年龄详细信息）
-     * 
-     * @param tourId 旅游产品ID
-     * @param tourType 旅游产品类型 (day_tour/group_tour)
-     * @param agentId 代理商ID，如果是普通用户则为null
-     * @param adultCount 成人数量
-     * @param childCount 儿童数量
-     * @param hotelLevel 酒店等级
-     * @param roomCount 房间数量
-     * @param userId 用户ID
-     * @param roomType 房间类型
-     * @param childrenAges 儿童年龄数组
-     * @return 价格明细和儿童详细价格信息
-     */
-    Map<String, Object> calculatePriceDetailWithChildrenAges(Integer tourId, String tourType, Long agentId, 
-                                                            Integer adultCount, Integer childCount, String hotelLevel, 
-                                                            Integer roomCount, Long userId, String roomType, 
-                                                            String childrenAges);
-    
     /**
      * 根据ID获取一日游信息
      * 
@@ -219,8 +132,6 @@ public interface TourBookingService {
      * @return 是否成功
      */
     Boolean updateBookingDetails(TourBookingUpdateDTO updateDTO);
-    
-
     
     /**
      * 自动同步订单数据到排团表

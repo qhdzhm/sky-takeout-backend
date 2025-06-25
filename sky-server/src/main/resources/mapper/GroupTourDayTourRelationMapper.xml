@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.GroupTourDayTourRelationMapper">
+
+    <!-- 批量更新关联记录的可选项信息 -->
+    <update id="batchUpdateOptionalInfo" parameterType="java.util.List">
+        <foreach collection="list" item="item" separator=";">
+            UPDATE group_tour_day_tour_relation SET
+            option_group_name = #{item.optionGroupName},
+            price_difference = #{item.priceDifference},
+            is_default = #{item.isDefault},
+            update_time = NOW()
+            WHERE id = #{item.id}
+        </foreach>
+    </update>
+
+</mapper> 

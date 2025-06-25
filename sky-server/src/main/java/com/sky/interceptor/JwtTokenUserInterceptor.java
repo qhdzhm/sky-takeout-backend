@@ -59,8 +59,7 @@ public class JwtTokenUserInterceptor implements HandlerInterceptor {
            requestURI.contains("/user/tours/hot") ||
            requestURI.contains("/user/tours/recommended") ||
            requestURI.contains("/user/tours/search") ||
-           requestURI.contains("/agent/login") ||
-           requestURI.contains("/user/agent/login")) {
+           requestURI.contains("/agent/login")) {
             log.debug("公共API无需验证: {}", requestURI);
             return true;
         }
@@ -114,6 +113,14 @@ public class JwtTokenUserInterceptor implements HandlerInterceptor {
         }
 
         if (token == null) {
+            // 检查是否是支持游客模式的接口
+            if (requestURI.contains("/user/bookings/tour/create") || 
+                requestURI.contains("/user/bookings/tour/calculate-price")) {
+                log.info("游客模式访问订单接口: {}", requestURI);
+                // 游客模式，不设置任何用户信息到BaseContext
+                return true;
+            }
+            
             //未携带token，不通过，响应401状态码
             log.debug("用户jwt校验:token为空");
             response.setStatus(401);

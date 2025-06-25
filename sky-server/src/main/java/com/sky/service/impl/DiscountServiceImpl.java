@@ -3,6 +3,7 @@ package com.sky.service.impl;
 import com.sky.entity.Agent;
 import com.sky.mapper.AgentMapper;
 import com.sky.service.DiscountService;
+import com.sky.service.EnhancedDiscountService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
@@ -23,6 +24,9 @@ public class DiscountServiceImpl implements DiscountService {
 
     @Autowired
     private AgentMapper agentMapper;
+    
+    @Autowired
+    private EnhancedDiscountService enhancedDiscountService;
 
     /**
      * 获取代理商折扣率
@@ -93,7 +97,7 @@ public class DiscountServiceImpl implements DiscountService {
     }
 
     /**
-     * 计算旅游产品折扣价格
+     * 计算旅游产品折扣价格（升级版：优先使用产品级别折扣，兼容原有统一折扣）
      * @param tourId 旅游产品ID
      * @param tourType 旅游产品类型
      * @param originalPrice 原价
@@ -128,6 +132,33 @@ public class DiscountServiceImpl implements DiscountService {
                 return result;
             }
             
+            // 尝试使用新的产品级别折扣系统
+            try {
+                BigDecimal productDiscountRate = enhancedDiscountService.getAgentProductDiscountRate(agentId, tourType, tourId);
+                if (productDiscountRate != null) {
+                    log.info("使用产品级别折扣率: {}", productDiscountRate);
+                    
+                    // 使用新的折扣计算方式
+                    Map<String, Object> enhancedResult = enhancedDiscountService.calculateProductDiscount(
+                            tourType, tourId, originalPrice, agentId, null);
+                    
+                    // 将新结果映射到原有结果格式以保持兼容性
+                    result.put("discountedPrice", enhancedResult.get("discountedPrice"));
+                    result.put("discountRate", enhancedResult.get("discountRate"));
+                    result.put("savedAmount", enhancedResult.get("savedAmount"));
+                    result.put("levelCode", enhancedResult.get("levelCode"));
+                    result.put("enhancedMode", true); // 标记使用了增强模式
+                    
+                    log.info("使用产品级别折扣计算完成");
+                    return result;
+                }
+            } catch (Exception e) {
+                log.warn("产品级别折扣计算失败，回退到统一折扣模式", e);
+            }
+            
+            // 回退到原有的统一折扣率逻辑
+            log.info("使用传统统一折扣率模式");
+            
             // 获取代理商折扣率
             BigDecimal discountRate = getAgentDiscountRate(agentId);
             
@@ -140,6 +171,7 @@ public class DiscountServiceImpl implements DiscountService {
             result.put("discountedPrice", discountedPrice);
             result.put("discountRate", discountRate);
             result.put("savedAmount", savedAmount);
+            result.put("enhancedMode", false); // 标记使用了传统模式
             
             // 保存折扣计算历史
             try {

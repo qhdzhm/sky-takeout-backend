@@ -11,6 +11,7 @@ import com.sky.properties.JwtProperties;
 import com.sky.result.Result;
 import com.sky.service.UserService;
 import com.sky.utils.JwtUtil;
+import com.sky.utils.CookieUtil;
 import com.sky.vo.UserLoginVO;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -89,22 +90,23 @@ public class UserController {
                 jwtProperties.getUserTtl(),
                 claims);
 
-        // 5. 设置安全Cookie
-        // 设置HttpOnly Cookie用于安全存储refresh token
-        Cookie refreshTokenCookie = new Cookie("refreshToken", token);
-        refreshTokenCookie.setHttpOnly(true);
-        refreshTokenCookie.setSecure(false); // 开发环境设为false，生产环境应设为true
-        refreshTokenCookie.setPath("/");
-        refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60); // 7天
-        response.addCookie(refreshTokenCookie);
-
-        // 设置访问token Cookie
-        Cookie authTokenCookie = new Cookie("authToken", token);
-        authTokenCookie.setHttpOnly(true);
-        authTokenCookie.setSecure(false);
-        authTokenCookie.setPath("/");
-        authTokenCookie.setMaxAge(15 * 60); // 15分钟
-        response.addCookie(authTokenCookie);
+        // 5. 设置安全Cookie - 正确的双Token模式
+        // Access Token（短期，15分钟）
+        CookieUtil.setCookieWithMultiplePaths(response, "authToken", token, true, 15 * 60);
+        
+        // Refresh Token（长期，7天）- 生成不同的Token
+        Map<String, Object> refreshClaims = new HashMap<>();
+        refreshClaims.put(JwtClaimsConstant.USER_ID, user.getId());
+        refreshClaims.put(JwtClaimsConstant.USERNAME, user.getUsername());
+        refreshClaims.put(JwtClaimsConstant.USER_TYPE, "regular");
+        
+        String refreshToken = JwtUtil.createRefreshJWT(
+            jwtProperties.getUserSecretKey(),
+            jwtProperties.getRefreshTokenTtl(),
+            refreshClaims
+        );
+        
+        CookieUtil.setCookieWithMultiplePaths(response, "refreshToken", refreshToken, true, 7 * 24 * 60 * 60);
 
         // 设置用户信息Cookie（非HttpOnly，供前端读取）
         Map<String, Object> userInfo = new HashMap<>();
@@ -116,18 +118,7 @@ public class UserController {
         userInfo.put("isAuthenticated", true);
         
         String userInfoJson = com.alibaba.fastjson.JSON.toJSONString(userInfo);
-        String encodedUserInfo;
-        try {
-            encodedUserInfo = URLEncoder.encode(userInfoJson, "UTF-8");
-        } catch (Exception e) {
-            log.error("URL编码失败", e);
-            encodedUserInfo = userInfoJson; // 如果编码失败，使用原始值
-        }
-        Cookie userInfoCookie = new Cookie("userInfo", encodedUserInfo);
-        userInfoCookie.setSecure(false);
-        userInfoCookie.setPath("/");
-        userInfoCookie.setMaxAge(15 * 60); // 15分钟
-        response.addCookie(userInfoCookie);
+        CookieUtil.setUserInfoCookie(response, userInfoJson, 15 * 60);
 
         // 6. 构建响应
         UserLoginVO userLoginVO = UserLoginVO.builder()
@@ -140,6 +131,26 @@ public class UserController {
 
         log.info("普通用户登录成功：{}", user.getUsername());
         return Result.success(userLoginVO);
+    }
+
+    /**
+     * 用户登出
+     */
+    @PostMapping("/logout")
+    @ApiOperation("用户登出")
+    public Result<String> logout(HttpServletResponse response) {
+        log.info("普通用户退出登录");
+        
+        try {
+            // 使用统一的Cookie工具类清理所有用户相关Cookie
+            CookieUtil.clearAllUserCookies(response);
+            
+            log.info("普通用户退出登录成功，已清理所有路径下的Cookie");
+            return Result.success("退出登录成功");
+        } catch (Exception e) {
+            log.error("普通用户退出登录失败", e);
+            return Result.error("退出登录失败：" + e.getMessage());
+        }
     }
 
     /**

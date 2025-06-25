@@ -12,6 +12,7 @@
         <result column="phone" property="phone"/>
         <result column="email" property="email"/>
         <result column="discount_rate" property="discountRate"/>
+        <result column="discount_level_id" property="discountLevelId"/>
         <result column="status" property="status"/>
     </resultMap>
 
@@ -58,10 +59,10 @@
     <insert id="insert" parameterType="com.sky.entity.Agent" useGeneratedKeys="true" keyProperty="id">
         insert into agents(
             username, password, company_name, contact_person, 
-            phone, email, discount_rate, status
+            phone, email, discount_rate, discount_level_id, status
         ) values(
             #{username}, #{password}, #{companyName}, #{contactPerson}, 
-            #{phone}, #{email}, #{discountRate}, #{status}
+            #{phone}, #{email}, #{discountRate}, #{discountLevelId}, #{status}
         )
     </insert>
     
@@ -74,6 +75,7 @@
             <if test="phone != null">phone = #{phone},</if>
             <if test="email != null">email = #{email},</if>
             <if test="discountRate != null">discount_rate = #{discountRate},</if>
+            <if test="discountLevelId != null">discount_level_id = #{discountLevelId},</if>
             <if test="status != null">status = #{status},</if>
             <if test="password != null">password = #{password},</if>
         </set>
@@ -132,4 +134,9 @@
     <select id="getEmailById" resultType="string">
         SELECT email FROM agents WHERE id = #{agentId}
     </select>
+    
+    <!-- 更新代理商折扣等级 -->
+    <update id="updateDiscountLevel">
+        UPDATE agents SET discount_level_id = #{discountLevelId} WHERE id = #{agentId}
+    </update>
 </mapper> 

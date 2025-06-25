@@ -13,6 +13,7 @@ import com.sky.service.OrderService;
 import com.sky.service.TourBookingService;
 import com.sky.vo.OrderVO;
 import com.sky.vo.PageResultVO;
+import com.sky.vo.TourBookingVO;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -49,9 +50,17 @@ public class OrderController {
         
         // 从线程上下文中获取当前登录用户信息
         Long userId = BaseContext.getCurrentId();
-        
-        // 从线程上下文中获取用户类型 (这里需要根据实际的认证机制调整)
         String userType = BaseContext.getCurrentUserType();
+        
+        // 🔍 详细调试日志
+        log.info("🔍 订单查询调试信息:");
+        log.info("  - 用户ID: {}", userId);
+        log.info("  - 用户类型: '{}'", userType);
+        log.info("  - 用户类型是否为null: {}", userType == null);
+        log.info("  - 用户类型长度: {}", userType != null ? userType.length() : "null");
+        if (userType != null) {
+            log.info("  - 用户类型字节: {}", java.util.Arrays.toString(userType.getBytes()));
+        }
         
         // 根据用户类型设置对应的查询条件
         if ("agent".equals(userType)) {
@@ -77,11 +86,25 @@ public class OrderController {
             log.info("操作员查询订单，代理商ID: {}, 操作员ID: {}", agentId, operatorId);
         } else {
             // 普通用户只能查询自己的订单
-            orderPageQueryDTO.setUserId(userId.intValue());
+            if (userId != null) {
+                orderPageQueryDTO.setUserId(userId.intValue());
+                log.info("✅ 普通用户查询订单，设置用户ID: {}", userId);
+            } else {
+                log.error("❌ 普通用户查询订单，但用户ID为null");
+                return Result.error("用户身份验证失败");
+            }
             log.info("普通用户查询订单，用户ID: {}", userId);
         }
         
+        // 🔍 查询前的参数确认
+        log.info("🔍 最终查询参数:");
+        log.info("  - userId: {}", orderPageQueryDTO.getUserId());
+        log.info("  - agentId: {}", orderPageQueryDTO.getAgentId());
+        log.info("  - operatorId: {}", orderPageQueryDTO.getOperatorId());
+        
         PageResultVO<OrderVO> pageResult = orderService.pageQuery(orderPageQueryDTO);
+        log.info("🔍 查询结果: 总记录数={}", pageResult != null ? pageResult.getTotal() : "null");
+        
         return Result.success(pageResult);
     }
 
@@ -108,8 +131,8 @@ public class OrderController {
         if (orderVO != null) {
             if ("agent".equals(userType)) {
                 // 代理商主账号：能查看自己的订单 + 所有操作员代理下的订单
-                if (!userId.equals(Long.valueOf(orderVO.getAgentId()))) {
-                    log.warn("代理商 {} 尝试查看非自己的订单 {}", userId, bookingId);
+                if (orderVO.getAgentId() == null || !userId.equals(Long.valueOf(orderVO.getAgentId()))) {
+                    log.warn("代理商 {} 尝试查看非自己的订单 {} (订单代理商ID: {})", userId, bookingId, orderVO.getAgentId());
                     return Result.error("无权限查看此订单");
                 }
                 log.info("代理商主账号查看订单详情，订单ID: {}, 订单代理商ID: {}, 操作员ID: {}", 
@@ -121,18 +144,19 @@ public class OrderController {
                 
                 // 验证订单是否属于该操作员且属于正确的代理商
                 boolean hasPermission = (operatorId != null && operatorId.equals(orderVO.getOperatorId())) &&
-                                       (agentId != null && agentId.equals(Long.valueOf(orderVO.getAgentId())));
+                                       (agentId != null && orderVO.getAgentId() != null && agentId.equals(Long.valueOf(orderVO.getAgentId())));
                 
                 if (!hasPermission) {
-                    log.warn("操作员 {} (代理商: {}) 尝试查看非自己的订单 {}", operatorId, agentId, bookingId);
+                    log.warn("操作员 {} (代理商: {}) 尝试查看非自己的订单 {} (订单代理商ID: {}, 订单操作员ID: {})", 
+                            operatorId, agentId, bookingId, orderVO.getAgentId(), orderVO.getOperatorId());
                     return Result.error("无权限查看此订单");
                 }
                 log.info("操作员查看订单详情，订单ID: {}, 操作员ID: {}, 代理商ID: {}", 
                         bookingId, operatorId, agentId);
             } else {
                 // 普通用户只能查看自己的订单
-                if (!userId.equals(Long.valueOf(orderVO.getUserId()))) {
-                    log.warn("普通用户 {} 尝试查看非自己的订单 {}", userId, bookingId);
+                if (orderVO.getUserId() == null || !userId.equals(Long.valueOf(orderVO.getUserId()))) {
+                    log.warn("普通用户 {} 尝试查看非自己的订单 {} (订单用户ID: {})", userId, bookingId, orderVO.getUserId());
                     return Result.error("无权限查看此订单");
                 }
                 log.info("普通用户查看订单详情，订单ID: {}, 用户ID: {}", bookingId, userId);
@@ -577,6 +601,56 @@ public class OrderController {
         orderVO.setContactPhone(tourBooking.getContactPhone());
         
         return orderVO;
+    }
+
+    /**
+     * 手动同步订单到排团表（测试用）
+     * @param bookingId 订单ID
+     * @return 操作结果
+     */
+    @PostMapping("/{bookingId}/sync-to-schedule")
+    @ApiOperation("手动同步订单到排团表")
+    public Result<String> syncOrderToSchedule(
+            @ApiParam(name = "bookingId", value = "订单ID", required = true)
+            @PathVariable Integer bookingId) {
+        log.info("手动同步订单到排团表，订单ID：{}", bookingId);
+        
+        try {
+            tourBookingService.autoSyncOrderToScheduleTable(bookingId);
+            return Result.success("同步成功");
+        } catch (Exception e) {
+            log.error("手动同步订单到排团表失败：{}", e.getMessage(), e);
+            return Result.error("同步失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 简化测试同步方法（调试用）
+     * @param bookingId 订单ID
+     * @return 操作结果
+     */
+    @PostMapping("/{bookingId}/test-sync")
+    @ApiOperation("简化测试同步方法")
+    public Result<String> testSyncOrderToSchedule(
+            @ApiParam(name = "bookingId", value = "订单ID", required = true)
+            @PathVariable Integer bookingId) {
+        log.info("🧪 开始简化测试同步，订单ID：{}", bookingId);
+        
+        try {
+            // 直接查询订单信息
+            TourBookingVO booking = tourBookingService.getById(bookingId);
+            if (booking == null) {
+                return Result.error("订单不存在");
+            }
+            
+            log.info("🧪 找到订单：{}, 类型：{}, 行程ID：{}", 
+                booking.getOrderNumber(), booking.getTourType(), booking.getTourId());
+            
+            return Result.success("测试完成，订单信息：" + booking.getOrderNumber());
+        } catch (Exception e) {
+            log.error("🧪 简化测试失败：{}", e.getMessage(), e);
+            return Result.error("测试失败：" + e.getMessage());
+        }
     }
 
 }

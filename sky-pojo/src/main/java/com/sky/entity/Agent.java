@@ -41,8 +41,11 @@ public class Agent implements Serializable {
     // 电子邮箱
     private String email;
     
-    // 折扣率
+    // 折扣率（保留兼容性，新系统使用折扣等级）
     private BigDecimal discountRate;
+    
+    // 折扣等级ID
+    private Long discountLevelId;
     
     // 账号状态：1-活跃，0-禁用
     private Integer status;

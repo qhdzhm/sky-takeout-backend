@@ -1,9 +1,11 @@
 package com.sky.controller.admin;
 
 import com.sky.dto.GroupTourDTO;
+import com.sky.dto.ItineraryOptionGroupDTO;
 import com.sky.result.PageResult;
 import com.sky.result.Result;
 import com.sky.service.GroupTourService;
+import com.sky.service.ItineraryOptionService;
 import com.sky.service.TourService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -33,6 +35,9 @@ public class GroupTourController {
     
     @Autowired
     private ImageService imageService;
+    
+    @Autowired
+    private ItineraryOptionService itineraryOptionService;
 
     /**
      * 获取团队游列表（分页）
@@ -243,6 +248,21 @@ public class GroupTourController {
         groupTourService.saveGroupTourDayTours(id, dayTours);
         return Result.success("关联一日游保存成功");
     }
+
+    /**
+     * 获取团队游的可选行程配置
+     * @param groupTourId 团队游ID
+     * @return 可选行程配置列表
+     */
+    @GetMapping("/itinerary-options/{groupTourId}")
+    @ApiOperation("获取团队游的可选行程配置")
+    public Result<List<ItineraryOptionGroupDTO>> getItineraryOptions(@PathVariable Integer groupTourId) {
+        log.info("获取团队游的可选行程配置，团队游ID：{}", groupTourId);
+        List<ItineraryOptionGroupDTO> options = itineraryOptionService.getItineraryOptionGroups(groupTourId);
+        return Result.success(options);
+    }
+
+
 
     /**
      * 获取所有可用的一日游
