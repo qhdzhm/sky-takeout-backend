@@ -96,8 +96,9 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
                 .excludePathPatterns("/regions")
                 // 酒店价格和价格计算API也不需要身份验证
                 .excludePathPatterns("/user/bookings/hotel-prices")
-                .excludePathPatterns("/user/bookings/tour/calculate-price")  // 游客价格计算API不需要认证
-                .excludePathPatterns("/user/bookings/tour/create")  // 游客下单API不需要认证
+                // 🔧 修复代理商下单问题：移除以下两行排除配置，让订单接口经过JWT拦截器
+                // .excludePathPatterns("/user/bookings/tour/calculate-price")  // 游客价格计算API不需要认证
+                // .excludePathPatterns("/user/bookings/tour/create")  // 游客下单API不需要认证
                 // 静态资源和Swagger文档
                 .excludePathPatterns("/")
                 .excludePathPatterns("/error")

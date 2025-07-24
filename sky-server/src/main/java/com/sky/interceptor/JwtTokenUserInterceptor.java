@@ -130,18 +130,17 @@ public class JwtTokenUserInterceptor implements HandlerInterceptor {
         }
 
         if (token == null) {
-            // 检查是否是支持游客模式的接口
-            if (requestURI.contains("/user/bookings/tour/calculate-price")) {
-                log.info("游客模式访问价格计算接口: {}", requestURI);
-                // 游客模式，不设置任何用户信息到BaseContext
+            // 🔧 修复代理商下单问题：支持游客模式访问订单相关接口
+            if (requestURI.contains("/user/bookings/tour/calculate-price") || 
+                requestURI.contains("/user/bookings/tour/create")) {
+                log.info("✅ 游客模式访问订单接口: {}", requestURI);
+                // 游客模式，清空BaseContext确保没有用户信息
+                BaseContext.setCurrentId(null);
+                BaseContext.setCurrentUserType(null);
+                BaseContext.setCurrentAgentId(null);
+                BaseContext.setCurrentOperatorId(null);
+                BaseContext.setCurrentUsername(null);
                 return true;
-            }
-            
-            // 订单创建接口必须要求认证，不再支持游客模式
-            if (requestURI.contains("/user/bookings/tour/create")) {
-                log.warn("❌ 订单创建接口要求认证，但未提供token: {}", requestURI);
-                response.setStatus(401);
-                return false;
             }
             
             //未携带token，不通过，响应401状态码
