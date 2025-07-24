@@ -163,15 +163,22 @@ public class CustomerServiceServiceImpl implements CustomerServiceService {
     }
 
     /**
-     * 创建客服
+     * 创建客服团队成员
      */
     @Override
     public void createService(CustomerServiceDTO customerServiceDTO) {
         Employee employee = new Employee();
         BeanUtils.copyProperties(customerServiceDTO, employee);
         
-        // 设置客服角色
-        employee.setRole(3);
+        // 设置角色：如果未指定角色，默认为客服(role=3)
+        if (employee.getRole() == null) {
+            employee.setRole(3); // 默认客服角色
+        }
+        // 只允许创建管理员(1)、操作员(2)、客服(3)角色，不允许创建导游(4)
+        if (employee.getRole() != 1 && employee.getRole() != 2 && employee.getRole() != 3) {
+            employee.setRole(3); // 强制设置为客服
+        }
+        
         employee.setWorkStatus(0); // 默认空闲
         employee.setOnlineStatus(0); // 默认离线
         employee.setCurrentCustomerCount(0); // 初始服务客户数为0
@@ -180,9 +187,10 @@ public class CustomerServiceServiceImpl implements CustomerServiceService {
         employee.setCreateTime(LocalDateTime.now());
         employee.setUpdateTime(LocalDateTime.now());
         
-        // 生成客服工号
+        // 生成工号（根据角色生成不同前缀）
         if (employee.getServiceNo() == null || employee.getServiceNo().isEmpty()) {
-            employee.setServiceNo("CS" + System.currentTimeMillis());
+            String prefix = getRolePrefix(employee.getRole());
+            employee.setServiceNo(prefix + System.currentTimeMillis());
         }
         
         // 密码加密
@@ -191,6 +199,19 @@ public class CustomerServiceServiceImpl implements CustomerServiceService {
         }
 
         employeeMapper.insertCustomerService(employee);
+    }
+    
+    private String getRolePrefix(Integer role) {
+        switch (role) {
+            case 1:
+                return "ADM"; // 管理员
+            case 2:
+                return "OP";  // 操作员
+            case 3:
+                return "CS";  // 客服
+            default:
+                return "CS";  // 默认客服
+        }
     }
 
     /**

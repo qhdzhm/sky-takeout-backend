@@ -4,8 +4,10 @@ import com.sky.context.BaseContext;
 import com.sky.dto.SendMessageDTO;
 import com.sky.entity.ServiceMessage;
 import com.sky.entity.ServiceSession;
+import com.sky.entity.Employee;
 import com.sky.mapper.ServiceMessageMapper;
 import com.sky.mapper.ServiceSessionMapper;
+import com.sky.mapper.EmployeeMapper;
 import com.sky.service.ServiceMessageService;
 import com.sky.webSocket.AdminWebSocketServer;
 import com.sky.webSocket.WebSocketServer;
@@ -30,6 +32,9 @@ public class ServiceMessageServiceImpl implements ServiceMessageService {
 
     @Autowired
     private ServiceSessionMapper serviceSessionMapper;
+
+    @Autowired
+    private EmployeeMapper employeeMapper;
 
     @Autowired
     private WebSocketServer webSocketServer;
@@ -68,10 +73,26 @@ public class ServiceMessageServiceImpl implements ServiceMessageService {
                 statusChanged = true;
             }
         } else if (session.getEmployeeId() == null) {
-            // 会话未分配，管理员/客服可以接管并发送消息
-            log.info("会话 {} 未分配客服，客服 {} 自动接管该会话", sessionId, senderId);
+            // 🔧 修复权限控制：会话未分配时，允许管理员、操作员、客服接管
+            log.info("会话 {} 未分配客服，员工 {} 尝试接管该会话", sessionId, senderId);
             
-            // 自动分配会话给当前客服
+            // 检查当前员工角色是否有权限接管会话
+            Employee currentEmployee = employeeMapper.getById(senderId.intValue());
+            if (currentEmployee == null) {
+                log.error("❌ 权限检查失败: 员工 {} 不存在", senderId);
+                throw new RuntimeException("员工不存在，无法接管会话");
+            }
+            
+            // 允许管理员(role=1)、操作员(role=2)、客服(role=3)接管会话，禁止导游(role=4)
+            if (currentEmployee.getRole() == 4) {
+                log.error("❌ 权限检查失败: 导游 {} 无权接管客服会话", senderId);
+                throw new RuntimeException("导游无权接管客服会话");
+            }
+            
+            String roleText = getRoleText(currentEmployee.getRole());
+            log.info("✅ {} {} 自动接管未分配的会话 {}", roleText, senderId, sessionId);
+            
+            // 自动分配会话给当前员工（可能是管理员、操作员或客服）
             serviceSessionMapper.assignService(sessionId, senderId, LocalDateTime.now());
             
             // 更新会话状态为进行中
@@ -210,5 +231,19 @@ public class ServiceMessageServiceImpl implements ServiceMessageService {
     public void markAsReadByService(Long sessionId) {
         // 临时实现：暂时跳过，避免编译错误
         log.info("标记会话 {} 的消息为已读（临时实现）", sessionId);
+    }
+
+    
+    private String getRoleText(Integer role) {
+        switch (role) {
+            case 1:
+                return "管理员";
+            case 2:
+                return "操作员";
+            case 3:
+                return "客服";
+            default:
+                return "未知";
+        }
     }
 } 

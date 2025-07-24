@@ -61,7 +61,7 @@ public interface EmployeeMapper {
     /**
      * 根据ID查询客服员工
      */
-    @Select("select * from employees where id = #{id} and role = 3")
+    @Select("select * from employees where id = #{id} and role in (1, 2, 3)")
     Employee getCustomerServiceById(Long id);
 
     /**
@@ -73,7 +73,7 @@ public interface EmployeeMapper {
     /**
      * 更新客服在线状态
      */
-    @Update("update employees set online_status = #{onlineStatus}, last_active_time = now(), update_time = now() where id = #{id} and role = 3")
+    @Update("update employees set online_status = #{onlineStatus}, last_active_time = now(), update_time = now() where id = #{id} and role in (1, 2, 3)")
     void updateCustomerServiceOnlineStatus(Long id, Integer onlineStatus);
 
     /**
@@ -94,7 +94,7 @@ public interface EmployeeMapper {
     /**
      * 查询可用的客服（根据技能标签）
      */
-    @Select("select * from employees where role = 3 and online_status = 1 and current_customer_count < max_concurrent_customers " +
+    @Select("select * from employees where role in (1, 2, 3) and online_status = 1 and current_customer_count < max_concurrent_customers " +
             "and (#{skillTag} is null or find_in_set(#{skillTag}, skill_tags) > 0) " +
             "order by current_customer_count asc, service_level desc limit 1")
     Employee getAvailableCustomerService(String skillTag);
@@ -102,6 +102,6 @@ public interface EmployeeMapper {
     /**
      * 更新客服当前服务客户数
      */
-    @Update("update employees set current_customer_count = #{count}, update_time = now() where id = #{id} and role = 3")
+    @Update("update employees set current_customer_count = #{count}, update_time = now() where id = #{id} and role in (1, 2, 3)")
     void updateCustomerServiceCurrentCount(Long id, Integer count);
 }
