@@ -139,15 +139,25 @@ public class ServiceSessionServiceImpl implements ServiceSessionService {
         // 获取可用客服
         CustomerService availableService = customerServiceService.getAvailableService(skillTag);
         
+        // 🔧 修复：检查客服是否真的连接到WebSocket
+        if (availableService != null && !AdminWebSocketServer.isServiceOnline(availableService.getId())) {
+            log.warn("客服 {} (ID: {}) 在数据库中标记为在线，但WebSocket未连接，跳过分配", 
+                availableService.getName(), availableService.getId());
+            availableService = null;
+        }
+        
         if (availableService != null) {
             // 分配客服
             serviceSessionMapper.assignService(sessionId, availableService.getId(), LocalDateTime.now());
+            
+            // 🔧 修复：建立WebSocket会话映射关系
+            AdminWebSocketServer.bindSessionToService(sessionId, availableService.getId());
             
             // 更新客服当前服务客户数
             int newCount = availableService.getCurrentCustomerCount() + 1;
             customerServiceService.updateCurrentCustomerCount(availableService.getId(), newCount);
             
-            log.info("会话 {} 已分配给客服 {} (ID: {})", sessionId, availableService.getName(), availableService.getId());
+            log.info("会话 {} 已分配给客服 {} (ID: {})，已建立WebSocket映射", sessionId, availableService.getName(), availableService.getId());
         } else {
             log.warn("暂无可用客服，会话 {} 进入等待队列。技能标签: {}", sessionId, skillTag);
             
@@ -156,14 +166,19 @@ public class ServiceSessionServiceImpl implements ServiceSessionService {
             if (onlineServices != null) {
                 log.info("当前在线客服数量: {}", onlineServices.size());
                 for (CustomerService service : onlineServices) {
-                    log.info("客服 {} (ID: {}) - 当前服务数: {}/{}, 技能: {}", 
+                    boolean isWebSocketOnline = AdminWebSocketServer.isServiceOnline(service.getId());
+                    log.info("客服 {} (ID: {}) - 当前服务数: {}/{}, 技能: {}, WebSocket连接: {}", 
                         service.getName(), service.getId(), 
                         service.getCurrentCustomerCount(), service.getMaxConcurrentCustomers(),
-                        service.getSkillTags());
+                        service.getSkillTags(), isWebSocketOnline ? "✅已连接" : "❌未连接");
                 }
             } else {
                 log.warn("无法获取在线客服列表，onlineServices为null");
             }
+            
+            // 🔧 输出WebSocket连接状态调试信息
+            int webSocketConnections = AdminWebSocketServer.getOnlineServiceCount();
+            log.info("🔍 当前WebSocket连接数: {}", webSocketConnections);
         }
     }
 
