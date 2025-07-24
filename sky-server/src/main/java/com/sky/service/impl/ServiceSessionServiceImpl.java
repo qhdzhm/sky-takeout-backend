@@ -281,35 +281,44 @@ public class ServiceSessionServiceImpl implements ServiceSessionService {
      */
     @Override
     public PageResult getSessionList(Integer page, Integer pageSize, Integer status, 
-                                   String startDate, String endDate, String keyword) {
+                                   String startDate, String endDate, String keyword, Long serviceId) {
         try {
-            // 由于没有完整的分页查询SQL，先返回所有会话的简单版本
-            List<ServiceSession> allSessions;
+            log.info("📋 分页查询会话列表 - page:{}, pageSize:{}, status:{}, startDate:{}, endDate:{}, keyword:{}, serviceId:{}", 
+                    page, pageSize, status, startDate, endDate, keyword, serviceId);
             
-            if (status != null && status == 0) {
-                // 如果查询等待中的会话
-                allSessions = serviceSessionMapper.getWaitingAssignSessions();
+            // 计算分页参数
+            int offset = (page - 1) * pageSize;
+            
+            List<ServiceSessionVO> sessionList;
+            Integer total;
+            
+            if (serviceId != null) {
+                // 🎯 查询特定员工的会话记录
+                log.info("🔍 查询员工 {} 的会话记录", serviceId);
+                sessionList = serviceSessionMapper.pageQueryByEmployeeId(serviceId, status, startDate, endDate, keyword, offset, pageSize);
+                total = serviceSessionMapper.countByEmployeeId(serviceId, status, startDate, endDate, keyword);
+                log.info("✅ 员工 {} 的会话查询完成，总数: {}, 当前页数据: {}", serviceId, total, sessionList.size());
             } else {
-                // 这里应该有完整的分页查询，暂时用简单查询代替
-                log.warn("分页查询会话列表功能需要完整实现，当前返回等待队列");
-                allSessions = serviceSessionMapper.getWaitingAssignSessions();
+                // 🌐 查询所有会话（管理员视图）
+                log.info("🔍 查询所有会话记录（管理员视图）");
+                sessionList = serviceSessionMapper.pageQueryAll(status, startDate, endDate, keyword, offset, pageSize);
+                total = serviceSessionMapper.countAll(status, startDate, endDate, keyword);
+                log.info("✅ 所有会话查询完成，总数: {}, 当前页数据: {}", total, sessionList.size());
             }
             
-            log.info("查询到会话数量: {}", allSessions.size());
+            // 如果查询结果为空，记录调试信息
+            if (sessionList.isEmpty()) {
+                if (serviceId != null) {
+                    log.info("📝 员工 {} 暂无匹配的会话记录", serviceId);
+                } else {
+                    log.info("📝 系统中暂无匹配的会话记录");
+                }
+            }
             
-            // 简单分页处理
-            int total = allSessions.size();
-            int startIndex = (page - 1) * pageSize;
-            int endIndex = Math.min(startIndex + pageSize, total);
+            return new PageResult(total, sessionList);
             
-            List<ServiceSession> pageData = allSessions.subList(
-                Math.max(0, startIndex), 
-                Math.max(0, endIndex)
-            );
-            
-            return new PageResult(total, pageData);
         } catch (Exception e) {
-            log.error("查询会话列表失败", e);
+            log.error("❌ 分页查询会话列表失败：{}", e.getMessage(), e);
             return new PageResult(0, Collections.emptyList());
         }
     }

@@ -60,7 +60,7 @@ public interface ServiceSessionService {
      * 分页查询会话列表
      */
     PageResult getSessionList(Integer page, Integer pageSize, Integer status, 
-                             String startDate, String endDate, String keyword);
+                             String startDate, String endDate, String keyword, Long serviceId);
 
     /**
      * 获取等待队列

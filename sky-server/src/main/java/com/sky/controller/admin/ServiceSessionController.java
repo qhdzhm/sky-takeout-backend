@@ -45,12 +45,13 @@ public class ServiceSessionController {
             @RequestParam(required = false) Integer status,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate,
-            @RequestParam(required = false) String keyword) {
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long serviceId) {
         
-        log.info("分页查询会话列表：page={}, pageSize={}, status={}, startDate={}, endDate={}, keyword={}", 
-                page, pageSize, status, startDate, endDate, keyword);
+        log.info("分页查询会话列表：page={}, pageSize={}, status={}, startDate={}, endDate={}, keyword={}, serviceId={}", 
+                page, pageSize, status, startDate, endDate, keyword, serviceId);
         
-        PageResult pageResult = serviceSessionService.getSessionList(page, pageSize, status, startDate, endDate, keyword);
+        PageResult pageResult = serviceSessionService.getSessionList(page, pageSize, status, startDate, endDate, keyword, serviceId);
         return Result.success(pageResult);
     }
 

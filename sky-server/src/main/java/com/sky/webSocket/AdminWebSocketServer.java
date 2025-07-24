@@ -1,7 +1,9 @@
 package com.sky.webSocket;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sky.mapper.EmployeeMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import javax.websocket.*;
@@ -31,6 +33,14 @@ public class AdminWebSocketServer {
     // 简化的ObjectMapper，不需要处理LocalDateTime
     private static ObjectMapper objectMapper = new ObjectMapper();
 
+    // 静态注入EmployeeMapper用于更新在线状态
+    private static EmployeeMapper employeeMapper;
+
+    @Autowired
+    public void setEmployeeMapper(EmployeeMapper employeeMapper) {
+        AdminWebSocketServer.employeeMapper = employeeMapper;
+    }
+
     /**
      * 连接建立成功调用的方法
      */
@@ -39,6 +49,18 @@ public class AdminWebSocketServer {
         try {
             serviceConnections.put(serviceId, session);
             log.info("✅ 客服 {} 成功连接到管理端WebSocket，当前在线客服数: {}", serviceId, serviceConnections.size());
+            
+            // 🔧 新增：更新数据库中的在线状态
+            if (employeeMapper != null) {
+                try {
+                    employeeMapper.updateCustomerServiceOnlineStatus(serviceId, 1);
+                    log.info("✅ 已更新客服 {} 的数据库在线状态为：上线", serviceId);
+                } catch (Exception e) {
+                    log.error("❌ 更新客服 {} 在线状态失败：{}", serviceId, e.getMessage());
+                }
+            } else {
+                log.warn("⚠️ EmployeeMapper未注入，无法更新在线状态");
+            }
             
             // 发送连接成功消息
             sendMessage(serviceId, createMessage("connected", "连接成功", null));
@@ -59,6 +81,18 @@ public class AdminWebSocketServer {
         try {
             serviceConnections.remove(serviceId);
             log.info("❌ 客服 {} 断开管理端WebSocket连接，剩余在线客服数: {}", serviceId, serviceConnections.size());
+            
+            // 🔧 新增：更新数据库中的在线状态
+            if (employeeMapper != null) {
+                try {
+                    employeeMapper.updateCustomerServiceOnlineStatus(serviceId, 0);
+                    log.info("✅ 已更新客服 {} 的数据库在线状态为：离线", serviceId);
+                } catch (Exception e) {
+                    log.error("❌ 更新客服 {} 离线状态失败：{}", serviceId, e.getMessage());
+                }
+            } else {
+                log.warn("⚠️ EmployeeMapper未注入，无法更新离线状态");
+            }
             
             // 清理相关的会话映射
             sessionServiceMapping.entrySet().removeIf(entry -> entry.getValue().equals(serviceId));

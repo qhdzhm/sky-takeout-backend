@@ -80,4 +80,42 @@ public interface ServiceSessionMapper {
     @Update("update service_session set session_status = #{sessionStatus}, session_type = #{sessionType}, " +
             "subject = #{subject}, employee_id = #{employeeId}, update_time = #{updateTime} where id = #{id}")
     void updateSession(ServiceSession serviceSession);
+
+    /**
+     * 按员工ID分页查询会话列表
+     */
+    List<ServiceSessionVO> pageQueryByEmployeeId(@Param("employeeId") Long employeeId,
+                                               @Param("status") Integer status,
+                                               @Param("startDate") String startDate,
+                                               @Param("endDate") String endDate,
+                                               @Param("keyword") String keyword,
+                                               @Param("offset") Integer offset,
+                                               @Param("limit") Integer limit);
+
+    /**
+     * 统计员工会话总数
+     */
+    Integer countByEmployeeId(@Param("employeeId") Long employeeId,
+                            @Param("status") Integer status,
+                            @Param("startDate") String startDate,
+                            @Param("endDate") String endDate,
+                            @Param("keyword") String keyword);
+
+    /**
+     * 查询所有会话（管理员查看全部）
+     */
+    List<ServiceSessionVO> pageQueryAll(@Param("status") Integer status,
+                                      @Param("startDate") String startDate,
+                                      @Param("endDate") String endDate,
+                                      @Param("keyword") String keyword,
+                                      @Param("offset") Integer offset,
+                                      @Param("limit") Integer limit);
+
+    /**
+     * 统计所有会话总数
+     */
+    Integer countAll(@Param("status") Integer status,
+                   @Param("startDate") String startDate,
+                   @Param("endDate") String endDate,
+                   @Param("keyword") String keyword);
 } 

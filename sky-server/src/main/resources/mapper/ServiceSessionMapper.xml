@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sky.mapper.ServiceSessionMapper">
+
+    <!-- 按员工ID分页查询会话列表 -->
+    <select id="pageQueryByEmployeeId" resultType="com.sky.vo.ServiceSessionVO">
+        SELECT 
+            ss.id,
+            ss.session_no,
+            ss.user_id,
+            ss.employee_id,
+            ss.session_status,
+            ss.session_type,
+            ss.subject,
+            ss.start_time,
+            ss.end_time,
+            ss.service_duration,
+            ss.wait_duration,
+            ss.user_rating,
+            ss.user_comment,
+            ss.service_remark,
+            ss.create_time,
+            ss.update_time,
+            u.username as user_name,
+            u.first_name as user_avatar,
+            e.name as service_name
+        FROM service_session ss
+        LEFT JOIN users u ON ss.user_id = u.user_id
+        LEFT JOIN employees e ON ss.employee_id = e.id
+        WHERE ss.employee_id = #{employeeId}
+        <if test="status != null">
+            AND ss.session_status = #{status}
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND DATE(ss.create_time) >= #{startDate}
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND DATE(ss.create_time) &lt;= #{endDate}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (ss.subject LIKE CONCAT('%', #{keyword}, '%') 
+                 OR u.username LIKE CONCAT('%', #{keyword}, '%')
+                 OR ss.session_no LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY ss.create_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <!-- 统计员工会话总数 -->
+    <select id="countByEmployeeId" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM service_session ss
+        LEFT JOIN users u ON ss.user_id = u.user_id
+        WHERE ss.employee_id = #{employeeId}
+        <if test="status != null">
+            AND ss.session_status = #{status}
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND DATE(ss.create_time) >= #{startDate}
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND DATE(ss.create_time) &lt;= #{endDate}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (ss.subject LIKE CONCAT('%', #{keyword}, '%') 
+                 OR u.username LIKE CONCAT('%', #{keyword}, '%')
+                 OR ss.session_no LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </select>
+
+    <!-- 查询所有会话（管理员查看全部） -->
+    <select id="pageQueryAll" resultType="com.sky.vo.ServiceSessionVO">
+        SELECT 
+            ss.id,
+            ss.session_no,
+            ss.user_id,
+            ss.employee_id,
+            ss.session_status,
+            ss.session_type,
+            ss.subject,
+            ss.start_time,
+            ss.end_time,
+            ss.service_duration,
+            ss.wait_duration,
+            ss.user_rating,
+            ss.user_comment,
+            ss.service_remark,
+            ss.create_time,
+            ss.update_time,
+            u.username as user_name,
+            u.first_name as user_avatar,
+            e.name as service_name
+        FROM service_session ss
+        LEFT JOIN users u ON ss.user_id = u.user_id
+        LEFT JOIN employees e ON ss.employee_id = e.id
+        WHERE 1=1
+        <if test="status != null">
+            AND ss.session_status = #{status}
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND DATE(ss.create_time) >= #{startDate}
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND DATE(ss.create_time) &lt;= #{endDate}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (ss.subject LIKE CONCAT('%', #{keyword}, '%') 
+                 OR u.username LIKE CONCAT('%', #{keyword}, '%')
+                 OR ss.session_no LIKE CONCAT('%', #{keyword}, '%')
+                 OR e.name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY ss.create_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <!-- 统计所有会话总数 -->
+    <select id="countAll" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM service_session ss
+        LEFT JOIN users u ON ss.user_id = u.user_id
+        LEFT JOIN employees e ON ss.employee_id = e.id
+        WHERE 1=1
+        <if test="status != null">
+            AND ss.session_status = #{status}
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND DATE(ss.create_time) >= #{startDate}
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND DATE(ss.create_time) &lt;= #{endDate}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (ss.subject LIKE CONCAT('%', #{keyword}, '%') 
+                 OR u.username LIKE CONCAT('%', #{keyword}, '%')
+                 OR ss.session_no LIKE CONCAT('%', #{keyword}, '%')
+                 OR e.name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </select>
+
+</mapper> 
