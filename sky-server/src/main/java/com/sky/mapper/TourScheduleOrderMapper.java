@@ -17,6 +17,14 @@ import java.util.List;
 public interface TourScheduleOrderMapper {
 
     /**
+     * 根据ID查询排团记录
+     * @param id 排团记录ID
+     * @return 排团记录
+     */
+    @Select("SELECT * FROM tour_schedule_order WHERE id = #{id}")
+    TourScheduleOrder getById(Integer id);
+
+    /**
      * 通过订单ID查询行程排序
      * @param bookingId 订单ID
      * @return 行程排序列表
@@ -96,4 +104,20 @@ public interface TourScheduleOrderMapper {
      */
     @Update("UPDATE tour_schedule_order SET contact_person=#{contactPerson}, contact_phone=#{contactPhone}, updated_at=NOW() WHERE booking_id=#{bookingId}")
     int updateContactInfoByBookingId(Integer bookingId, String contactPerson, String contactPhone);
+
+    /**
+     * 根据订单号搜索行程排序
+     * @param orderNumber 订单号
+     * @return 行程排序列表
+     */
+    @Select("SELECT * FROM tour_schedule_order WHERE order_number LIKE CONCAT('%', #{orderNumber}, '%') ORDER BY tour_date, display_order")
+    List<TourScheduleOrder> getByOrderNumber(String orderNumber);
+
+    /**
+     * 根据联系人姓名搜索行程排序
+     * @param contactPerson 联系人姓名
+     * @return 行程排序列表
+     */
+    @Select("SELECT * FROM tour_schedule_order WHERE contact_person LIKE CONCAT('%', #{contactPerson}, '%') ORDER BY tour_date, display_order")
+    List<TourScheduleOrder> getByContactPerson(String contactPerson);
 } 

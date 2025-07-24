@@ -98,4 +98,11 @@ public interface PassengerMapper {
      * @return 影响行数
      */
     int deleteRelation(@Param("bookingId") Integer bookingId, @Param("passengerId") Integer passengerId);
+    
+    /**
+     * 🆕 获取乘客的所有关联订单
+     * @param passengerId 乘客ID
+     * @return 关联关系列表
+     */
+    List<BookingPassengerRelation> getPassengerRelations(@Param("passengerId") Integer passengerId);
 } 

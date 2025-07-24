@@ -77,10 +77,6 @@ public class TourScheduleController {
         return Result.success(result);
     }
 
-
-
-
-
     /**
      * 根据日期和地点获取导游车辆分配信息
      */
@@ -92,5 +88,27 @@ public class TourScheduleController {
         log.info("获取导游车辆分配信息: 日期={}, 地点={}", date, location);
         List<Object> assignments = tourScheduleOrderService.getAssignmentByDateAndLocation(date, location);
         return Result.success(assignments);
+    }
+
+    /**
+     * 根据订单号搜索行程排序
+     */
+    @GetMapping("/search")
+    @ApiOperation("根据订单号搜索行程排序")
+    public Result<List<TourScheduleVO>> getSchedulesByOrderNumber(@RequestParam String orderNumber) {
+        log.info("根据订单号搜索行程排序: {}", orderNumber);
+        List<TourScheduleVO> schedules = tourScheduleOrderService.getSchedulesByOrderNumber(orderNumber);
+        return Result.success(schedules);
+    }
+
+    /**
+     * 根据联系人姓名搜索行程排序
+     */
+    @GetMapping("/search/contact")
+    @ApiOperation("根据联系人姓名搜索行程排序")
+    public Result<List<TourScheduleVO>> getSchedulesByContactPerson(@RequestParam String contactPerson) {
+        log.info("根据联系人姓名搜索行程排序: {}", contactPerson);
+        List<TourScheduleVO> schedules = tourScheduleOrderService.getSchedulesByContactPerson(contactPerson);
+        return Result.success(schedules);
     }
 } 

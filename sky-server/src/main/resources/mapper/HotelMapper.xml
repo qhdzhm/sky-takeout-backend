@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sky.mapper.HotelMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.sky.entity.Hotel">
+        <id column="id" property="id" jdbcType="INTEGER"/>
+        <result column="supplier_id" property="supplierId" jdbcType="INTEGER"/>
+        <result column="hotel_name" property="hotelName" jdbcType="VARCHAR"/>
+        <result column="hotel_level" property="hotelLevel" jdbcType="VARCHAR"/>
+        <result column="address" property="address" jdbcType="VARCHAR"/>
+        <result column="location_area" property="locationArea" jdbcType="VARCHAR"/>
+        <result column="phone" property="phone" jdbcType="VARCHAR"/>
+        <result column="contact_phone" property="contactPhone" jdbcType="VARCHAR"/>
+        <result column="contact_email" property="contactEmail" jdbcType="VARCHAR"/>
+        <result column="contact_person" property="contactPerson" jdbcType="VARCHAR"/>
+        <result column="check_in_time" property="checkInTime" jdbcType="TIME"/>
+        <result column="check_out_time" property="checkOutTime" jdbcType="TIME"/>
+        <result column="facilities" property="facilities" jdbcType="VARCHAR"/>
+        <result column="description" property="description" jdbcType="VARCHAR"/>
+        <result column="images" property="images" jdbcType="VARCHAR"/>
+        <result column="status" property="status" jdbcType="VARCHAR"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+        <result column="rating" property="rating" jdbcType="DECIMAL"/>
+    </resultMap>
+
+    <!-- 基础列 -->
+    <sql id="Base_Column_List">
+        id, supplier_id, hotel_name, hotel_level, address, location_area, 
+        phone, contact_phone, contact_email, contact_person, check_in_time, check_out_time, 
+        facilities, description, images, status, created_at, updated_at, rating
+    </sql>
+
+    <!-- 插入酒店 -->
+    <insert id="insert" parameterType="com.sky.entity.Hotel">
+        INSERT INTO hotels (
+            supplier_id, hotel_name, hotel_level, address, location_area, 
+            phone, contact_phone, contact_email, contact_person, check_in_time, check_out_time, 
+            facilities, description, images, status, created_at, updated_at, rating
+        ) VALUES (
+            #{supplierId}, #{hotelName}, #{hotelLevel}, #{address}, #{locationArea}, 
+            #{phone}, #{contactPhone}, #{contactEmail}, #{contactPerson}, #{checkInTime}, #{checkOutTime}, 
+            #{facilities}, #{description}, #{images}, #{status}, #{createdAt}, #{updatedAt}, #{rating}
+        )
+    </insert>
+
+    <!-- 根据ID查询酒店 -->
+    <select id="getById" parameterType="java.lang.Integer" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM hotels
+        WHERE id = #{id}
+    </select>
+
+    <!-- 获取所有活跃的酒店 -->
+    <select id="getAllActive" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM hotels
+        WHERE status = 'active'
+        ORDER BY hotel_name
+    </select>
+
+    <!-- 根据供应商ID获取酒店列表 -->
+    <select id="getBySupplierId" parameterType="java.lang.Integer" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM hotels
+        WHERE supplier_id = #{supplierId} AND status = 'active'
+        ORDER BY hotel_name
+    </select>
+
+    <!-- 根据酒店等级查询酒店列表 -->
+    <select id="getByHotelLevel" parameterType="java.lang.String" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM hotels
+        WHERE hotel_level = #{hotelLevel} AND status = 'active'
+        ORDER BY hotel_name
+    </select>
+
+    <!-- 根据区域位置查询酒店列表 -->
+    <select id="getByLocationArea" parameterType="java.lang.String" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM hotels
+        WHERE location_area = #{locationArea} AND status = 'active'
+        ORDER BY hotel_name
+    </select>
+
+    <!-- 更新酒店 -->
+    <update id="update" parameterType="com.sky.entity.Hotel">
+        UPDATE hotels
+        SET supplier_id = #{supplierId},
+            hotel_name = #{hotelName},
+            hotel_level = #{hotelLevel},
+            address = #{address},
+            location_area = #{locationArea},
+            phone = #{phone},
+            contact_phone = #{contactPhone},
+            contact_email = #{contactEmail},
+            contact_person = #{contactPerson},
+            check_in_time = #{checkInTime},
+            check_out_time = #{checkOutTime},
+            facilities = #{facilities},
+            description = #{description},
+            images = #{images},
+            status = #{status},
+            updated_at = #{updatedAt},
+            rating = #{rating}
+        WHERE id = #{id}
+    </update>
+
+    <!-- 更新酒店状态 -->
+    <update id="updateStatus">
+        UPDATE hotels
+        SET status = #{status}
+        WHERE id = #{id}
+    </update>
+
+    <!-- 删除酒店 -->
+    <delete id="deleteById" parameterType="java.lang.Integer">
+        DELETE FROM hotels WHERE id = #{id}
+    </delete>
+
+    <!-- 根据条件搜索酒店 -->
+    <select id="searchHotels" resultType="com.sky.vo.HotelVO">
+        SELECT h.id, h.hotel_name, h.hotel_level, h.address, h.location_area, 
+               h.phone, h.rating, h.status, s.supplier_name
+        FROM hotels h
+        LEFT JOIN hotel_suppliers s ON h.supplier_id = s.id
+        WHERE h.status = 'active'
+        <if test="locationArea != null and locationArea != ''">
+            AND h.location_area = #{locationArea}
+        </if>
+        <if test="hotelLevel != null and hotelLevel != ''">
+            AND h.hotel_level = #{hotelLevel}
+        </if>
+        <if test="minPrice != null">
+            AND EXISTS (
+                SELECT 1 FROM hotel_room_types rt 
+                WHERE rt.hotel_id = h.id AND rt.base_price &gt;= #{minPrice}
+            )
+        </if>
+        <if test="maxPrice != null">
+            AND EXISTS (
+                SELECT 1 FROM hotel_room_types rt 
+                WHERE rt.hotel_id = h.id AND rt.base_price &lt;= #{maxPrice}
+            )
+        </if>
+        <choose>
+            <when test="sortBy == 'price_asc'">
+                ORDER BY (SELECT MIN(rt.base_price) FROM hotel_room_types rt WHERE rt.hotel_id = h.id) ASC
+            </when>
+            <when test="sortBy == 'price_desc'">
+                ORDER BY (SELECT MIN(rt.base_price) FROM hotel_room_types rt WHERE rt.hotel_id = h.id) DESC
+            </when>
+            <when test="sortBy == 'rating_desc'">
+                ORDER BY h.rating DESC
+            </when>
+            <otherwise>
+                ORDER BY h.hotel_name
+            </otherwise>
+        </choose>
+    </select>
+
+    <!-- 获取酒店详细信息 -->
+    <select id="getDetailById" parameterType="java.lang.Integer" resultType="com.sky.vo.HotelVO">
+        SELECT h.id, h.hotel_name, h.hotel_level, h.address, h.location_area, 
+               h.phone, h.facilities, h.description, h.images, h.rating, h.status,
+               s.supplier_name, s.contact_person, s.contact_phone, s.contact_email
+        FROM hotels h
+        LEFT JOIN hotel_suppliers s ON h.supplier_id = s.id
+        WHERE h.id = #{id}
+    </select>
+
+</mapper>

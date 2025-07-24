@@ -585,12 +585,45 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
     public List<Object> getAssignmentByDateAndLocation(LocalDate date, String location) {
         log.info("根据日期和地点获取导游车辆分配信息: 日期={}, 地点={}", date, location);
         
-        try {
-            // TODO: 临时禁用，等TourGuideVehicleAssignmentVO类可用时再启用
-            return new ArrayList<>();
-        } catch (Exception e) {
-            log.error("获取导游车辆分配信息失败", e);
+        // 暂时返回空列表，后续如果需要可以实现具体逻辑
+        return new ArrayList<>();
+    }
+
+    /**
+     * 根据订单号搜索行程排序
+     * @param orderNumber 订单号
+     * @return 行程排序视图对象列表
+     */
+    @Override
+    public List<TourScheduleVO> getSchedulesByOrderNumber(String orderNumber) {
+        log.info("根据订单号搜索行程排序: {}", orderNumber);
+        
+        if (orderNumber == null || orderNumber.trim().isEmpty()) {
+            log.warn("订单号为空，返回空列表");
             return new ArrayList<>();
         }
+        
+        List<TourScheduleOrder> scheduleOrders = tourScheduleOrderMapper.getByOrderNumber(orderNumber.trim());
+        
+        return scheduleOrders.stream().map(this::convertToVO).collect(Collectors.toList());
+    }
+
+    /**
+     * 根据联系人姓名搜索行程排序
+     * @param contactPerson 联系人姓名
+     * @return 行程排序视图对象列表
+     */
+    @Override
+    public List<TourScheduleVO> getSchedulesByContactPerson(String contactPerson) {
+        log.info("根据联系人姓名搜索行程排序: {}", contactPerson);
+        
+        if (contactPerson == null || contactPerson.trim().isEmpty()) {
+            log.warn("联系人姓名为空，返回空列表");
+            return new ArrayList<>();
+        }
+        
+        List<TourScheduleOrder> scheduleOrders = tourScheduleOrderMapper.getByContactPerson(contactPerson.trim());
+        
+        return scheduleOrders.stream().map(this::convertToVO).collect(Collectors.toList());
     }
 } 

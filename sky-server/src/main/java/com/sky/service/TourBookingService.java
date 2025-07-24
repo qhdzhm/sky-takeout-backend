@@ -70,6 +70,14 @@ public interface TourBookingService {
      * @return 是否成功
      */
     Boolean complete(Integer bookingId);
+
+    /**
+     * 删除订单（只能删除已取消的订单）
+     * 
+     * @param bookingId 订单ID
+     * @return 是否成功
+     */
+    Boolean delete(Integer bookingId);
     
     /**
      * 统一的价格计算方法（支持所有功能）

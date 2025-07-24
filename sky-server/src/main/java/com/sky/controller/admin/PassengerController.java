@@ -134,4 +134,42 @@ public class PassengerController {
         Boolean result = passengerService.updatePassengerBookingInfo(bookingId, passengerDTO);
         return Result.success(result);
     }
+    
+    /**
+     * 🆕 批量修复所有订单的乘客人数统计
+     */
+    @PostMapping("/fix-passenger-counts")
+    @ApiOperation("批量修复所有订单的乘客人数统计")
+    public Result<String> fixAllBookingPassengerCounts() {
+        log.info("🚀 管理员手动执行批量修复所有订单的乘客人数统计");
+        try {
+            Integer fixedCount = passengerService.fixAllBookingPassengerCounts();
+            String message = String.format("✅ 批量修复完成！实际修复了 %d 个订单的人数统计", fixedCount);
+            log.info(message);
+            return Result.success(message);
+        } catch (Exception e) {
+            String errorMessage = "❌ 批量修复失败: " + e.getMessage();
+            log.error(errorMessage, e);
+            return Result.error(errorMessage);
+        }
+    }
+    
+    /**
+     * 🆕 清理重复乘客数据
+     */
+    @PostMapping("/clean-duplicate-passengers")
+    @ApiOperation("清理重复乘客数据")
+    public Result<String> cleanDuplicatePassengers() {
+        log.info("🧹 管理员手动执行清理重复乘客数据");
+        try {
+            Integer cleanedCount = passengerService.cleanDuplicatePassengers();
+            String message = String.format("✅ 重复数据清理完成！清理了 %d 条重复乘客记录", cleanedCount);
+            log.info(message);
+            return Result.success(message);
+        } catch (Exception e) {
+            String errorMessage = "❌ 重复数据清理失败: " + e.getMessage();
+            log.error(errorMessage, e);
+            return Result.error(errorMessage);
+        }
+    }
 }

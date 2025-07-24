@@ -45,16 +45,42 @@ public class AgentCreditController {
         String userType = BaseContext.getCurrentUserType();
         Long targetAgentId;
         
+        // 🔍 BaseContext详细状态调试
+        log.info("🔍 BaseContext详细状态:");
+        log.info("  - 用户类型 (userType): {} (是否为空: {})", userType, userType == null);
+        log.info("  - 当前用户ID (currentId): {} (是否为空: {})", BaseContext.getCurrentId(), BaseContext.getCurrentId() == null);
+        log.info("  - 代理商ID (agentId): {} (是否为空: {})", BaseContext.getCurrentAgentId(), BaseContext.getCurrentAgentId() == null);
+        log.info("  - 前端提供的ID信息: agentId={}", agentId);
+        
         // 如果是操作员，获取所属代理商的信用额度信息
         if ("agent_operator".equals(userType)) {
             targetAgentId = BaseContext.getCurrentAgentId();
             if (targetAgentId == null) {
-                return Result.error("无法获取代理商信息");
+                log.error("❌ 操作员无法获取代理商ID，BaseContext状态异常");
+                return Result.error("无法获取代理商信息，请重新登录");
             }
             log.info("操作员获取代理商信用额度信息, 操作员ID: {}, 代理商ID: {}", BaseContext.getCurrentId(), targetAgentId);
         } else {
             // 代理商主账号，使用传入的agentId或当前用户ID
             targetAgentId = agentId != null ? agentId : BaseContext.getCurrentId();
+            
+            // 🔒 兜底逻辑：如果BaseContext中没有agentId但有userId，且用户类型是agent，则使用userId作为agentId
+            if (targetAgentId == null && "agent".equals(userType)) {
+                targetAgentId = BaseContext.getCurrentId();
+                log.warn("⚠️ BaseContext中agentId为空，使用userId作为agentId: {}", targetAgentId);
+            }
+            
+            // 🔒 进一步兜底：如果前端提供了agentId参数，则使用前端提供的值
+            if (targetAgentId == null && agentId != null) {
+                targetAgentId = agentId;
+                log.warn("⚠️ BaseContext中agentId为空，使用前端提供的agentId: {}", targetAgentId);
+            }
+            
+            if (targetAgentId == null) {
+                log.error("❌ 无法确定代理商ID，BaseContext状态异常");
+                return Result.error("无法获取代理商信息，请重新登录");
+            }
+            
             log.info("代理商获取信用额度信息, 代理商ID: {}", targetAgentId);
         }
         

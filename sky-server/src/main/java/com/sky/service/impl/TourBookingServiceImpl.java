@@ -202,6 +202,14 @@ public class TourBookingServiceImpl implements TourBookingService {
             
             log.info("🔍 TourBookingService获取到的用户上下文: userType={}, currentId={}, agentId={}, operatorId={}, username={}", 
                     userType, currentId, agentId, operatorId, username);
+                    
+            // 详细调试日志
+            log.info("🔍 BaseContext详细状态:");
+            log.info("  - 用户类型 (userType): {} (是否为空: {})", userType, userType == null);
+            log.info("  - 当前用户ID (currentId): {} (是否为空: {})", currentId, currentId == null);
+            log.info("  - 代理商ID (agentId): {} (是否为空: {})", agentId, agentId == null);
+            log.info("  - 操作员ID (operatorId): {} (是否为空: {})", operatorId, operatorId == null);
+            log.info("  - 用户名 (username): {} (是否为空: {})", username, username == null);
             
             // 检查前端是否已经传递了agentId或userId
             boolean frontendProvidedAgentId = tourBookingDTO.getAgentId() != null;
@@ -293,22 +301,26 @@ public class TourBookingServiceImpl implements TourBookingService {
                     tourBooking.getUserId(), tourBooking.getAgentId(), tourBooking.getOperatorId());
                     
         } catch (Exception e) {
-            // 游客模式：BaseContext调用失败是正常的
-            log.error("获取用户认证信息失败，可能是游客模式", e);
+            // BaseContext调用失败，但现在订单创建需要认证，这不应该发生
+            log.error("❌ 获取用户认证信息失败，这是一个异常情况！", e);
             
-            // 即使异常情况下，也尝试使用前端传递的ID
+            // 检查前端是否传递了有效的代理商ID
+            if (tourBookingDTO.getAgentId() != null) {
+                log.warn("⚠️ BaseContext失败但前端提供了代理商ID: {}, 可能存在认证问题", tourBookingDTO.getAgentId());
+                // 暂时使用前端传递的代理商ID，但记录警告
+                tourBooking.setAgentId(tourBookingDTO.getAgentId());
+                log.info("临时使用前端传递的代理商ID: {}", tourBookingDTO.getAgentId());
+            } else {
+                log.error("❌ BaseContext失败且前端未提供代理商ID，这是游客模式但订单创建已不支持游客模式");
+                tourBooking.setAgentId(null);
+            }
+            
+            // 用户ID处理
             if (tourBookingDTO.getUserId() != null) {
                 tourBooking.setUserId(tourBookingDTO.getUserId());
                 log.info("异常情况下使用前端传递的用户ID: {}", tourBookingDTO.getUserId());
             } else {
                 tourBooking.setUserId(null);
-            }
-            
-            if (tourBookingDTO.getAgentId() != null) {
-                tourBooking.setAgentId(tourBookingDTO.getAgentId());
-                log.info("异常情况下使用前端传递的代理商ID: {}", tourBookingDTO.getAgentId());
-            } else {
-                tourBooking.setAgentId(null);
             }
         }
         
@@ -2613,6 +2625,70 @@ public class TourBookingServiceImpl implements TourBookingService {
         
         AccommodationPriceInfo(BigDecimal totalAccommodationFee) {
             this.totalAccommodationFee = totalAccommodationFee;
+        }
+    }
+
+    /**
+     * 删除订单（只能删除已取消的订单）
+     * 
+     * @param bookingId 订单ID
+     * @return 是否成功
+     */
+    @Override
+    @Transactional
+    public Boolean delete(Integer bookingId) {
+        log.info("删除订单, 订单ID: {}", bookingId);
+        
+        try {
+            TourBooking tourBooking = tourBookingMapper.getById(bookingId);
+            if (tourBooking == null) {
+                log.error("订单不存在: {}", bookingId);
+                return false;
+            }
+            
+            // 只有已取消的订单可以删除
+            String status = tourBooking.getStatus();
+            if (!"cancelled".equals(status)) {
+                log.error("只能删除已取消的订单，当前状态: {}", status);
+                return false;
+            }
+            
+            // 1. 先删除相关的乘客信息
+            try {
+                List<PassengerVO> passengers = passengerService.getByBookingId(bookingId);
+                for (PassengerVO passenger : passengers) {
+                    passengerMapper.deleteById(passenger.getPassengerId());
+                }
+                log.info("已删除订单{}的所有乘客信息，共{}个乘客", bookingId, passengers.size());
+            } catch (Exception e) {
+                log.warn("删除订单{}的乘客信息时出错: {}", bookingId, e.getMessage());
+                // 不抛出异常，继续删除订单主体
+            }
+            
+            // 2. 删除相关的排团信息（如果存在）
+            try {
+                tourScheduleOrderMapper.deleteByBookingId(bookingId);
+                log.info("已删除订单{}的排团信息", bookingId);
+            } catch (Exception e) {
+                log.warn("删除订单{}的排团信息时出错: {}", bookingId, e.getMessage());
+                // 不抛出异常，继续删除订单主体
+            }
+            
+            // 3. 最后删除订单主体
+            tourBookingMapper.deleteById(bookingId);
+            
+            // 🔔 发送订单删除通知
+            try {
+                sendDetailedOrderNotification(tourBooking, "delete", "管理员删除已取消订单");
+            } catch (Exception e) {
+                log.error("❌ 发送订单删除通知失败: {}", e.getMessage(), e);
+            }
+            
+            log.info("订单删除完成, 订单ID: {}", bookingId);
+            return true;
+        } catch (Exception e) {
+            log.error("删除订单出错, 订单ID: {}, 错误: {}", bookingId, e.getMessage(), e);
+            throw new RuntimeException("删除订单出错: " + e.getMessage(), e);
         }
     }
 } 

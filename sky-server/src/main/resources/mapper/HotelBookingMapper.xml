@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sky.mapper.HotelBookingMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.sky.entity.HotelBooking">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="booking_reference" property="bookingReference" jdbcType="VARCHAR"/>
+        <result column="tour_booking_id" property="tourBookingId" jdbcType="BIGINT"/>
+        <result column="schedule_order_id" property="scheduleOrderId" jdbcType="BIGINT"/>
+        <result column="assignment_id" property="assignmentId" jdbcType="BIGINT"/>
+        <result column="hotel_id" property="hotelId" jdbcType="BIGINT"/>
+        <result column="room_type_id" property="roomTypeId" jdbcType="BIGINT"/>
+        <result column="guest_name" property="guestName" jdbcType="VARCHAR"/>
+        <result column="guest_phone" property="guestPhone" jdbcType="VARCHAR"/>
+        <result column="guest_email" property="guestEmail" jdbcType="VARCHAR"/>
+        <result column="check_in_date" property="checkInDate" jdbcType="DATE"/>
+        <result column="check_out_date" property="checkOutDate" jdbcType="DATE"/>
+        <result column="nights" property="nights" jdbcType="INTEGER"/>
+        <result column="room_count" property="roomCount" jdbcType="INTEGER"/>
+        <result column="adult_count" property="adultCount" jdbcType="INTEGER"/>
+        <result column="child_count" property="childCount" jdbcType="INTEGER"/>
+        <result column="total_guests" property="totalGuests" jdbcType="INTEGER"/>
+        <result column="room_rate" property="roomRate" jdbcType="DECIMAL"/>
+        <result column="total_amount" property="totalAmount" jdbcType="DECIMAL"/>
+        <result column="currency" property="currency" jdbcType="VARCHAR"/>
+        <result column="special_requests" property="specialRequests" jdbcType="VARCHAR"/>
+        <result column="booking_status" property="bookingStatus" jdbcType="VARCHAR"/>
+        <result column="payment_status" property="paymentStatus" jdbcType="VARCHAR"/>
+        <result column="cancellation_policy" property="cancellationPolicy" jdbcType="VARCHAR"/>
+        <result column="booking_source" property="bookingSource" jdbcType="VARCHAR"/>
+        <result column="booked_by" property="bookedBy" jdbcType="BIGINT"/>
+        <result column="notes" property="notes" jdbcType="VARCHAR"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <!-- 基础列 -->
+    <sql id="Base_Column_List">
+        id, booking_reference, tour_booking_id, schedule_order_id, assignment_id, hotel_id, 
+        room_type_id, guest_name, guest_phone, guest_email, check_in_date, check_out_date, 
+        nights, room_count, adult_count, child_count, total_guests, room_rate, total_amount, 
+        currency, special_requests, booking_status, payment_status, cancellation_policy, 
+        booking_source, booked_by, notes, created_at, updated_at
+    </sql>
+
+    <!-- 插入酒店预订 -->
+    <insert id="insert" parameterType="com.sky.entity.HotelBooking" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO hotel_bookings (
+            booking_reference, tour_booking_id, schedule_order_id, assignment_id, hotel_id,
+            room_type_id, guest_name, guest_phone, guest_email, check_in_date, check_out_date,
+            room_count, adult_count, child_count, room_rate, booking_status, payment_status,
+            special_requests, booking_source, booked_by, notes
+        ) VALUES (
+            #{bookingReference}, #{tourBookingId}, #{scheduleOrderId}, #{assignmentId}, #{hotelId},
+            #{roomTypeId}, #{guestName}, #{guestPhone}, #{guestEmail}, #{checkInDate}, #{checkOutDate},
+            #{roomCount}, #{adultCount}, #{childCount}, #{roomRate}, #{bookingStatus}, #{paymentStatus},
+            #{specialRequests}, #{bookingSource}, #{bookedBy}, #{notes}
+        )
+    </insert>
+
+    <!-- 批量插入酒店预订 -->
+    <insert id="insertBatch" parameterType="java.util.List" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO hotel_bookings (
+            booking_reference, tour_booking_id, schedule_order_id, assignment_id, hotel_id,
+            room_type_id, guest_name, guest_phone, guest_email, check_in_date, check_out_date,
+            room_count, adult_count, child_count, room_rate, booking_status, payment_status,
+            special_requests, booking_source, booked_by, notes
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+                #{item.bookingReference}, #{item.tourBookingId}, #{item.scheduleOrderId}, #{item.assignmentId}, #{item.hotelId},
+                #{item.roomTypeId}, #{item.guestName}, #{item.guestPhone}, #{item.guestEmail}, #{item.checkInDate}, #{item.checkOutDate},
+                #{item.roomCount}, #{item.adultCount}, #{item.childCount}, #{item.roomRate}, #{item.bookingStatus}, #{item.paymentStatus},
+                #{item.specialRequests}, #{item.bookingSource}, #{item.bookedBy}, #{item.notes}
+            )
+        </foreach>
+    </insert>
+
+    <!-- 根据ID查询 -->
+    <select id="getById" parameterType="java.lang.Integer" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM hotel_bookings
+        WHERE id = #{id}
+    </select>
+
+    <!-- 根据预订参考号查询 -->
+    <select id="getByBookingReference" parameterType="java.lang.String" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM hotel_bookings
+        WHERE booking_reference = #{bookingReference}
+    </select>
+
+    <!-- 根据排团订单ID查询 -->
+    <select id="getByScheduleOrderId" parameterType="java.lang.Integer" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM hotel_bookings
+        WHERE schedule_order_id = #{scheduleOrderId}
+        ORDER BY created_at DESC
+        LIMIT 1
+    </select>
+
+    <!-- 根据旅游订单ID查询酒店预订列表 -->
+    <select id="getByTourBookingId" parameterType="java.lang.Integer" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM hotel_bookings
+        WHERE tour_booking_id = #{tourBookingId}
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 分页查询酒店预订（包含关联信息） -->
+    <select id="pageQuery" resultType="com.sky.vo.HotelBookingVO">
+        SELECT 
+            hb.id,
+            hb.booking_reference AS bookingReference,
+            tb.order_number AS orderNumber,
+            h.hotel_name AS hotelName,
+            h.hotel_level AS hotelLevel,
+            h.contact_email AS hotelEmail,
+            h.contact_person AS contactPerson,
+            rt.room_type AS roomType,
+            hb.guest_name AS guestName,
+            hb.guest_phone AS guestPhone,
+            hb.guest_email AS guestEmail,
+            hb.check_in_date AS checkInDate,
+            hb.check_out_date AS checkOutDate,
+            hb.nights,
+            hb.room_count AS roomCount,
+            hb.adult_count AS adultCount,
+            hb.child_count AS childCount,
+            hb.total_guests AS totalGuests,
+            hb.room_rate AS roomRate,
+            hb.total_amount AS totalAmount,
+            hb.booking_status AS bookingStatus,
+            hb.payment_status AS paymentStatus,
+            hb.special_requests AS specialRequests,
+            a.email AS agentEmail,
+            hb.created_at AS createdAt
+        FROM hotel_bookings hb
+        LEFT JOIN hotels h ON hb.hotel_id = h.id
+        LEFT JOIN hotel_room_types rt ON hb.room_type_id = rt.id
+        LEFT JOIN tour_bookings tb ON hb.tour_booking_id = tb.booking_id
+        LEFT JOIN agents a ON tb.agent_id = a.id
+        <where>
+            <if test="status != null and status != ''">
+                AND hb.booking_status = #{status}
+            </if>
+            <if test="guestName != null and guestName != ''">
+                AND hb.guest_name LIKE CONCAT('%', #{guestName}, '%')
+            </if>
+            <if test="guestPhone != null and guestPhone != ''">
+                AND hb.guest_phone LIKE CONCAT('%', #{guestPhone}, '%')
+            </if>
+            <if test="hotelId != null">
+                AND hb.hotel_id = #{hotelId}
+            </if>
+            <if test="checkInDate != null">
+                AND hb.check_in_date &gt;= #{checkInDate}
+            </if>
+            <if test="checkOutDate != null">
+                AND hb.check_out_date &lt;= #{checkOutDate}
+            </if>
+        </where>
+        ORDER BY hb.created_at DESC
+    </select>
+
+    <!-- 更新酒店预订 -->
+    <update id="update" parameterType="com.sky.entity.HotelBooking">
+        UPDATE hotel_bookings
+        <set>
+            <if test="hotelId != null">hotel_id = #{hotelId},</if>
+            <if test="roomTypeId != null">room_type_id = #{roomTypeId},</if>
+            <if test="guestName != null">guest_name = #{guestName},</if>
+            <if test="guestPhone != null">guest_phone = #{guestPhone},</if>
+            <if test="guestEmail != null">guest_email = #{guestEmail},</if>
+            <if test="checkInDate != null">check_in_date = #{checkInDate},</if>
+            <if test="checkOutDate != null">check_out_date = #{checkOutDate},</if>
+            <if test="roomCount != null">room_count = #{roomCount},</if>
+            <if test="adultCount != null">adult_count = #{adultCount},</if>
+            <if test="childCount != null">child_count = #{childCount},</if>
+            <if test="roomRate != null">room_rate = #{roomRate},</if>
+            <if test="bookingStatus != null">booking_status = #{bookingStatus},</if>
+            <if test="paymentStatus != null">payment_status = #{paymentStatus},</if>
+            <if test="specialRequests != null">special_requests = #{specialRequests},</if>
+            <if test="bookingSource != null">booking_source = #{bookingSource},</if>
+            <if test="bookedBy != null">booked_by = #{bookedBy},</if>
+            <if test="notes != null">notes = #{notes}</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 更新预订状态 -->
+    <update id="updateBookingStatus">
+        UPDATE hotel_bookings
+        SET booking_status = #{bookingStatus}
+        WHERE id = #{id}
+    </update>
+
+    <!-- 更新支付状态 -->
+    <update id="updatePaymentStatus">
+        UPDATE hotel_bookings
+        SET payment_status = #{paymentStatus}
+        WHERE id = #{id}
+    </update>
+
+    <!-- 批量更新预订状态 -->
+    <update id="updateStatusBatch">
+        UPDATE hotel_bookings
+        SET booking_status = #{bookingStatus}
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <!-- 删除酒店预订 -->
+    <delete id="deleteById" parameterType="java.lang.Integer">
+        DELETE FROM hotel_bookings WHERE id = #{id}
+    </delete>
+
+    <!-- 批量删除酒店预订 -->
+    <delete id="deleteBatch">
+        DELETE FROM hotel_bookings
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <!-- 统计查询 -->
+    <select id="countByStatus" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM hotel_bookings WHERE booking_status = #{status}
+    </select>
+
+    <select id="countByDateRange" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM hotel_bookings
+        WHERE check_in_date &gt;= #{startDate} AND check_in_date &lt;= #{endDate}
+    </select>
+
+    <!-- 获取下一个预订参考号序列 -->
+    <select id="getNextBookingSequence" resultType="java.lang.Integer">
+        SELECT COALESCE(MAX(CAST(SUBSTRING(booking_reference, 11) AS UNSIGNED)), 0) + 1
+        FROM hotel_bookings
+        WHERE booking_reference LIKE CONCAT('HB', #{dateStr}, '%')
+    </select>
+
+    <!-- 根据ID查询酒店预订详细信息 -->
+    <select id="getDetailById" parameterType="java.lang.Integer" resultType="com.sky.vo.HotelBookingVO">
+        SELECT 
+            hb.id,
+            hb.booking_reference as bookingReference,
+            hb.tour_booking_id as tourBookingId,
+            hb.schedule_order_id as scheduleOrderId,
+            hb.hotel_id as hotelId,
+            h.hotel_name as hotelName,
+            h.hotel_level as hotelLevel,
+            h.contact_email as hotelEmail,
+            h.contact_person as contactPerson,
+            h.address as hotelAddress,
+            h.contact_phone as hotelPhone,
+            hb.room_type_id as roomTypeId,
+            rt.room_type as roomType,
+            rt.description as roomDescription,
+            hb.room_rate as roomRate,
+            hb.guest_name as guestName,
+            hb.guest_phone as guestPhone,
+            hb.guest_email as guestEmail,
+            hb.check_in_date as checkInDate,
+            hb.check_out_date as checkOutDate,
+            hb.nights,
+            hb.room_count as roomCount,
+            hb.adult_count as adultCount,
+            hb.child_count as childCount,
+            hb.total_guests as totalGuests,
+            hb.total_amount as totalAmount,
+            hb.booking_status as bookingStatus,
+            hb.payment_status as paymentStatus,
+            hb.booking_source as bookingSource,
+            hb.special_requests as specialRequests,
+            hb.created_at as createdAt,
+            hb.updated_at as updatedAt,
+            hb.email_sent_at as emailSentAt,
+            hb.email_sent_to as emailSentTo,
+            hb.email_sent_by as emailSentBy
+        FROM hotel_bookings hb
+        LEFT JOIN hotels h ON hb.hotel_id = h.id
+        LEFT JOIN hotel_room_types rt ON hb.room_type_id = rt.id
+        WHERE hb.id = #{id}
+    </select>
+
+    <!-- 根据代理商ID查询酒店预订列表 -->
+    <select id="getByAgentId" parameterType="java.lang.Integer" resultType="com.sky.vo.HotelBookingVO">
+        SELECT 
+            hb.id,
+            hb.booking_reference AS bookingReference,
+            tb.order_number AS orderNumber,
+            h.hotel_name AS hotelName,
+            hb.guest_name AS guestName,
+            hb.guest_phone AS guestPhone,
+            hb.check_in_date AS checkInDate,
+            hb.check_out_date AS checkOutDate,
+            hb.nights,
+            hb.room_count AS roomCount,
+            hb.total_amount AS totalAmount,
+            hb.booking_status AS bookingStatus,
+            hb.payment_status AS paymentStatus,
+            hb.created_at AS createdAt
+        FROM hotel_bookings hb
+        LEFT JOIN hotels h ON hb.hotel_id = h.id
+        LEFT JOIN tour_bookings tb ON hb.tour_booking_id = tb.booking_id
+        WHERE tb.agent_id = #{agentId}
+        ORDER BY hb.created_at DESC
+    </select>
+
+    <!-- 检查酒店房间可用性 -->
+    <select id="checkRoomAvailability" resultType="boolean">
+        SELECT CASE 
+            WHEN COUNT(*) = 0 THEN true 
+            ELSE false 
+        END
+        FROM hotel_bookings hb
+        WHERE hb.hotel_id = #{hotelId}
+          AND hb.room_type_id = #{roomTypeId}
+          AND hb.booking_status != 'cancelled'
+          AND (
+              (hb.check_in_date &lt; #{checkOutDate} AND hb.check_out_date &gt; #{checkInDate})
+          )
+        GROUP BY hb.hotel_id, hb.room_type_id
+        HAVING SUM(hb.room_count) + #{roomCount} &gt; (
+            SELECT rt.max_occupancy 
+            FROM hotel_room_types rt 
+            WHERE rt.id = #{roomTypeId}
+        )
+    </select>
+
+    <!-- 根据导游车辆分配ID查询酒店预订列表 -->
+    <select id="getByAssignmentId" parameterType="java.lang.Integer" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM hotel_bookings
+        WHERE assignment_id = #{assignmentId}
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 更新邮件发送信息 -->
+    <update id="updateEmailSentInfo">
+        UPDATE hotel_bookings 
+        SET email_sent_at = NOW(),
+            email_sent_to = #{emailTo},
+            email_content = #{emailContent},
+            email_sent_by = #{sentBy},
+            updated_at = NOW()
+        WHERE id = #{bookingId}
+    </update>
+
+</mapper> 

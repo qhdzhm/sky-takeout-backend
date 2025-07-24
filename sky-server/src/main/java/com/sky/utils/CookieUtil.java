@@ -14,6 +14,25 @@ import javax.servlet.http.HttpServletResponse;
 public class CookieUtil {
     
     /**
+     * 设置管理后台专用Cookie到多个路径
+     * @param response HTTP响应
+     * @param name Cookie名称
+     * @param value Cookie值
+     * @param httpOnly 是否HttpOnly
+     * @param maxAge 过期时间（秒）
+     */
+    public static void setAdminCookieWithMultiplePaths(HttpServletResponse response, String name, String value, boolean httpOnly, int maxAge) {
+        // 管理后台专用路径
+        String[] paths = {"/", "/admin"};
+        
+        for (String path : paths) {
+            setCookie(response, name, value, path, httpOnly, maxAge);
+        }
+        
+        log.debug("已设置管理后台Cookie到多个路径: {} (maxAge: {})", name, maxAge);
+    }
+    
+    /**
      * 设置Cookie到多个路径（用于代理商登录等场景）
      * @param response HTTP响应
      * @param name Cookie名称
@@ -220,5 +239,45 @@ public class CookieUtil {
         } catch (Exception e) {
             log.error("设置用户信息Cookie失败", e);
         }
+    }
+    
+    /**
+     * 清理管理后台专用Cookie（多路径版本）
+     * @param response HTTP响应
+     * @param cookieName Cookie名称
+     */
+    public static void clearAdminCookieAllPaths(HttpServletResponse response, String cookieName) {
+        String[] paths = {"/", "/admin"};
+        
+        log.info("清理管理后台Cookie: {} 在所有路径下", cookieName);
+        
+        for (String path : paths) {
+            log.info("清理管理后台Cookie: {} 在路径: {}", cookieName, path);
+            clearCookie(response, cookieName, path);
+        }
+        
+        log.info("已完成清理管理后台Cookie: {} 在所有路径下", cookieName);
+    }
+    
+    /**
+     * 批量清理管理后台相关的所有Cookie
+     * @param response HTTP响应
+     */
+    public static void clearAllAdminCookies(HttpServletResponse response) {
+        // 管理后台专用Cookie
+        String[] cookieNames = {"adminToken", "adminRefreshToken", "adminUserInfo", "adminAuthToken", "admin_token"};
+        
+        log.info("开始清理管理后台相关Cookie，共{}个", cookieNames.length);
+        
+        // 清理管理后台Cookie
+        for (String cookieName : cookieNames) {
+            log.info("正在清理管理后台Cookie: {}", cookieName);
+            clearAdminCookieAllPaths(response, cookieName);
+        }
+        
+        // 添加响应头指示前端清理特定Cookie
+        response.addHeader("X-Clear-Admin-Cookies", String.join(",", cookieNames));
+        
+        log.info("已完成清理所有管理后台相关Cookie");
     }
 } 

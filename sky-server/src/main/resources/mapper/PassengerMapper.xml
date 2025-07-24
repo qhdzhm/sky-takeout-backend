@@ -189,4 +189,10 @@
         delete from booking_passenger_relation 
         where booking_id = #{bookingId} and passenger_id = #{passengerId}
     </delete>
+    
+    <!-- 🆕 获取乘客的所有关联订单 -->
+    <select id="getPassengerRelations" resultType="com.sky.entity.BookingPassengerRelation">
+        select * from booking_passenger_relation 
+        where passenger_id = #{passengerId}
+    </select>
 </mapper> 

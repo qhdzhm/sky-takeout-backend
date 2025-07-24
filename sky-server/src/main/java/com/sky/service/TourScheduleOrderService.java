@@ -41,8 +41,6 @@ public interface TourScheduleOrderService {
      */
     boolean saveBatchSchedules(TourScheduleBatchSaveDTO batchSaveDTO);
 
-
-
     /**
      * 根据日期和地点获取导游车辆分配信息
      * @param date 日期
@@ -50,4 +48,18 @@ public interface TourScheduleOrderService {
      * @return 分配信息列表
      */
     List<Object> getAssignmentByDateAndLocation(LocalDate date, String location);
+
+    /**
+     * 根据订单号搜索行程排序
+     * @param orderNumber 订单号
+     * @return 行程排序视图对象列表
+     */
+    List<TourScheduleVO> getSchedulesByOrderNumber(String orderNumber);
+
+    /**
+     * 根据联系人姓名搜索行程排序
+     * @param contactPerson 联系人姓名
+     * @return 行程排序视图对象列表
+     */
+    List<TourScheduleVO> getSchedulesByContactPerson(String contactPerson);
 } 

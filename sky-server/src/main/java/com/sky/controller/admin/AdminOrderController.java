@@ -416,4 +416,26 @@ public class AdminOrderController {
         
         return Result.success(itinerary);
     }
+
+    /**
+     * 删除已取消的订单
+     * @param bookingId 订单ID
+     * @return 操作结果
+     */
+    @DeleteMapping("/{bookingId}")
+    @ApiOperation("删除已取消的订单")
+    public Result<String> deleteOrder(
+            @ApiParam(name = "bookingId", value = "订单ID", required = true)
+            @PathVariable Integer bookingId) {
+        log.info("删除订单，订单ID：{}", bookingId);
+        
+        // 调用服务删除订单
+        Boolean success = tourBookingService.delete(bookingId);
+        
+        if (success) {
+            return Result.success("订单删除成功");
+        } else {
+            return Result.error("订单删除失败");
+        }
+    }
 } 

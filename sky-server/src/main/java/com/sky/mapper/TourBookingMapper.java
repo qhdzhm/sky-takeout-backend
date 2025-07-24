@@ -143,4 +143,11 @@ public interface TourBookingMapper {
      */
     @Select("SELECT * FROM tour_bookings WHERE booking_id = #{bookingId}")
     Map<String, Object> getBookingInfoById(Integer bookingId);
+    
+    /**
+     * 🆕 获取所有订单ID列表
+     * @return 所有订单ID列表
+     */
+    @Select("SELECT booking_id FROM tour_bookings ORDER BY booking_id")
+    List<Integer> getAllBookingIds();
 } 

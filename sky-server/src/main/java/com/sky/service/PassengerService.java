@@ -83,4 +83,18 @@ public interface PassengerService {
      * @return 是否成功
      */
     Boolean updatePassengerBookingInfo(Integer bookingId, PassengerDTO passengerDTO);
+    
+    /**
+     * 🆕 修复所有订单的乘客人数统计
+     * 根据实际乘客数据重新计算并更新所有订单的adultCount和childCount
+     * @return 修复的订单数量
+     */
+    Integer fixAllBookingPassengerCounts();
+    
+    /**
+     * 🆕 清理重复乘客数据
+     * 识别并清理因接口重复调用导致的重复乘客记录
+     * @return 清理的重复记录数量
+     */
+    Integer cleanDuplicatePassengers();
 } 

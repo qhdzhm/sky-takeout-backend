@@ -22,6 +22,7 @@ public class Employee implements Serializable {
     private String name; // 姓名
     private String password; // 密码
     private String phone; // 电话
+    private String email; // 邮箱
     private String sex; // 性别
     private String idNumber; // 身份证号
     private Integer role; // 角色：0-导游，1-操作员，2-管理员，3-客服

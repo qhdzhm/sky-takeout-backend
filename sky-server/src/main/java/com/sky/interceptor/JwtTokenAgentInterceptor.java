@@ -127,7 +127,21 @@ public class JwtTokenAgentInterceptor implements HandlerInterceptor {
                 BaseContext.setCurrentOperatorId(operatorId);
             }
             
-            log.info("JWT校验通过，用户ID:{}, 用户名:{}, 用户类型:{}, 代理商ID:{}, 操作员ID:{}", userId, username, userType, agentId, operatorId);
+            // 🔍 详细记录BaseContext设置状态
+            log.info("🔍 JWT校验通过，BaseContext设置完成:");
+            log.info("  - 用户ID: {} (设置状态: {})", userId, BaseContext.getCurrentId());
+            log.info("  - 用户名: {} (设置状态: {})", username, BaseContext.getCurrentUsername());
+            log.info("  - 用户类型: {} (设置状态: {})", userType, BaseContext.getCurrentUserType());
+            log.info("  - 代理商ID: {} (设置状态: {})", agentId, BaseContext.getCurrentAgentId());
+            log.info("  - 操作员ID: {} (设置状态: {})", operatorId, BaseContext.getCurrentOperatorId());
+            
+            // 🔒 验证BaseContext设置是否成功
+            if (BaseContext.getCurrentId() == null || !BaseContext.getCurrentId().equals(userId)) {
+                log.error("❌ BaseContext.setCurrentId设置失败！预期: {}, 实际: {}", userId, BaseContext.getCurrentId());
+            }
+            if (agentId != null && (BaseContext.getCurrentAgentId() == null || !BaseContext.getCurrentAgentId().equals(agentId))) {
+                log.error("❌ BaseContext.setCurrentAgentId设置失败！预期: {}, 实际: {}", agentId, BaseContext.getCurrentAgentId());
+            }
             
             return true;
         } catch (ExpiredJwtException ex) {
@@ -201,7 +215,14 @@ public class JwtTokenAgentInterceptor implements HandlerInterceptor {
     
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
+        // 🔍 记录请求完成前的BaseContext状态
+        String requestUri = request.getRequestURI();
+        log.debug("🔍 请求完成，准备清理BaseContext: {} - 当前状态: userId={}, agentId={}, userType={}", 
+                 requestUri, BaseContext.getCurrentId(), BaseContext.getCurrentAgentId(), BaseContext.getCurrentUserType());
+        
         // 请求完成后，清除当前线程的用户信息
         BaseContext.removeAll();
+        
+        log.debug("✅ BaseContext已清理完成: {}", requestUri);
     }
 } 

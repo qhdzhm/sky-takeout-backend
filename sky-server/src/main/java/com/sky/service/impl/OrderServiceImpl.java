@@ -550,25 +550,14 @@ public class OrderServiceImpl implements OrderService {
             }
         }
         
-        // 处理乘客信息更新
+        // ⚠️  修复重复处理乘客信息的问题
+        // 订单状态更新接口不应该处理乘客信息，乘客信息应该通过专门的接口处理
+        // 如果需要在状态更新时处理乘客信息，应该在前端调用时明确分离这两个操作
+        
+        // 🔧 移除乘客信息处理逻辑，避免与 /passengers 接口重复
         if (orderUpdateDTO.getPassengers() != null && !orderUpdateDTO.getPassengers().isEmpty()) {
-            log.info("开始更新订单{}的乘客信息，共{}位乘客", bookingId, orderUpdateDTO.getPassengers().size());
-            
-            for (PassengerDTO passengerDTO : orderUpdateDTO.getPassengers()) {
-                if (passengerDTO.getPassengerId() != null) {
-                    // 如果乘客ID存在，更新乘客信息
-                    Boolean updated = passengerService.updatePassengerBookingInfo(bookingId, passengerDTO);
-                    if (!updated) {
-                        log.warn("更新订单{}的乘客{}信息失败", bookingId, passengerDTO.getPassengerId());
-                    }
-                } else {
-                    // 如果乘客ID不存在，添加新乘客到订单
-                    Boolean added = passengerService.addPassengerToBooking(bookingId, passengerDTO);
-                    if (!added) {
-                        log.warn("添加乘客到订单{}失败", bookingId);
-                    }
-                }
-            }
+            log.warn("⚠️  订单状态更新接口收到乘客信息，但已禁用乘客处理以避免重复。请使用专门的乘客接口：PUT /admin/orders/{}/passengers", bookingId);
+            log.warn("⚠️  收到的乘客数量: {}，已忽略处理", orderUpdateDTO.getPassengers().size());
         }
         
         return result > 0;
