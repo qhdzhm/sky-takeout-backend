@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.GuideAvailabilityMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="GuideAvailabilityVOMap" type="com.sky.vo.GuideAvailabilityVO">
+        <result column="guide_id" property="guideId"/>
+        <result column="guide_name" property="guideName"/>
+        <result column="phone" property="phone"/>
+        <result column="email" property="email"/>
+        <result column="languages" property="languages"/>
+        <result column="experience_years" property="experienceYears"/>
+        <result column="daily_rate" property="dailyRate"/>
+        <result column="hourly_rate" property="hourlyRate"/>
+        <result column="date" property="date"/>
+        <result column="available_start_time" property="availableStartTime"/>
+        <result column="available_end_time" property="availableEndTime"/>
+        <result column="status" property="status"/>
+        <result column="max_groups" property="maxGroups"/>
+        <result column="current_groups" property="currentGroups"/>
+        <result column="notes" property="notes"/>
+        <result column="remaining_capacity" property="remainingCapacity"/>
+        <result column="recommended" property="recommended"/>
+        <result column="recommend_reason" property="recommendReason"/>
+    </resultMap>
+
+    <!-- 获取导游可用性列表 -->
+    <select id="getGuideAvailability" resultMap="GuideAvailabilityVOMap">
+        SELECT 
+            ga.guide_id,
+            ga.date,
+            ga.available_start_time,
+            ga.available_end_time,
+            ga.status,
+            ga.max_groups,
+            COALESCE(assigned_count.current_groups, 0) as current_groups,
+            ga.notes,
+            g.name as guide_name,
+            g.phone,
+            g.email,
+            g.languages,
+            g.experience_years,
+            g.daily_rate,
+            g.hourly_rate,
+            CASE 
+                WHEN ga.status = 'available' AND COALESCE(assigned_count.current_groups, 0) = 0 THEN TRUE
+                ELSE FALSE
+            END as recommended,
+            CASE 
+                WHEN ga.status = 'available' THEN '可用'
+                WHEN COALESCE(assigned_count.current_groups, 0) > 0 THEN '使用中'
+                ELSE '不可用'
+            END as recommend_reason
+        FROM guide_availability ga
+        LEFT JOIN guides g ON ga.guide_id = g.guide_id
+        LEFT JOIN (
+            SELECT 
+                guide_id, 
+                assignment_date, 
+                COUNT(*) as current_groups
+            FROM tour_guide_vehicle_assignment 
+            WHERE status IN ('confirmed', 'in_progress')
+            GROUP BY guide_id, assignment_date
+        ) assigned_count ON ga.guide_id = assigned_count.guide_id AND ga.date = assigned_count.assignment_date
+        WHERE ga.guide_id = #{guideId}
+        <if test="startDate != null">
+            AND ga.date &gt;= #{startDate}
+        </if>
+        <if test="endDate != null">
+            AND ga.date &lt;= #{endDate}
+        </if>
+        ORDER BY ga.date ASC
+    </select>
+
+    <!-- 根据日期获取导游可用性 -->
+    <select id="getGuideAvailabilityByDate" resultMap="GuideAvailabilityVOMap">
+        SELECT 
+            ga.guide_id,
+            ga.date,
+            ga.available_start_time,
+            ga.available_end_time,
+            ga.status,
+            ga.max_groups,
+            COALESCE(assigned_count.current_groups, 0) as current_groups,
+            ga.notes,
+            g.name as guide_name,
+            g.phone,
+            g.email,
+            g.languages,
+            g.experience_years,
+            g.daily_rate,
+            g.hourly_rate,
+            CASE 
+                WHEN ga.status = 'available' AND COALESCE(assigned_count.current_groups, 0) = 0 THEN TRUE
+                ELSE FALSE
+            END as recommended,
+            CASE 
+                WHEN ga.status = 'available' THEN '可用'
+                WHEN COALESCE(assigned_count.current_groups, 0) > 0 THEN '使用中'
+                ELSE '不可用'
+            END as recommend_reason
+        FROM guide_availability ga
+        LEFT JOIN guides g ON ga.guide_id = g.guide_id
+        LEFT JOIN (
+            SELECT 
+                guide_id, 
+                assignment_date, 
+                COUNT(*) as current_groups
+            FROM tour_guide_vehicle_assignment 
+            WHERE status IN ('confirmed', 'in_progress')
+            GROUP BY guide_id, assignment_date
+        ) assigned_count ON ga.guide_id = assigned_count.guide_id AND ga.date = assigned_count.assignment_date
+        WHERE ga.guide_id = #{guideId} AND ga.date = #{date}
+    </select>
+
+    <!-- 插入导游可用性 -->
+    <insert id="insertGuideAvailability">
+        INSERT INTO guide_availability (
+            guide_id, date, available_start_time, available_end_time, 
+            status, max_groups, notes, created_time, updated_time
+        ) VALUES (
+            #{guideId}, #{date}, #{availableStartTime}, #{availableEndTime},
+            #{status}, #{maxGroups}, #{notes}, NOW(), NOW()
+        )
+    </insert>
+
+    <!-- 更新导游可用性 -->
+    <update id="updateGuideAvailability">
+        UPDATE guide_availability 
+        SET 
+            available_start_time = #{availableStartTime},
+            available_end_time = #{availableEndTime},
+            status = #{status},
+            max_groups = #{maxGroups},
+            notes = #{notes},
+            updated_time = NOW()
+        WHERE guide_id = #{guideId} AND date = #{date}
+    </update>
+
+    <!-- 删除导游可用性 -->
+    <delete id="deleteGuideAvailability">
+        DELETE FROM guide_availability 
+        WHERE guide_id = #{guideId} AND date = #{date}
+    </delete>
+
+    <!-- 更新导游可用性状态 -->
+    <update id="updateAvailability">
+        UPDATE guide_availability 
+        SET available_start_time = #{startTime},
+            available_end_time = #{endTime},
+            status = CASE WHEN #{isAvailable} = true THEN 'available' ELSE 'busy' END,
+            updated_time = NOW()
+        WHERE guide_id = #{guideId} AND date = #{date}
+    </update>
+
+    <!-- 检查导游在指定时间段是否可用 -->
+    <select id="checkAvailability" resultType="java.lang.Boolean">
+        SELECT CASE 
+            WHEN COUNT(*) > 0 AND ga.status = 'available' THEN TRUE 
+            ELSE FALSE 
+        END
+        FROM guide_availability ga
+        WHERE ga.guide_id = #{guideId} 
+        AND ga.date = #{date}
+        AND ga.available_start_time &lt;= #{startTime}
+        AND ga.available_end_time &gt;= #{endTime}
+        AND ga.status = 'available'
+        AND NOT EXISTS (
+            SELECT 1 
+            FROM tour_guide_vehicle_assignment 
+            WHERE guide_id = #{guideId} 
+            AND assignment_date = #{date}
+            AND status IN ('confirmed', 'in_progress')
+            AND (
+                (start_time &lt;= #{startTime} AND end_time > #{startTime})
+                OR (start_time &lt; #{endTime} AND end_time >= #{endTime})
+                OR (start_time >= #{startTime} AND end_time &lt;= #{endTime})
+            )
+        )
+    </select>
+
+    <!-- 增加导游当前组数 -->
+    <update id="incrementCurrentGroups">
+        INSERT INTO guide_availability (guide_id, date, available_start_time, available_end_time, status, max_groups, notes, created_time, updated_time)
+        VALUES (#{guideId}, #{date}, '08:00:00', '18:00:00', 'available', 2, '自动创建', NOW(), NOW())
+        ON DUPLICATE KEY UPDATE updated_time = NOW()
+    </update>
+
+    <!-- 减少导游当前组数 -->
+    <update id="decrementCurrentGroups">
+        UPDATE guide_availability 
+        SET updated_time = NOW()
+        WHERE guide_id = #{guideId} AND date = #{date}
+    </update>
+
+    <!-- 重置导游可用性状态 -->
+    <update id="resetAvailability">
+        UPDATE guide_availability 
+        SET status = 'available', updated_time = NOW()
+        WHERE guide_id = #{guideId} AND date = #{date}
+    </update>
+
+    <!-- 确保导游在指定日期有可用性记录 -->
+    <insert id="ensureAvailabilityRecord">
+        INSERT INTO guide_availability (
+            guide_id, date, available_start_time, available_end_time, 
+            status, max_groups, notes, created_time, updated_time
+        ) VALUES (
+            #{guideId}, #{date}, '08:00:00', '18:00:00', 
+            'available', 2, '取消分配时自动创建', NOW(), NOW()
+        )
+        ON DUPLICATE KEY UPDATE 
+            status = 'available',
+            updated_time = NOW()
+    </insert>
+
+    <!-- 根据日期和时间获取可用导游 -->
+    <select id="getAvailableGuidesByDateTime" resultMap="GuideAvailabilityVOMap">
+        SELECT 
+            ga.id,
+            ga.guide_id,
+            g.name AS guide_name,
+            g.phone,
+            g.email,
+            g.languages,
+            g.experience_years,
+            g.daily_rate,
+            g.hourly_rate,
+            ga.date,
+            ga.available_start_time,
+            ga.available_end_time,
+            ga.status,
+            ga.max_groups,
+            ga.notes,
+            0 AS current_groups,
+            ga.max_groups AS remaining_capacity,
+            CASE 
+                WHEN ga.status = 'available' 
+                     AND (#{startTime} IS NULL OR ga.available_start_time &lt;= #{startTime})
+                     AND (#{endTime} IS NULL OR ga.available_end_time &gt;= #{endTime})
+                     AND NOT EXISTS (
+                         SELECT 1 FROM tour_guide_vehicle_assignment t 
+                         WHERE t.guide_id = ga.guide_id 
+                         AND t.assignment_date = ga.date 
+                         AND t.status != 'cancelled'
+                     )
+                THEN 1 ELSE 0 
+            END AS recommended,
+            CASE 
+                WHEN ga.status = 'available' 
+                     AND (#{startTime} IS NULL OR ga.available_start_time &lt;= #{startTime})
+                     AND (#{endTime} IS NULL OR ga.available_end_time &gt;= #{endTime})
+                     AND NOT EXISTS (
+                         SELECT 1 FROM tour_guide_vehicle_assignment t 
+                         WHERE t.guide_id = ga.guide_id 
+                         AND t.assignment_date = ga.date 
+                         AND t.status != 'cancelled'
+                     )
+                THEN '状态可用，时间匹配' 
+                ELSE '不可用或时间冲突' 
+            END AS recommend_reason
+        FROM guide_availability ga
+        LEFT JOIN guides g ON ga.guide_id = g.guide_id
+        WHERE ga.date = #{date}
+            AND ga.status = 'available'
+            AND (#{startTime} IS NULL OR ga.available_start_time &lt;= #{startTime})
+            AND (#{endTime} IS NULL OR ga.available_end_time &gt;= #{endTime})
+            AND NOT EXISTS (
+                SELECT 1 FROM tour_guide_vehicle_assignment t 
+                WHERE t.guide_id = ga.guide_id 
+                AND t.assignment_date = ga.date 
+                AND t.status != 'cancelled'
+            )
+        ORDER BY g.experience_years DESC, ga.guide_id
+    </select>
+
+</mapper> 

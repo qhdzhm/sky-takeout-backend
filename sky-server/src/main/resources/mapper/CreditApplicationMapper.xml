@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.CreditApplicationMapper">
+
+    <resultMap id="BaseResultMap" type="com.sky.entity.CreditApplication">
+        <id column="id" property="id"/>
+        <result column="application_no" property="applicationNo"/>
+        <result column="agent_id" property="agentId"/>
+        <result column="agent_name" property="agentName"/>
+        <result column="contact_person" property="contactPerson"/>
+        <result column="contact_phone" property="contactPhone"/>
+        <result column="requested_amount" property="requestedAmount"/>
+        <result column="approved_amount" property="approvedAmount"/>
+        <result column="status" property="status"/>
+        <result column="reason" property="reason"/>
+        <result column="admin_comment" property="adminComment"/>
+        <result column="admin_id" property="adminId"/>
+        <result column="admin_name" property="adminName"/>
+        <result column="submitted_at" property="submittedAt"/>
+        <result column="processed_at" property="processedAt"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, application_no, agent_id, agent_name, contact_person, contact_phone, 
+        requested_amount, approved_amount, status, reason, admin_comment, 
+        admin_id, admin_name, submitted_at, processed_at, create_time, update_time
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into credit_application (
+            application_no, agent_id, agent_name, contact_person, contact_phone,
+            requested_amount, status, reason, submitted_at, create_time, update_time
+        ) values (
+            #{applicationNo}, #{agentId}, #{agentName}, #{contactPerson}, #{contactPhone},
+            #{requestedAmount}, #{status}, #{reason}, #{submittedAt}, now(), now()
+        )
+    </insert>
+
+    <update id="update">
+        update credit_application
+        <set>
+            <if test="approvedAmount != null">approved_amount = #{approvedAmount},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="adminComment != null">admin_comment = #{adminComment},</if>
+            <if test="adminId != null">admin_id = #{adminId},</if>
+            <if test="adminName != null">admin_name = #{adminName},</if>
+            <if test="processedAt != null">processed_at = #{processedAt},</if>
+            update_time = now()
+        </set>
+        where id = #{id}
+    </update>
+
+    <select id="getById" resultMap="BaseResultMap">
+        select
+        <include refid="Base_Column_List"/>
+        from credit_application
+        where id = #{id}
+    </select>
+
+    <select id="getByAgentId" resultMap="BaseResultMap">
+        select
+        <include refid="Base_Column_List"/>
+        from credit_application
+        where agent_id = #{agentId}
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        order by submitted_at desc
+        limit #{offset}, #{limit}
+    </select>
+
+    <select id="countByAgentId" resultType="int">
+        select count(*)
+        from credit_application
+        where agent_id = #{agentId}
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+    </select>
+
+    <select id="getAll" resultMap="BaseResultMap">
+        select
+        <include refid="Base_Column_List"/>
+        from credit_application
+        <where>
+            <if test="status != null and status != ''">
+                status = #{status}
+            </if>
+            <if test="agentId != null">
+                and agent_id = #{agentId}
+            </if>
+        </where>
+        order by submitted_at desc
+        limit #{offset}, #{limit}
+    </select>
+
+    <select id="countAll" resultType="int">
+        select count(*)
+        from credit_application
+        <where>
+            <if test="status != null and status != ''">
+                status = #{status}
+            </if>
+            <if test="agentId != null">
+                and agent_id = #{agentId}
+            </if>
+        </where>
+    </select>
+</mapper> 

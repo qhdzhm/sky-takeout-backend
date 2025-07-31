@@ -1,0 +1,50 @@
+sky:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    host: localhost
+    port: 3306
+    database: happy_tassie_travel
+    username: root
+    password: abc123
+  alioss:
+    endpoint: oss-cn-hongkong.aliyuncs.com
+    bucket-name: happy-tassie-hongkong
+    access-key-id: ${SKY_ALIOSS_ACCESS_KEY:your-access-key-id}
+    access-key-secret: ${SKY_ALIOSS_ACCESS_SECRET:your-access-key-secret}
+  redis:
+    host: localhost
+    port: 6379
+    database: 7
+  wechat:
+    appid: wx6a4d9f9390fa4e49
+    secret: fd706c40e9a471ff19bd9cf947321398
+  mail:
+    enabled: true  # 启用邮件发送功能
+    host: smtp.gmail.com
+    port: 587
+    username: Tom.zhang@htas.com.au  # 需要配置真实邮箱
+    password: igdf bnrq nrga qxnn  # 需要配置真实密码
+    from: Tom.zhang@htas.com.au
+
+# Spring Mail配置
+spring:
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: Tom.zhang@htas.com.au
+    password: igdf bnrq nrga qxnn
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          timeout: 25000
+
+# OpenWeatherMap 天气API配置
+weather:
+  openweathermap:
+    api-key: ec19e77fd31ded1dd1880d1f64f49c91  # Active状态的API Key
+    base-url: http://api.openweathermap.org/data/2.5
+    enabled: true  # 启用天气功能
+    cache-duration: 600  # 缓存10分钟（API建议不超过10分钟请求一次）

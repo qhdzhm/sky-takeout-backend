@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Booking Confirmation</title>
+    <style>
+        body {
+            font-family: "Chinese", "Microsoft YaHei", "微软雅黑", "SimHei", "黑体", "SimSun", "宋体", Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #f5f5f5;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 15px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            border-radius: 6px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #d32f2f;
+        }
+        .logo-section {
+            display: flex;
+            align-items: center;
+            flex: 1;
+        }
+        .logo-img {
+            width: 80px;
+            height: 60px;
+            margin-right: 15px;
+            background-color: #d32f2f;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .company-name {
+            color: #d32f2f;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+        .company-tagline {
+            color: #666;
+            font-size: 11px;
+            font-style: italic;
+        }
+        .confirmation-title {
+            flex: 1;
+            text-align: center;
+            font-size: 28px;
+            font-weight: bold;
+            color: #d32f2f;
+            letter-spacing: 2px;
+        }
+        .company-contact {
+            flex: 1;
+            text-align: right;
+            font-size: 11px;
+            color: #666;
+            line-height: 1.4;
+        }
+        .booking-info {
+            background-color: #f9f9f9;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            page-break-inside: avoid;
+        }
+        .info-section {
+            width: 48%;
+        }
+        .info-row {
+            display: flex;
+            margin-bottom: 8px;
+        }
+        .info-label {
+            font-weight: bold;
+            width: 100px;
+            color: #333;
+            font-size: 10px;
+        }
+        .info-value {
+            color: #666;
+            font-size: 10px;
+        }
+        .tour-details {
+            background-color: #fff8dc;
+            border: 1px solid #daa520;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+            page-break-inside: avoid;
+        }
+        .tour-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #d32f2f;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .tour-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        .tour-column {
+            width: 48%;
+        }
+        .itinerary-section {
+            background-color: #e8f5e8;
+            border: 1px solid #4caf50;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+            page-break-inside: avoid;
+        }
+        .itinerary-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #d32f2f;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .itinerary-item {
+            background-color: white;
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+            padding: 12px;
+            border-radius: 4px;
+        }
+        .itinerary-item:last-child {
+            margin-bottom: 0;
+        }
+        .itinerary-day {
+            font-weight: bold;
+            color: #d32f2f;
+            font-size: 11px;
+            margin-bottom: 4px;
+        }
+        .itinerary-activity {
+            font-weight: bold;
+            color: #333;
+            font-size: 10px;
+            margin-bottom: 2px;
+        }
+        .itinerary-description {
+            color: #666;
+            font-size: 9px;
+            line-height: 1.3;
+        }
+        .passenger-section {
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+        }
+        .passenger-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #d32f2f;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .passenger-table {
+            width: 100%;
+            border-collapse: collapse;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        .passenger-table th,
+        .passenger-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            font-size: 11px;
+        }
+        .passenger-table th {
+            background-color: #d32f2f;
+            color: white;
+            font-weight: bold;
+        }
+        .emergency-contact {
+            background-color: #ffe6e6;
+            border: 2px solid #ff6b6b;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+            text-align: center;
+            page-break-inside: avoid;
+        }
+        .emergency-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #d32f2f;
+            margin-bottom: 10px;
+        }
+        .emergency-content {
+            font-size: 12px;
+            color: #333;
+            line-height: 1.5;
+        }
+        .page-break {
+            page-break-before: always;
+        }
+        
+        /* 确保第二页内容不被截断 */
+        .important-notice {
+            page-break-inside: avoid;
+        }
+        .important-notice {
+            background-color: #e8f4f8;
+            border: 1px solid #4a90a4;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+        .notice-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #d32f2f;
+            margin-bottom: 10px;
+        }
+        .notice-content {
+            font-size: 11px;
+            color: #333;
+            line-height: 1.4;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+            color: #666;
+            font-size: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+    <div class="header">
+            
+            <div>
+        <div class="logo-section">
+                    <img src="data:image/png;base64,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"/>
+                </div>
+                <div class="company-name">HAPPY TASSIE HOLIDAY</div>
+                <div class="company-tagline">Your Local Travel in Tasmania</div>
+            </div>
+            <div class="company-contact">
+                ABN: 68 377 285 084<br/>
+                Ph: 04 3342 4877<br/>
+                Email: booking@htas.com.au<br/>
+                Web: www.htas.com.au
+            </div>
+            
+        </div>
+        <div class="confirmation-title">BOOKING CONFIRMATION</div>
+        <!-- Booking Information -->
+        <div class="booking-info">
+            <div class="info-section">
+                <div class="info-row">
+                    <span class="info-label">Confirmation Date/确认日期:</span>
+                    <span class="info-value" th:text="${confirmationDate}"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Booking Reference/订单号:</span>
+                    <span class="info-value" th:text="${orderNumber}"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Tour Date/参团日期:</span>
+                    <span class="info-value" th:text="${tourDetails != null ? tourDetails.startDate : 'N/A'}"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Total Passengers/总人数:</span>
+                    <span class="info-value" th:text="${tourDetails != null ? (tourDetails.adultCount + tourDetails.childCount) : 'N/A'}"></span>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <div class="info-row">
+                    <span class="info-label">Agent/代理商:</span>
+                    <span class="info-value" th:text="${tourDetails != null ? (tourDetails.agentName ?: 'N/A') : 'N/A'}"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Contact Person/联系人:</span>
+                    <span class="info-value" th:text="${tourDetails != null ? tourDetails.contactPerson : 'N/A'}"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Contact Phone/联系电话:</span>
+                    <span class="info-value" th:text="${tourDetails != null ? tourDetails.contactPhone : 'N/A'}"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tour Details -->
+        <div class="tour-details">
+            <div class="tour-title" th:text="${tourDetails != null ? tourDetails.tourName : 'N/A'}"></div>
+            <div class="tour-info">
+                <div class="tour-column">
+                    <div class="info-row">
+                        <span class="info-label">Start Date/出发日期:</span>
+                        <span class="info-value" th:text="${tourDetails != null ? tourDetails.startDate : 'N/A'}"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">End Date/结束日期:</span>
+                        <span class="info-value" th:text="${tourDetails != null ? tourDetails.endDate : 'N/A'}"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Hotel Level/酒店等级:</span>
+                        <span class="info-value" th:text="${tourDetails != null ? tourDetails.hotelLevel : 'N/A'}"></span>
+                    </div>
+                </div>
+                <div class="tour-column">
+                    <div class="info-row">
+                        <span class="info-label">Adults/成人:</span>
+                        <span class="info-value" th:text="${tourDetails != null ? tourDetails.adultCount : 'N/A'}"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Children/儿童:</span>
+                        <span class="info-value" th:text="${tourDetails != null ? tourDetails.childCount : 'N/A'}"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Pickup Location/接车地点:</span>
+                        <span class="info-value" th:text="${tourDetails != null ? tourDetails.pickupLocation : 'N/A'}"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Dropoff Location/送达地点:</span>
+                        <span class="info-value" th:text="${tourDetails != null ? tourDetails.dropoffLocation : 'N/A'}"></span>
+                    </div>
+                </div>
+        </div>
+    </div>
+
+        <!-- Itinerary Section -->
+        <div class="itinerary-section" th:if="${tourDetails != null && tourDetails.itinerary != null && !#lists.isEmpty(tourDetails.itinerary)}">
+            <div class="itinerary-title">行程安排 / Tour Itinerary</div>
+            <div th:each="item, iterStat : ${tourDetails.itinerary}" class="itinerary-item">
+                <!-- 团队游格式 -->
+                <div th:if="${tourDetails.tourType == 'group_tour'}" class="itinerary-day" 
+                     th:text="'第' + ${item.day_number} + '天 / Day ' + ${item.day_number}"></div>
+                
+                <!-- 一日游格式 -->
+                <div th:if="${tourDetails.tourType == 'day_tour'}" class="itinerary-day" 
+                     th:text="'活动' + ${item.display_order} + ' / Activity ' + ${item.display_order}"></div>
+                
+                <div class="itinerary-activity" th:text="${item.title}"></div>
+                <div class="itinerary-description" th:text="${item.description}"></div>
+                
+                <!-- 如果有餐食信息 -->
+                <div th:if="${item.meals != null && !#strings.isEmpty(item.meals)}" 
+                     class="itinerary-description" style="margin-top: 5px;">
+                    <strong>餐食 / Meals:</strong> <span th:text="${item.meals}"></span>
+    </div>
+
+                <!-- 如果有住宿信息 -->
+                <div th:if="${item.accommodation != null && !#strings.isEmpty(item.accommodation)}" 
+                     class="itinerary-description" style="margin-top: 5px;">
+                    <strong>住宿 / Accommodation:</strong> <span th:text="${item.accommodation}"></span>
+                </div>
+            </div>
+        </div>
+
+                <!-- Passenger Information -->
+        <div class="passenger-section" th:if="${tourDetails != null && tourDetails.passengers != null && !#lists.isEmpty(tourDetails.passengers)}">
+            <div class="passenger-title">Passenger Information/乘客信息</div>
+            <table class="passenger-table">
+                <thead>
+                    <tr>
+                        <th>Full Name/姓名</th>
+                        <th>Phone/电话</th>
+                        <th>WeChat ID/微信号</th>
+                        <th>Type/类型</th>
+                        <th>Child Age/儿童年龄</th>
+            </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="passenger : ${tourDetails.passengers}">
+                        <td th:text="${passenger.fullName}"></td>
+                        <td th:text="${passenger.phone}"></td>
+                        <td th:text="${passenger.wechatId}"></td>
+                        <td th:text="${passenger.isChild != null && passenger.isChild ? 'Child/儿童' : 'Adult/成人'}"></td>
+                        <td th:text="${passenger.isChild != null && passenger.isChild ? (passenger.childAge != null ? passenger.childAge : 'N/A') : 'N/A'}"></td>
+            </tr>
+                </tbody>
+        </table>
+    </div>
+
+        <!-- Emergency Contact -->
+        <div class="emergency-contact">
+            <div class="emergency-title">24-Hour Emergency Contact/24小时紧急联系电话</div>
+            <div class="emergency-content">
+                <strong>Chinese Service/中文服务:</strong> +61 433 424 877<br/>
+                <strong>English Service/英文服务:</strong> +61 433 424 877<br/>
+                <strong>Please contact us immediately in case of emergency/紧急情况请立即联系我们</strong>
+            </div>
+        </div>
+
+        <!-- Footer for Page 1 -->
+        <div class="footer">
+            ABN: 68 377 285 084. Registered Office: Shop 4B 234-238 Sandy Bay Rd, SANDY BAY, TAS, 7005, Australia.<br/>
+            感谢您选择塔斯马尼亚快乐假期！/ Thank you for choosing Happy Tassie Holiday!
+        </div>
+    </div>
+
+    <!-- Page Break -->
+    <div class="page-break"></div>
+
+    <!-- Page 2: Important Notices -->
+    <div class="container">
+        <!-- Header for Page 2 -->
+        <div class="header" style="text-align: center; margin-bottom: 30px;">
+            <div class="confirmation-title">IMPORTANT NOTICE/重要提醒</div>
+            <div class="company-contact" style="margin-top: 15px;">
+                Order No./订单号: <span th:text="${orderNumber}"></span>
+            </div>
+        </div>
+
+        <!-- Important Notice -->
+        <div class="important-notice">
+            <div class="notice-title">Important Notice/重要提醒</div>
+            <div class="notice-content">
+                <strong>中文：</strong><br/>
+                • 请在出发前24小时确认行程安排，如有任何变更请及时联系我们<br/>
+                • 请携带有效身份证件（护照或驾照），部分景点可能需要验证身份<br/>
+                • 如需要取消或修改行程，请提前48小时通知，以避免产生额外费用<br/>
+                • 天气因素可能影响行程安排，我们会及时通知您并协助调整<br/>
+                • 请准时到达指定接车地点，司机导游会在约定时间等候15分钟<br/>
+                • 建议携带适合当地天气的服装和必要的个人物品<br/>
+                • 如有特殊饮食要求或身体状况需要特别注意，请提前告知<br/>
+                • 行程中请保管好个人贵重物品，公司不承担遗失责任<br/>
+                • 请尊重当地文化和环境，遵守导游的安全提醒<br/>
+                • 如对服务有任何意见或建议，欢迎随时联系我们<br/><br/>
+                
+                <strong>English:</strong><br/>
+                • Please confirm your itinerary 24 hours before departure, and contact us promptly for any changes<br/>
+                • Please bring valid identification documents (passport or driver's license), as some attractions may require ID verification<br/>
+                • For cancellation or modification, please notify us 48 hours in advance to avoid additional charges<br/>
+                • Weather conditions may affect the itinerary, we will notify you promptly and assist with adjustments<br/>
+                • Please arrive at the designated pickup location on time, driver-guide will wait for 15 minutes<br/>
+                • It is recommended to bring clothing suitable for local weather and necessary personal items<br/>
+                • If you have special dietary requirements or health conditions requiring attention, please inform us in advance<br/>
+                • Please take care of your personal valuables during the tour, the company is not responsible for loss<br/>
+                • Please respect local culture and environment, and follow the guide's safety reminders<br/>
+                • If you have any comments or suggestions about our service, please feel free to contact us<br/>
+            </div>
+        </div>
+
+        <!-- Additional Terms -->
+        <div class="important-notice">
+            <div class="notice-title">Terms of Service/服务条款</div>
+            <div class="notice-content">
+                <strong>中文：</strong><br/>
+                • 本确认单是您与Happy Tassie Holiday之间服务合同的重要组成部分<br/>
+                • 行程价格已包含导游服务费、交通费用和行程中标明的门票费用<br/>
+                • 不包含个人消费、小费、餐费（除特别标明）和保险费用<br/>
+                • 因个人原因导致的行程变更或取消，相关费用由客户承担<br/>
+                • 如遇不可抗力因素（自然灾害、政府政策等），我们有权调整行程<br/>
+                • 最终解释权归Happy Tassie Holiday所有<br/><br/>
+                
+                <strong>English:</strong><br/>
+                • This confirmation letter is an important part of the service contract between you and Happy Tassie Holiday<br/>
+                • The tour price includes guide service fees, transportation costs and entrance fees specified in the itinerary<br/>
+                • Does not include personal expenses, tips, meal costs (unless specified) and insurance fees<br/>
+                • Costs arising from itinerary changes or cancellations due to personal reasons shall be borne by the customer<br/>
+                • In case of force majeure (natural disasters, government policies, etc.), we reserve the right to adjust the itinerary<br/>
+                • Final interpretation rights belong to Happy Tassie Holiday<br/>
+            </div>
+        </div>
+
+        <!-- Contact Information -->
+        <div class="important-notice">
+            <div class="notice-title">Contact Information/联系方式</div>
+            <div class="notice-content">
+                <strong>Office Hours/办公时间:</strong> Mon-Fri 9:00-17:00 / 周一至周五 9:00-17:00<br/>
+                <strong>24-Hour Emergency/24小时紧急联系:</strong> +61 433 424 877<br/>
+                <strong>WeChat Service/微信客服:</strong> HappyTassieHoliday<br/>
+                <strong>Email/邮箱:</strong> booking@htas.com.au<br/>
+                <strong>Website/网站:</strong> www.htas.com.au<br/>
+                <strong>Address/地址:</strong> Shop 4B 234-238 Sandy Bay Rd, SANDY BAY, TAS, 7005, Australia<br/>
+        </div>
+    </div>
+
+        <!-- Footer for Page 2 -->
+        <div class="footer">
+            Copyright © 2024 Happy Tassie Holiday Pty Ltd. All rights reserved.<br/>
+            版权所有 © 2024 Happy Tassie Holiday Pty Ltd. 保留所有权利。
+        </div>
+    </div>
+</body>
+</html> 

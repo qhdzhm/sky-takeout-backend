@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.AgentMapper">
+    <!-- 基础结果映射 -->
+    <resultMap id="agentMap" type="com.sky.entity.Agent">
+        <id column="id" property="id"/>
+        <result column="username" property="username"/>
+        <result column="password" property="password"/>
+        <result column="company_name" property="companyName"/>
+        <result column="contact_person" property="contactPerson"/>
+        <result column="phone" property="phone"/>
+        <result column="email" property="email"/>
+        <result column="avatar" property="avatar"/>
+        <result column="discount_rate" property="discountRate"/>
+        <result column="discount_level_id" property="discountLevelId"/>
+        <result column="status" property="status"/>
+    </resultMap>
+
+    <!-- 根据用户名查询代理商 -->
+    <select id="getByUsername" resultMap="agentMap">
+        select * from agents where username = #{username}
+    </select>
+    
+    <!-- 根据ID查询代理商 -->
+    <select id="getById" resultMap="agentMap">
+        select * from agents where id = #{id}
+    </select>
+    
+    <!-- 查询所有代理商 -->
+    <select id="list" resultMap="agentMap">
+        select * from agents
+        <where>
+            <if test="status != null">
+                status = #{status}
+            </if>
+        </where>
+    </select>
+    
+    <!-- 分页查询代理商 -->
+    <select id="pageQuery" resultMap="agentMap">
+        select * from agents
+        <where>
+            <if test="companyName != null and companyName != ''">
+                and company_name like concat('%', #{companyName}, '%')
+            </if>
+            <if test="contactPerson != null and contactPerson != ''">
+                and contact_person like concat('%', #{contactPerson}, '%')
+            </if>
+            <if test="phone != null and phone != ''">
+                and phone = #{phone}
+            </if>
+            <if test="status != null">
+                and status = #{status}
+            </if>
+        </where>
+    </select>
+    
+    <!-- 插入代理商 -->
+    <insert id="insert" parameterType="com.sky.entity.Agent" useGeneratedKeys="true" keyProperty="id">
+        insert into agents(
+            username, password, company_name, contact_person, 
+            phone, email, discount_rate, discount_level_id, status
+        ) values(
+            #{username}, #{password}, #{companyName}, #{contactPerson}, 
+            #{phone}, #{email}, #{discountRate}, #{discountLevelId}, #{status}
+        )
+    </insert>
+    
+    <!-- 更新代理商 -->
+    <update id="update" parameterType="com.sky.entity.Agent">
+        update agents
+        <set>
+            <if test="companyName != null">company_name = #{companyName},</if>
+            <if test="contactPerson != null">contact_person = #{contactPerson},</if>
+            <if test="phone != null">phone = #{phone},</if>
+            <if test="email != null">email = #{email},</if>
+            <if test="avatar != null">avatar = #{avatar},</if>
+            <if test="discountRate != null">discount_rate = #{discountRate},</if>
+            <if test="discountLevelId != null">discount_level_id = #{discountLevelId},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="password != null">password = #{password},</if>
+        </set>
+        where id = #{id}
+    </update>
+    
+    <!-- 根据ID删除代理商 -->
+    <delete id="deleteById">
+        delete from agents where id = #{id}
+    </delete>
+    
+    <!-- 更新代理商状态 -->
+    <update id="updateStatus">
+        update agents set status = #{status} where id = #{id}
+    </update>
+    
+    <!-- 重置代理商密码 -->
+    <update id="resetPassword">
+        update agents set password = #{password} where id = #{id}
+    </update>
+    
+    <!-- 根据名称关键字查询代理商 -->
+    <select id="getAgentsByNameKeyword" resultMap="agentMap">
+        SELECT * FROM agents
+        <where>
+            status = 1
+            <if test="keyword != null and keyword != ''">
+                AND (username LIKE CONCAT('%', #{keyword}, '%') 
+                OR company_name LIKE CONCAT('%', #{keyword}, '%')
+                OR contact_person LIKE CONCAT('%', #{keyword}, '%')
+                OR phone LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+        ORDER BY id DESC
+        LIMIT 20
+    </select>
+    
+    <!-- 统计代理商的订单数量 -->
+    <select id="countOrdersByAgentId" resultType="int">
+        SELECT COUNT(*) 
+        FROM tour_bookings
+        WHERE agent_id = #{agentId}
+    </select>
+    
+    <!-- 获取代理商的销售数据 -->
+    <select id="getSalesDataByAgentId" resultType="java.util.Map">
+        SELECT 
+            COALESCE(SUM(total_price), 0) as totalSales,
+            COALESCE(SUM(total_price * (1 - (SELECT discount_rate FROM agents WHERE id = #{agentId}))), 0) as savedAmount
+        FROM tour_bookings
+        WHERE agent_id = #{agentId}
+          AND status != 'cancelled'
+    </select>
+    
+    <!-- 根据代理商ID获取邮箱地址 -->
+    <select id="getEmailById" resultType="string">
+        SELECT email FROM agents WHERE id = #{agentId}
+    </select>
+    
+    <!-- 更新代理商折扣等级 -->
+    <update id="updateDiscountLevel">
+        UPDATE agents SET discount_level_id = #{discountLevelId} WHERE id = #{agentId}
+    </update>
+    
+    <!-- 更新代理商头像 -->
+    <update id="updateAvatar">
+        UPDATE agents SET avatar = #{avatar} WHERE id = #{agentId}
+    </update>
+</mapper> 

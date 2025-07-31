@@ -1,0 +1,146 @@
+server:
+  port: 8080
+
+spring:
+  profiles:
+    active: prod
+    include: ai
+  main:
+    allow-circular-references: true
+  datasource:
+    druid:
+      driver-class-name: ${sky.datasource.driver-class-name}
+      url: jdbc:mysql://${sky.datasource.host}:${sky.datasource.port}/${sky.datasource.database}?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&zeroDateTimeBehavior=convertToNull&useSSL=false&allowPublicKeyRetrieval=true
+      username: ${sky.datasource.username}
+      password: ${sky.datasource.password}
+
+      initial-size: 5
+      min-idle: 5
+      max-active: 20
+      max-wait: 60000
+
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+      validation-query: SELECT 1
+
+      time-between-eviction-runs-millis: 60000
+
+      min-evictable-idle-time-millis: 300000
+
+      keep-alive: true
+
+      mysql:
+        usePingMethod: false
+  redis:
+    host: ${sky.redis.host}
+    port: ${sky.redis.port}
+    database: ${sky.redis.database}
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: "Tom.zhang@htas.com.au"
+    password: "igdf bnrq nrga qxnn"
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          ssl:
+            trust: smtp.gmail.com
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.sky.entity,com.sky.dto,com.sky.vo
+  configuration:
+    map-underscore-to-camel-case: true
+
+logging:
+  level:
+    com:
+      sky:
+        mapper: debug
+        service: info
+        controller: info
+
+sky:
+  jwt:
+    admin-secret-key: itcast
+    admin-ttl: 7200000
+    admin-token-name: token
+
+    user-secret-key: itheima
+    user-ttl: 3600000  # 60分钟 (60 * 60 * 1000)
+    user-token-name: authentication
+    
+    agent-secret-key: tasmania
+    agent-ttl: 3600000  # 60分钟 (60 * 60 * 1000)
+    agent-token-name: agent-token
+    
+    # Refresh Token配置
+    refresh-token-ttl: 604800000  # 7天 (7 * 24 * 60 * 60 * 1000)
+    token-refresh-threshold: 15    # 提前15分钟刷新
+    
+  alioss:
+    endpoint: ${sky.alioss.endpoint}
+    access-key-secret: ${sky.alioss.access-key-secret}
+    access-key-id: ${sky.alioss.access-key-id}
+    bucket-name: ${sky.alioss.bucket-name}
+  wechat:
+    appid: ${sky.wechat.appid}
+    secret: ${sky.wechat.secret}
+  mail:
+    enabled: true
+    host: smtp.gmail.com
+    port: 587
+    username: "Tom.zhang@htas.com.au"
+    password: "igdf bnrq nrga qxnn"
+    from: "Tom.zhang@htas.com.au"
+
+credit:
+  referral:
+    direct-rate: 0.05
+    indirect-rate: 0.02
+
+# 通义千问 AI配置 (阿里云DashScope API)
+qwen:
+  api:
+    key: sk-eb67303b39c34d1195e99c3a276590d3
+    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  model: qwen-turbo
+  timeout: 30000
+  max-tokens: 2000
+  temperature: 0.7
+
+chatbot:
+  rate-limit:
+    requests-per-minute: 10
+    daily-limit: 100
+  message:
+    max-length: 1000
+  context:
+    history-size: 5
+
+tour-knowledge:
+  cache:
+    enabled: true
+    ttl: 3600
+  recommendation:
+    max-results: 8
+    fallback-enabled: true
+  query:
+    min-keywords: 1
+    similarity-threshold: 0.6
+
+flight:
+  api:
+    aviationstack:
+      api-key: 1779d870374fb097423fff552925cedb
+      base-url: http://api.aviationstack.com/v1
+      enabled: true

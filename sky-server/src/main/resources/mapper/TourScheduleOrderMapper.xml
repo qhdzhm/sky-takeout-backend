@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.TourScheduleOrderMapper">
+    <!-- 基础结果映射 -->
+    <resultMap id="tourScheduleOrderMap" type="com.sky.entity.TourScheduleOrder">
+        <id column="id" property="id"/>
+        <result column="booking_id" property="bookingId"/>
+        <result column="day_number" property="dayNumber"/>
+        <result column="tour_id" property="tourId"/>
+        <result column="tour_type" property="tourType"/>
+        <result column="tour_date" property="tourDate"/>
+        <result column="title" property="title"/>
+        <result column="description" property="description"/>
+        <result column="display_order" property="displayOrder"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+        <result column="order_number" property="orderNumber"/>
+        <result column="adult_count" property="adultCount"/>
+        <result column="child_count" property="childCount"/>
+        <result column="contact_person" property="contactPerson"/>
+        <result column="contact_phone" property="contactPhone"/>
+        <result column="pickup_location" property="pickupLocation"/>
+        <result column="dropoff_location" property="dropoffLocation"/>
+        <result column="special_requests" property="specialRequests"/>
+        <result column="guide_remarks" property="guideRemarks"/>
+        <result column="luggage_count" property="luggageCount"/>
+        <result column="hotel_level" property="hotelLevel"/>
+        <result column="room_type" property="roomType"/>
+        <result column="hotel_room_count" property="hotelRoomCount"/>
+        <result column="hotel_check_in_date" property="hotelCheckInDate"/>
+        <result column="hotel_check_out_date" property="hotelCheckOutDate"/>
+        <result column="room_details" property="roomDetails"/>
+        <result column="flight_number" property="flightNumber"/>
+        <result column="arrival_departure_time" property="arrivalDepartureTime"/>
+        <result column="arrival_landing_time" property="arrivalLandingTime"/>
+        <result column="return_flight_number" property="returnFlightNumber"/>
+        <result column="departure_departure_time" property="departureDepartureTime"/>
+        <result column="departure_landing_time" property="departureLandingTime"/>
+        <result column="tour_start_date" property="tourStartDate"/>
+        <result column="tour_end_date" property="tourEndDate"/>
+        <result column="pickup_date" property="pickupDate"/>
+        <result column="dropoff_date" property="dropoffDate"/>
+        <result column="passenger_contact" property="passengerContact"/>
+        <result column="itinerary_details" property="itineraryDetails"/>
+        <result column="is_first_order" property="isFirstOrder"/>
+        <result column="from_referral" property="fromReferral"/>
+        <result column="referral_code" property="referralCode"/>
+        <result column="service_type" property="serviceType"/>
+        <result column="payment_status" property="paymentStatus"/>
+        <result column="total_price" property="totalPrice"/>
+        <result column="user_id" property="userId"/>
+        <result column="agent_id" property="agentId"/>
+        <result column="operator_id" property="operatorId"/>
+        <result column="booking_date" property="bookingDate"/>
+        <result column="group_size" property="groupSize"/>
+        <result column="status" property="status"/>
+        <result column="tour_name" property="tourName"/>
+        <result column="tour_location" property="tourLocation"/>
+        <result column="is_extra_schedule" property="isExtraSchedule"/>
+        <result column="schedule_type" property="scheduleType"/>
+        <result column="pickup_time" property="pickupTime"/>
+        <result column="dropoff_time" property="dropoffTime"/>
+        <!-- 统计查询专用字段映射 -->
+        <result column="guide_name" property="guideName"/>
+        <result column="vehicle_info" property="vehicleInfo"/>
+    </resultMap>
+
+    <!-- 批量插入行程排序 -->
+    <insert id="insertBatch" parameterType="java.util.List">
+        INSERT INTO tour_schedule_order (
+            booking_id, day_number, tour_id, tour_type, tour_date, title, description, display_order, 
+            created_at, updated_at, order_number, adult_count, child_count, contact_person, 
+            contact_phone, pickup_location, dropoff_location, special_requests, guide_remarks, luggage_count, 
+            hotel_level, room_type, hotel_room_count, hotel_check_in_date, hotel_check_out_date, 
+            room_details, flight_number, arrival_departure_time, arrival_landing_time, 
+            return_flight_number, departure_departure_time, departure_landing_time, 
+            tour_start_date, tour_end_date, pickup_date, dropoff_date, passenger_contact, 
+            itinerary_details, is_first_order, from_referral, referral_code, service_type, 
+            payment_status, total_price, user_id, agent_id, operator_id, booking_date, 
+            group_size, status, tour_name, tour_location, is_extra_schedule, schedule_type, 
+            pickup_time, dropoff_time
+        ) VALUES 
+        <foreach collection="list" item="item" separator=",">
+            (
+                #{item.bookingId}, #{item.dayNumber}, #{item.tourId}, #{item.tourType}, 
+                #{item.tourDate}, #{item.title}, #{item.description}, #{item.displayOrder}, 
+                #{item.createdAt}, #{item.updatedAt}, #{item.orderNumber}, #{item.adultCount}, 
+                #{item.childCount}, #{item.contactPerson}, #{item.contactPhone}, 
+                #{item.pickupLocation}, #{item.dropoffLocation}, #{item.specialRequests}, #{item.guideRemarks}, 
+                #{item.luggageCount}, #{item.hotelLevel}, #{item.roomType}, #{item.hotelRoomCount}, 
+                #{item.hotelCheckInDate}, #{item.hotelCheckOutDate}, #{item.roomDetails}, 
+                #{item.flightNumber}, #{item.arrivalDepartureTime}, #{item.arrivalLandingTime}, 
+                #{item.returnFlightNumber}, #{item.departureDepartureTime}, #{item.departureLandingTime}, 
+                #{item.tourStartDate}, #{item.tourEndDate}, #{item.pickupDate}, #{item.dropoffDate}, 
+                #{item.passengerContact}, #{item.itineraryDetails}, #{item.isFirstOrder}, 
+                #{item.fromReferral}, #{item.referralCode}, #{item.serviceType}, #{item.paymentStatus}, 
+                #{item.totalPrice}, #{item.userId}, #{item.agentId}, #{item.operatorId}, 
+                #{item.bookingDate}, #{item.groupSize}, #{item.status}, #{item.tourName}, #{item.tourLocation},
+                #{item.isExtraSchedule}, #{item.scheduleType}, #{item.pickupTime}, #{item.dropoffTime}
+            )
+        </foreach>
+    </insert>
+
+    <!-- 根据日期范围查询行程排序 -->
+    <select id="getByDateRange" resultMap="tourScheduleOrderMap">
+        SELECT 
+            id, booking_id, day_number, tour_id, tour_type, tour_date, title, description, display_order,
+            created_at, updated_at, order_number, adult_count, child_count, contact_person, 
+            contact_phone, pickup_location, dropoff_location, special_requests, guide_remarks, luggage_count,
+            hotel_level, room_type, hotel_room_count, hotel_check_in_date, hotel_check_out_date,
+            room_details, flight_number, arrival_departure_time, arrival_landing_time,
+            return_flight_number, departure_departure_time, departure_landing_time,
+            tour_start_date, tour_end_date, pickup_date, dropoff_date, passenger_contact,
+            itinerary_details, is_first_order, from_referral, referral_code, service_type,
+            payment_status, total_price, user_id, agent_id, operator_id, booking_date,
+            group_size, status, tour_name, tour_location, is_extra_schedule, schedule_type,
+            pickup_time, dropoff_time
+        FROM tour_schedule_order
+        WHERE tour_date BETWEEN #{startDate} AND #{endDate}
+        ORDER BY tour_date ASC, display_order ASC
+    </select>
+
+    <!-- 根据订单ID查询行程排序 -->
+    <select id="getByBookingId" resultMap="tourScheduleOrderMap">
+        SELECT 
+            id, booking_id, day_number, tour_id, tour_type, tour_date, title, description, display_order,
+            created_at, updated_at, order_number, adult_count, child_count, contact_person, 
+            contact_phone, pickup_location, dropoff_location, special_requests, guide_remarks, luggage_count,
+            hotel_level, room_type, hotel_room_count, hotel_check_in_date, hotel_check_out_date,
+            room_details, flight_number, arrival_departure_time, arrival_landing_time,
+            return_flight_number, departure_departure_time, departure_landing_time,
+            tour_start_date, tour_end_date, pickup_date, dropoff_date, passenger_contact,
+            itinerary_details, is_first_order, from_referral, referral_code, service_type,
+            payment_status, total_price, user_id, agent_id, operator_id, booking_date,
+            group_size, status, tour_name, tour_location, is_extra_schedule, schedule_type,
+            pickup_time, dropoff_time
+        FROM tour_schedule_order
+        WHERE booking_id = #{bookingId}
+        ORDER BY day_number ASC, display_order ASC
+    </select>
+
+    <!-- 根据订单ID删除行程排序 -->
+    <delete id="deleteByBookingId">
+        DELETE FROM tour_schedule_order WHERE booking_id = #{bookingId}
+    </delete>
+
+    <!-- 更新最后一天的送机地点为航班号 -->
+    <update id="updateLastDayDropoffLocation">
+        UPDATE tour_schedule_order t1
+        SET t1.dropoff_location = #{flightNumber}, t1.updated_at = NOW()
+        WHERE t1.booking_id = #{bookingId} 
+        AND t1.day_number = (
+            SELECT max_day FROM (
+                SELECT MAX(day_number) as max_day 
+                FROM tour_schedule_order t2 
+                WHERE t2.booking_id = #{bookingId}
+            ) as temp
+        )
+    </update>
+
+    <!-- 根据酒店名称和日期统计住在该酒店的所有客人 -->
+    <select id="getCustomersByHotelAndDate" resultMap="tourScheduleOrderMap">
+        SELECT 
+            tso.*
+        FROM tour_schedule_order tso
+        WHERE tso.tour_date = #{tourDate}
+        AND tso.dropoff_location LIKE CONCAT('%', #{hotelName}, '%')
+        ORDER BY tso.order_number ASC
+    </select>
+
+    <!-- 根据酒店名称、日期和导游获取客人信息 -->
+    <select id="getCustomersByHotelDateAndGuide" resultMap="tourScheduleOrderMap">
+        SELECT 
+            tso.*,
+            tgva.guide_name,
+            CONCAT(
+                IFNULL(tgva.license_plate, ''),
+                CASE 
+                    WHEN tgva.license_plate IS NOT NULL AND tgva.vehicle_type IS NOT NULL THEN ' - '
+                    ELSE ''
+                END,
+                IFNULL(tgva.vehicle_type, '')
+            ) as vehicle_info
+        FROM tour_schedule_order tso
+        LEFT JOIN tour_guide_vehicle_assignment tgva 
+            ON tso.tour_date = tgva.assignment_date
+        WHERE tso.tour_date = #{tourDate}
+        AND tso.dropoff_location LIKE CONCAT('%', #{hotelName}, '%')
+        <if test="guideName != null and guideName != ''">
+            AND tgva.guide_name = #{guideName}
+        </if>
+        ORDER BY tgva.guide_name ASC, tso.order_number ASC
+    </select>
+
+</mapper> 

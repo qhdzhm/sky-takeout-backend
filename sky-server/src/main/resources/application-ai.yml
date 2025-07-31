@@ -1,0 +1,85 @@
+# AI助手相关配置
+ai:
+  # DeepSeek配置
+  deepseek:
+    api:
+      key: ${DEEPSEEK_API_KEY:}
+      base-url: https://api.deepseek.com
+    model: deepseek-chat
+    timeout: 30000
+    max-tokens: 150
+    temperature: 0.7
+
+  # 通义千问配置
+  qwen:
+    api:
+      key: ${QWEN_API_KEY:}
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    model: qwen-turbo
+    timeout: 30000
+    max-tokens: 2000
+    temperature: 0.7
+
+# 天气API配置
+weather:
+  openweathermap:
+    api-key: d1845658f92b31c64bd94f06f7188c9c
+    base-url: http://api.openweathermap.org/data/2.5
+    enabled: true
+    cache-duration: 600
+
+# 汇率API配置
+exchange:
+  api:
+    key: ${EXCHANGE_API_KEY:}
+    base-url: https://api.exchangerate-api.com/v4
+    enabled: false
+
+# 新闻API配置
+news:
+  api:
+    key: ${NEWS_API_KEY:}
+    base-url: https://newsapi.org/v2
+    enabled: false
+
+# 百度搜索API配置
+baidu:
+  search:
+    api-key: ${BAIDU_SEARCH_API_KEY:}
+    base-url: https://aip.baidubce.com/rest/2.0
+    enabled: false
+
+# 航班信息API配置
+flight:
+  api:
+    aviationstack:
+      api-key: ${AVIATION_STACK_API_KEY:}
+      base-url: http://api.aviationstack.com/v1
+      enabled: false
+
+# ChatBot特定配置
+chatbot:
+  # 限流配置
+  rate-limit:
+    max-requests: 30
+    time-window: 60
+  
+  # 响应配置
+  response:
+    max-length: 2000
+    default-language: zh-CN
+  
+  # 功能开关
+  features:
+    weather-query: true
+    exchange-rate-query: true
+    news-query: true
+    traffic-query: true
+    travel-guide-query: true
+    smart-search: true
+  
+  # 缓存配置
+  cache:
+    weather-duration: 600
+    exchange-rate-duration: 300
+    news-duration: 1800 

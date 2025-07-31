@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.PassengerMapper">
+    <!-- 基础结果映射 -->
+    <resultMap id="passengerMap" type="com.sky.entity.Passenger">
+        <id column="passenger_id" property="passengerId"/>
+        <result column="full_name" property="fullName"/>
+        <result column="gender" property="gender"/>
+        <result column="date_of_birth" property="dateOfBirth"/>
+        <result column="is_child" property="isChild"/>
+        <result column="child_age" property="childAge"/>
+        <result column="passport_number" property="passportNumber"/>
+        <result column="passport_expiry" property="passportExpiry"/>
+        <result column="nationality" property="nationality"/>
+        <result column="phone" property="phone"/>
+        <result column="wechat_id" property="wechatId"/>
+        <result column="email" property="email"/>
+        <result column="emergency_contact_name" property="emergencyContactName"/>
+        <result column="emergency_contact_phone" property="emergencyContactPhone"/>
+        <result column="dietary_requirements" property="dietaryRequirements"/>
+        <result column="medical_conditions" property="medicalConditions"/>
+        <result column="luggage_count" property="luggageCount"/>
+        <result column="special_requests" property="specialRequests"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <!-- 根据ID查询乘客 -->
+    <select id="getById" resultMap="passengerMap">
+        select * from passengers where passenger_id = #{passengerId}
+    </select>
+    
+    <!-- 根据护照号查询乘客 -->
+    <select id="getByPassportNumber" resultMap="passengerMap">
+        select * from passengers where passport_number = #{passportNumber}
+    </select>
+    
+    <!-- 根据姓名模糊查询乘客列表 -->
+    <select id="getByFullNameLike" resultMap="passengerMap">
+        select * from passengers where full_name like concat('%', #{fullName}, '%')
+    </select>
+    
+    <!-- 根据电话号码查询乘客 -->
+    <select id="getByPhone" resultMap="passengerMap">
+        select * from passengers where phone = #{phone}
+    </select>
+    
+    <!-- 根据订单ID查询乘客列表 -->
+    <select id="getByBookingId" resultMap="passengerMap">
+        select p.* from passengers p
+        join booking_passenger_relation r on p.passenger_id = r.passenger_id
+        where r.booking_id = #{bookingId}
+    </select>
+    
+    <!-- 插入乘客信息 -->
+    <insert id="insert" parameterType="com.sky.entity.Passenger" useGeneratedKeys="true" keyProperty="passengerId">
+        insert into passengers(
+            full_name, gender, date_of_birth, is_child, child_age, passport_number, passport_expiry,
+            nationality, phone, wechat_id, email, emergency_contact_name, emergency_contact_phone,
+            dietary_requirements, medical_conditions, luggage_count, special_requests,
+            created_at, updated_at
+        ) values(
+            #{fullName}, 
+            <choose>
+                <when test="gender != null">#{gender}</when>
+                <otherwise>null</otherwise>
+            </choose>, 
+            <choose>
+                <when test="dateOfBirth != null">#{dateOfBirth}</when>
+                <otherwise>null</otherwise>
+            </choose>, 
+            #{isChild}, 
+            #{childAge}, 
+            <choose>
+                <when test="passportNumber != null">#{passportNumber}</when>
+                <otherwise>null</otherwise>
+            </choose>, 
+            <choose>
+                <when test="passportExpiry != null">#{passportExpiry}</when>
+                <otherwise>null</otherwise>
+            </choose>,
+            <choose>
+                <when test="nationality != null">#{nationality}</when>
+                <otherwise>null</otherwise>
+            </choose>, 
+            #{phone}, 
+            #{wechatId}, 
+            <choose>
+                <when test="email != null">#{email}</when>
+                <otherwise>null</otherwise>
+            </choose>, 
+            <choose>
+                <when test="emergencyContactName != null">#{emergencyContactName}</when>
+                <otherwise>null</otherwise>
+            </choose>, 
+            <choose>
+                <when test="emergencyContactPhone != null">#{emergencyContactPhone}</when>
+                <otherwise>null</otherwise>
+            </choose>,
+            <choose>
+                <when test="dietaryRequirements != null">#{dietaryRequirements}</when>
+                <otherwise>null</otherwise>
+            </choose>, 
+            <choose>
+                <when test="medicalConditions != null">#{medicalConditions}</when>
+                <otherwise>null</otherwise>
+            </choose>, 
+            <choose>
+                <when test="luggageCount != null">#{luggageCount}</when>
+                <otherwise>0</otherwise>
+            </choose>, 
+            <choose>
+                <when test="specialRequests != null">#{specialRequests}</when>
+                <otherwise>null</otherwise>
+            </choose>,
+            <choose>
+                <when test="createdAt != null">#{createdAt}</when>
+                <otherwise>now()</otherwise>
+            </choose>, 
+            <choose>
+                <when test="updatedAt != null">#{updatedAt}</when>
+                <otherwise>now()</otherwise>
+            </choose>
+        )
+    </insert>
+    
+    <!-- 更新乘客信息 -->
+    <update id="update" parameterType="com.sky.entity.Passenger">
+        update passengers
+        <set>
+            <if test="fullName != null">full_name = #{fullName},</if>
+            <if test="gender != null">gender = #{gender},</if>
+            <if test="dateOfBirth != null">date_of_birth = #{dateOfBirth},</if>
+            <if test="isChild != null">is_child = #{isChild},</if>
+            <if test="childAge != null">child_age = #{childAge},</if>
+            <if test="passportNumber != null">passport_number = #{passportNumber},</if>
+            <if test="passportExpiry != null">passport_expiry = #{passportExpiry},</if>
+            <if test="nationality != null">nationality = #{nationality},</if>
+            <if test="phone != null">phone = #{phone},</if>
+            <if test="wechatId != null">wechat_id = #{wechatId},</if>
+            <if test="email != null">email = #{email},</if>
+            <if test="emergencyContactName != null">emergency_contact_name = #{emergencyContactName},</if>
+            <if test="emergencyContactPhone != null">emergency_contact_phone = #{emergencyContactPhone},</if>
+            <if test="dietaryRequirements != null">dietary_requirements = #{dietaryRequirements},</if>
+            <if test="medicalConditions != null">medical_conditions = #{medicalConditions},</if>
+            <if test="luggageCount != null">luggage_count = #{luggageCount},</if>
+            <if test="specialRequests != null">special_requests = #{specialRequests},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </set>
+        where passenger_id = #{passengerId}
+    </update>
+    
+    <!-- 删除乘客信息 -->
+    <delete id="deleteById">
+        delete from passengers where passenger_id = #{passengerId}
+    </delete>
+    
+    <!-- 保存乘客和订单的关联 -->
+    <insert id="saveBookingPassengerRelation" parameterType="com.sky.entity.BookingPassengerRelation" useGeneratedKeys="true" keyProperty="id">
+        insert into booking_passenger_relation(
+            booking_id, passenger_id, is_primary, ticket_number, seat_number, luggage_tags, check_in_status
+        ) values(
+            #{bookingId}, #{passengerId}, #{isPrimary}, #{ticketNumber}, #{seatNumber}, #{luggageTags}, #{checkInStatus}
+        )
+    </insert>
+    
+    <!-- 更新乘客和订单的关联 -->
+    <update id="updateBookingPassengerRelation" parameterType="com.sky.entity.BookingPassengerRelation">
+        update booking_passenger_relation
+        <set>
+            <if test="isPrimary != null">is_primary = #{isPrimary},</if>
+            <if test="ticketNumber != null">ticket_number = #{ticketNumber},</if>
+            <if test="seatNumber != null">seat_number = #{seatNumber},</if>
+            <if test="luggageTags != null">luggage_tags = #{luggageTags},</if>
+            <if test="checkInStatus != null">check_in_status = #{checkInStatus},</if>
+        </set>
+        where booking_id = #{bookingId} and passenger_id = #{passengerId}
+    </update>
+    
+    <!-- 查询乘客和订单的关联信息 -->
+    <select id="getRelation" resultType="com.sky.entity.BookingPassengerRelation">
+        select * from booking_passenger_relation 
+        where booking_id = #{bookingId} and passenger_id = #{passengerId}
+    </select>
+    
+    <!-- 删除乘客和订单的关联 -->
+    <delete id="deleteRelation">
+        delete from booking_passenger_relation 
+        where booking_id = #{bookingId} and passenger_id = #{passengerId}
+    </delete>
+    
+    <!-- 🆕 获取乘客的所有关联订单 -->
+    <select id="getPassengerRelations" resultType="com.sky.entity.BookingPassengerRelation">
+        select * from booking_passenger_relation 
+        where passenger_id = #{passengerId}
+    </select>
+</mapper> 

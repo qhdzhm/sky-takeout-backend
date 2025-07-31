@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sky.mapper.BookingItineraryChoiceMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BookingItineraryChoiceResultMap" type="com.sky.entity.BookingItineraryChoice">
+        <id property="id" column="id"/>
+        <result property="bookingId" column="booking_id"/>
+        <result property="dayNumber" column="day_number"/>
+        <result property="selectedDayTourId" column="selected_day_tour_id"/>
+        <result property="optionGroupName" column="option_group_name"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <!-- 根据预订ID获取行程选择 -->
+    <select id="getByBookingId" parameterType="java.lang.Integer" resultMap="BookingItineraryChoiceResultMap">
+        SELECT id, booking_id, day_number, selected_day_tour_id, option_group_name, created_at
+        FROM booking_itinerary_choices
+        WHERE booking_id = #{bookingId}
+        ORDER BY day_number
+    </select>
+
+    <!-- 根据预订ID和天数获取行程选择 -->
+    <select id="getByBookingIdAndDay" resultMap="BookingItineraryChoiceResultMap">
+        SELECT id, booking_id, day_number, selected_day_tour_id, option_group_name, created_at
+        FROM booking_itinerary_choices
+        WHERE booking_id = #{bookingId} AND day_number = #{dayNumber}
+    </select>
+
+    <!-- 插入单个行程选择 -->
+    <insert id="insert" parameterType="com.sky.entity.BookingItineraryChoice" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO booking_itinerary_choices (booking_id, day_number, selected_day_tour_id, option_group_name, created_at)
+        VALUES (#{bookingId}, #{dayNumber}, #{selectedDayTourId}, #{optionGroupName}, #{createdAt})
+    </insert>
+
+    <!-- 批量插入行程选择 -->
+    <insert id="batchInsert" parameterType="java.util.List">
+        INSERT INTO booking_itinerary_choices (booking_id, day_number, selected_day_tour_id, option_group_name, created_at)
+        VALUES
+        <foreach collection="list" item="choice" separator=",">
+            (#{choice.bookingId}, #{choice.dayNumber}, #{choice.selectedDayTourId}, #{choice.optionGroupName}, NOW())
+        </foreach>
+    </insert>
+
+    <!-- 更新行程选择 -->
+    <update id="update" parameterType="com.sky.entity.BookingItineraryChoice">
+        UPDATE booking_itinerary_choices
+        SET selected_day_tour_id = #{selectedDayTourId},
+            option_group_name = #{optionGroupName}
+        WHERE id = #{id}
+    </update>
+
+    <!-- 根据预订ID删除所有行程选择 -->
+    <delete id="deleteByBookingId" parameterType="java.lang.Integer">
+        DELETE FROM booking_itinerary_choices WHERE booking_id = #{bookingId}
+    </delete>
+
+    <!-- 根据预订ID和天数删除行程选择 -->
+    <delete id="deleteByBookingIdAndDay">
+        DELETE FROM booking_itinerary_choices 
+        WHERE booking_id = #{bookingId} AND day_number = #{dayNumber}
+    </delete>
+
+    <!-- 根据ID删除行程选择 -->
+    <delete id="deleteById" parameterType="java.lang.Integer">
+        DELETE FROM booking_itinerary_choices WHERE id = #{id}
+    </delete>
+
+</mapper> 
+ 
+ 

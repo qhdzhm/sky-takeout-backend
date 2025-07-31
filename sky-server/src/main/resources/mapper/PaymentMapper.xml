@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.PaymentMapper">
+
+    <sql id="paymentColumns">
+        payment_id, booking_id, amount, payment_date, payment_method, transaction_id, status, 
+        is_credit_payment, credit_transaction_id
+    </sql>
+
+    <select id="getPaymentPage" resultType="com.sky.dto.PaymentDTO" parameterType="com.sky.dto.PaymentPageQueryDTO">
+        SELECT 
+            <include refid="paymentColumns" />
+        FROM 
+            payments
+        <where>
+            <if test="paymentMethod != null and paymentMethod != ''">
+                AND payment_method = #{paymentMethod}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="bookingId != null">
+                AND booking_id = #{bookingId}
+            </if>
+            <if test="transactionId != null and transactionId != ''">
+                AND transaction_id = #{transactionId}
+            </if>
+            <if test="minAmount != null">
+                AND amount >= #{minAmount}
+            </if>
+            <if test="maxAmount != null">
+                AND amount &lt;= #{maxAmount}
+            </if>
+            <if test="beginTime != null">
+                AND payment_date >= #{beginTime}
+            </if>
+            <if test="endTime != null">
+                AND payment_date &lt;= #{endTime}
+            </if>
+        </where>
+        ORDER BY payment_date DESC
+    </select>
+
+</mapper> 
