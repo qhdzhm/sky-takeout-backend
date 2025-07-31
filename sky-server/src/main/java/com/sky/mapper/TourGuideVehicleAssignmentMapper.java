@@ -47,6 +47,12 @@ public interface TourGuideVehicleAssignmentMapper {
                                                         @Param("assignmentDate") LocalDate assignmentDate);
 
     /**
+     * 根据目的地模糊匹配查询分配记录（支持简写地点名称）
+     */
+    List<Object> getByDestinationWithFuzzyMatch(@Param("location") String location, 
+                                               @Param("assignmentDate") LocalDate assignmentDate);
+
+    /**
      * 根据导游ID查询分配记录
      */
     List<TourGuideVehicleAssignmentVO> getByGuideId(@Param("guideId") Long guideId, 

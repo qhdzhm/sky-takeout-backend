@@ -616,8 +616,15 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
     public List<Object> getAssignmentByDateAndLocation(LocalDate date, String location) {
         log.info("根据日期和地点获取导游车辆分配信息: 日期={}, 地点={}", date, location);
         
-        // 暂时返回空列表，后续如果需要可以实现具体逻辑
-        return new ArrayList<>();
+        // 调用导游车辆分配服务获取数据
+        try {
+            List<Object> assignments = tourGuideVehicleAssignmentMapper.getByDestinationWithFuzzyMatch(location, date);
+            log.info("找到{}条分配记录", assignments.size());
+            return assignments;
+        } catch (Exception e) {
+            log.error("获取导游车辆分配信息失败: {}", e.getMessage(), e);
+            return new ArrayList<>();
+        }
     }
 
     /**

@@ -228,6 +228,52 @@
         ORDER BY tgva.created_time
     </select>
 
+    <!-- 根据目的地模糊匹配查询分配记录（支持简写地点名称） -->
+    <select id="getByDestinationWithFuzzyMatch" resultMap="TourGuideVehicleAssignmentVOMap">
+        SELECT 
+            tgva.id, tgva.assignment_date, tgva.destination, tgva.total_people,
+            tgva.adult_count, tgva.child_count, tgva.contact_phone, tgva.contact_person,
+            tgva.pickup_method, tgva.pickup_location, tgva.dropoff_location, tgva.remarks,
+            tgva.next_destination, tgva.status, tgva.booking_ids, tgva.tour_schedule_order_ids,
+            tgva.passenger_details, tgva.special_requirements, tgva.dietary_restrictions,
+            tgva.luggage_info, tgva.emergency_contact, tgva.language_preference,
+            tgva.created_time, tgva.updated_time,
+            tgva.guide_id, tgva.guide_name,
+            NULL as guide_phone, NULL as guide_email, NULL as guide_languages, 
+            NULL as guide_experience,
+            tgva.vehicle_id, tgva.license_plate, tgva.vehicle_type,
+            COALESCE(v.seat_count, 25) as seat_count, 
+            COALESCE(v.location, v.current_location, '未知位置') as vehicle_location, 
+            v.notes as vehicle_notes,
+            -- 获取关联的真实订单号（通过booking_id匹配）
+            (
+                SELECT GROUP_CONCAT(DISTINCT tso.order_number SEPARATOR ',')
+                FROM tour_schedule_order tso 
+                WHERE FIND_IN_SET(tso.booking_id, REPLACE(REPLACE(REPLACE(tgva.tour_schedule_order_ids, '[', ''), ']', ''), ' ', ''))
+                AND tso.tour_date = tgva.assignment_date
+                LIMIT 1
+            ) as real_order_numbers
+        FROM tour_guide_vehicle_assignment tgva
+        LEFT JOIN vehicles v ON tgva.vehicle_id = v.vehicle_id
+        WHERE (
+            tgva.destination = #{location} 
+            OR tgva.destination LIKE CONCAT('%', #{location}, '%')
+            OR (
+                #{location} = '酒(徒步)' AND tgva.destination LIKE '%亚瑟港%'
+            ) OR (
+                #{location} = '布' AND tgva.destination LIKE '%布鲁尼%'
+            ) OR (
+                #{location} = '霍' AND tgva.destination LIKE '%霍巴特%'
+            ) OR (
+                #{location} = '亚' AND tgva.destination LIKE '%亚瑟港%'
+            )
+        )
+        <if test="assignmentDate != null">
+            AND tgva.assignment_date = #{assignmentDate}
+        </if>
+        ORDER BY tgva.created_time
+    </select>
+
     <!-- 根据导游ID查询分配记录 -->
     <select id="getByGuideId" resultMap="TourGuideVehicleAssignmentVOMap">
         SELECT 
