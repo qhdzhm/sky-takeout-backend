@@ -510,6 +510,138 @@ public class ChatBotServiceImpl implements ChatBotService {
     }
     
     /**
+     * 检查是否为产品选择回复（数字1-5）
+     */
+    private boolean isProductSelectionReply(String message) {
+        if (message == null || message.trim().isEmpty()) {
+            return false;
+        }
+        
+        String trimmed = message.trim();
+        // 检查是否为纯数字且在1-5范围内
+        return trimmed.matches("^[1-5]$");
+    }
+    
+    /**
+     * 检查最近聊天历史中是否有产品选择提示
+     */
+    private boolean hasRecentProductSelectionPrompt(String sessionId) {
+        try {
+            // 获取最近3条聊天记录
+            List<ChatMessage> recentHistory = getRecentChatHistory(sessionId, 3);
+            
+            for (ChatMessage chatMessage : recentHistory) {
+                String botResponse = chatMessage.getBotResponse();
+                if (botResponse != null && botResponse.contains("请回复产品编号")) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            log.error("检查产品选择提示历史失败: {}", e.getMessage(), e);
+        }
+        
+        return false;
+    }
+    
+    /**
+     * 处理产品选择回复
+     */
+    private ChatResponse handleProductSelectionReply(ChatRequest request, String message) {
+        try {
+            int selectedIndex = Integer.parseInt(message.trim()) - 1; // 转换为0基索引
+            
+            // 从聊天历史中获取产品推荐信息和原始订单数据
+            List<ChatMessage> recentHistory = getRecentChatHistory(request.getSessionId(), 10);
+            
+            // 寻找包含产品推荐的聊天记录
+            ChatMessage productSelectionMessage = null;
+            String originalOrderData = null;
+            
+            for (ChatMessage chatMessage : recentHistory) {
+                String botResponse = chatMessage.getBotResponse();
+                String extractedData = chatMessage.getExtractedData();
+                
+                if (botResponse != null && botResponse.contains("请回复产品编号")) {
+                    productSelectionMessage = chatMessage;
+                    originalOrderData = extractedData; // 获取原始订单数据
+                    break;
+                }
+            }
+            
+            if (productSelectionMessage == null || originalOrderData == null) {
+                return ChatResponse.error("抱歉，我无法找到您之前的产品选择信息，请重新发送订单信息。");
+            }
+            
+            // 重新解析原始订单信息
+            OrderInfo orderInfo;
+            try {
+                orderInfo = JSON.parseObject(originalOrderData, OrderInfo.class);
+            } catch (Exception e) {
+                log.error("解析原始订单数据失败: {}", e.getMessage(), e);
+                return ChatResponse.error("抱歉，订单信息解析失败，请重新发送订单信息。");
+            }
+            
+            // 重新获取相似产品列表
+            List<GroupTourDTO> similarProducts = findSimilarProducts(orderInfo.getServiceType());
+            
+            if (selectedIndex < 0 || selectedIndex >= similarProducts.size()) {
+                return ChatResponse.error(String.format("请选择有效的产品编号（1-%d）", similarProducts.size()));
+            }
+            
+            // 获取用户选择的产品
+            GroupTourDTO selectedProduct = similarProducts.get(selectedIndex);
+            
+            log.info("用户选择了产品: ID={}, 名称={}", selectedProduct.getId(), selectedProduct.getName());
+            
+            // 生成订单URL参数
+            String orderParams = generateOrderParams(orderInfo, selectedProduct);
+            
+            // 根据用户类型决定跳转页面
+            String redirectUrl;
+            Integer userType = request.getUserType();
+            boolean isAgent = (userType != null && (userType == 2 || userType == 3)); // 2=操作员, 3=中介主号(代理商)
+            
+            if (isAgent) {
+                // 中介用户跳转到中介订单页面
+                String agentOrderParams = "tourId=" + selectedProduct.getId() + "&" + orderParams;
+                redirectUrl = "/agent-booking/group-tours/" + selectedProduct.getId() + "?" + agentOrderParams;
+                String userTypeName = (userType == 2) ? "操作员" : (userType == 3) ? "中介主号" : "中介用户";
+                log.info("{}，跳转到中介订单页面: {}", userTypeName, redirectUrl);
+            } else {
+                // 普通用户跳转到普通订单页面
+                redirectUrl = "/booking?" + orderParams;
+                log.info("普通用户，跳转到普通订单页面: {}", redirectUrl);
+            }
+            
+            // 构建响应消息
+            String responseMessage;
+            if (isAgent) {
+                String userTypeName = (userType == 2) ? "操作员" : (userType == 3) ? "中介主号" : "中介";
+                responseMessage = String.format("✅ 已选择产品：**%s**\n\n📋 订单信息已为%s准备完成，正在跳转到订单页面...", 
+                    selectedProduct.getName(), userTypeName);
+            } else {
+                responseMessage = String.format("✅ 已选择产品：**%s**\n\n📋 订单信息已准备完成，正在跳转到订单页面...", 
+                    selectedProduct.getName());
+            }
+            
+            // 保存聊天记录
+            saveChatMessage(request, responseMessage, 2, JSON.toJSONString(orderInfo));
+            
+            return ChatResponse.orderSuccess(
+                responseMessage,
+                JSON.toJSONString(orderInfo),
+                redirectUrl
+            );
+            
+        } catch (NumberFormatException e) {
+            return ChatResponse.error("请输入有效的数字（1-5）");
+        } catch (Exception e) {
+            log.error("处理产品选择回复失败: {}", e.getMessage(), e);
+            return ChatResponse.error("处理您的选择时出现错误，请重试或联系客服。");
+        }
+    }
+    
+    /**
      * 处理订单数据
      */
     private ChatResponse handleOrderData(ChatRequest request) {
@@ -740,6 +872,11 @@ public class ChatBotServiceImpl implements ChatBotService {
         String message = request.getMessage().toLowerCase().trim();
         
         try {
+            // 优先检查是否为产品选择回复（数字1-5）
+            if (isProductSelectionReply(message)) {
+                return handleProductSelectionReply(request, message);
+            }
+            
             // 检查是否为订单查询请求
             if (isOrderQueryRequest(message)) {
                 return handleOrderQuery(request);
@@ -3212,6 +3349,9 @@ public class ChatBotServiceImpl implements ChatBotService {
             // 添加AI处理标识，让前端知道这是AI处理的订单
             params.append("aiProcessed=true&");
             
+            // 添加showAIDialog参数，触发前端表单自动填充对话框
+            params.append("showAIDialog=true&");
+            
             // 添加处理时间戳，用于调试和跟踪
             params.append("aiProcessedTime=").append(System.currentTimeMillis()).append("&");
         
@@ -3235,6 +3375,7 @@ public class ChatBotServiceImpl implements ChatBotService {
                 fallbackParams.append("productType=group&");
             }
             fallbackParams.append("aiProcessed=true&");
+            fallbackParams.append("showAIDialog=true&");
             fallbackParams.append("error=paramGeneration");
             
             String fallback = fallbackParams.toString();

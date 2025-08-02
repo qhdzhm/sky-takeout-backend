@@ -424,8 +424,8 @@ public interface GroupTourMapper {
     void deleteImages(Integer tourId);
 
     /**
-     * 根据名称模糊查询跟团游（用于AI聊天机器人）
-     * @param name 产品名称
+     * 根据名称或产品代码模糊查询跟团游（用于AI聊天机器人）
+     * @param name 产品名称或产品代码
      * @return 跟团游信息
      */
     @Select("SELECT group_tour_id AS id, title AS name, description, price, discounted_price AS discountedPrice, " +
@@ -433,11 +433,11 @@ public interface GroupTourMapper {
             "departure_info AS departureInfo, group_size AS groupSize, language, " +
             "image_url AS coverImage, banner_image AS bannerImage, is_active AS isActive, location, category, " +
             "departure_address AS departureAddress, guide_fee AS guideFee, guide_id AS guideId " +
-            "FROM group_tours WHERE title LIKE CONCAT('%', #{name}, '%') AND is_active = 1 LIMIT 1")
+            "FROM group_tours WHERE (title LIKE CONCAT('%', #{name}, '%') OR tour_code LIKE CONCAT('%', #{name}, '%')) AND is_active = 1 LIMIT 1")
     GroupTourDTO findByNameLike(String name);
 
     /**
-     * 根据关键词智能搜索跟团游产品
+     * 根据关键词智能搜索跟团游产品（支持产品名称和产品代码）
      * @param keywords 关键词（用空格分隔）
      * @return 跟团游列表
      */
@@ -449,11 +449,13 @@ public interface GroupTourMapper {
             "departure_address AS departureAddress, guide_fee AS guideFee, guide_id AS guideId " +
             "FROM group_tours WHERE is_active = 1 " +
             "<foreach collection='keywords' item='keyword' separator=' '>" +
-            "AND title LIKE CONCAT('%', #{keyword}, '%')" +
+            "AND (title LIKE CONCAT('%', #{keyword}, '%') OR tour_code LIKE CONCAT('%', #{keyword}, '%'))" +
             "</foreach>" +
             "ORDER BY " +
             "<foreach collection='keywords' item='keyword' separator=' + '>" +
-            "(CASE WHEN title LIKE CONCAT('%', #{keyword}, '%') THEN 1 ELSE 0 END)" +
+            "(CASE WHEN title LIKE CONCAT('%', #{keyword}, '%') THEN 2 " +
+            "      WHEN tour_code LIKE CONCAT('%', #{keyword}, '%') THEN 1 " +
+            "      ELSE 0 END)" +
             "</foreach> DESC " +
             "LIMIT 5" +
             "</script>")
