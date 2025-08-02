@@ -73,8 +73,8 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
                 .excludePathPatterns("/user/register")
                 .excludePathPatterns("/user/shop/status")
                 .excludePathPatterns("/user/agent/login")  // 排除代理商登录
-                .excludePathPatterns("/api/auth/csrf-token")  // CSRF token获取不需要认证
-                .excludePathPatterns("/api/auth/logout")      // 登出接口不需要认证
+                .excludePathPatterns("/auth/csrf-token")      // CSRF token获取不需要认证
+                .excludePathPatterns("/auth/logout")          // 登出接口不需要认证
                 .excludePathPatterns("/chatbot/health")       // ChatBot健康检查不需要认证
                 // 微信登录相关接口
                 .excludePathPatterns("/user/wechat/qrcode-url")
