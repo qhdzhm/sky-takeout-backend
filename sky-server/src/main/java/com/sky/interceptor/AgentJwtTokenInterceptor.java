@@ -17,7 +17,7 @@ import javax.servlet.http.HttpServletResponse;
 /**
  * 代理商JWT令牌校验的拦截器
  */
-@Component
+// 已统一使用 JwtTokenAgentInterceptor，此拦截器保留但不再注入
 @Slf4j
 public class AgentJwtTokenInterceptor implements HandlerInterceptor {
 

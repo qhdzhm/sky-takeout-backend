@@ -44,6 +44,9 @@ public class Agent implements Serializable {
     // 头像URL
     private String avatar;
     
+    // 是否使用头像作为邮件Logo
+    private Boolean useAvatarAsLogo;
+    
     // 折扣率（保留兼容性，新系统使用折扣等级）
     private BigDecimal discountRate;
     

@@ -78,7 +78,7 @@ public class EmployeeController {
             refreshClaims.put(JwtClaimsConstant.USERNAME, employee.getUsername());
             refreshClaims.put(JwtClaimsConstant.USER_TYPE, actualUserType);
             
-            String refreshToken = JwtUtil.createRefreshJWT(
+            String refreshToken = JwtUtil.createJWT(
                 jwtProperties.getAdminSecretKey(),
                 8 * 60 * 60 * 1000L, // 8小时
                 refreshClaims

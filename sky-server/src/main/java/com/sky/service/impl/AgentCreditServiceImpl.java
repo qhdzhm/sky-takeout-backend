@@ -180,7 +180,7 @@ public class AgentCreditServiceImpl implements AgentCreditService {
         String transactionNo = "TX" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) 
                 + String.format("%04d", (int)(Math.random() * 10000));
         
-        // 记录交易前余额
+        // 记录交易前余额/后余额（总可用=信用+押金-已用）
         BigDecimal balanceBefore = totalAvailable;
         BigDecimal balanceAfter = balanceBefore.subtract(amount);
         
@@ -235,6 +235,7 @@ public class AgentCreditServiceImpl implements AgentCreditService {
                 .transactionNo(transaction.getTransactionNo())
                 .bookingId(transaction.getBookingId())
                 .amount(transaction.getAmount())
+                .balanceBefore(balanceBefore)
                 .balanceAfter(transaction.getBalanceAfter())
                 .paymentStatus("paid")
                 .build();
@@ -352,5 +353,66 @@ public class AgentCreditServiceImpl implements AgentCreditService {
                 .balanceAfter(transaction.getBalanceAfter())
                 .repaymentStatus("completed")
                 .build();
+    }
+    
+    /**
+     * 增加代理商信用余额（用于退款等场景）
+     */
+    @Override
+    @Transactional
+    public boolean addCredit(Long agentId, BigDecimal amount, String note) {
+        log.info("增加代理商信用余额: agentId={}, amount={}, note={}", agentId, amount, note);
+        
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            log.error("增加金额必须大于0: {}", amount);
+            throw new BusinessException("增加金额必须大于0");
+        }
+        
+        // 获取代理商信用信息
+        AgentCredit agentCredit = agentCreditMapper.getByAgentId(agentId);
+        if (agentCredit == null) {
+            log.error("代理商信用额度信息不存在, agentId: {}", agentId);
+            throw new BusinessException("代理商信用额度信息不存在");
+        }
+        
+        // 计算操作前后的余额
+        BigDecimal balanceBefore = agentCredit.getAvailableCredit();
+        
+        // 增加余额到预存余额中
+        agentCredit.setDepositBalance(agentCredit.getDepositBalance().add(amount));
+        
+        // 重新计算可用额度
+        agentCredit.setAvailableCredit(agentCredit.getTotalCredit()
+                .subtract(agentCredit.getUsedCredit())
+                .add(agentCredit.getDepositBalance()));
+        
+        BigDecimal balanceAfter = agentCredit.getAvailableCredit();
+        agentCredit.setLastUpdated(LocalDateTime.now());
+        
+        // 生成交易号
+        String transactionNo = "CR" + System.currentTimeMillis() + String.format("%04d", (int)(Math.random() * 10000));
+        
+        // 记录交易
+        CreditTransaction transaction = CreditTransaction.builder()
+                .transactionNo(transactionNo)
+                .agentId(agentId)
+                .amount(amount)
+                .transactionType(CreditConstants.TRANSACTION_TYPE_ADJUSTMENT)
+                .balanceBefore(balanceBefore)
+                .balanceAfter(balanceAfter)
+                .note(note != null ? note : "信用余额调整")
+                .createdBy(agentId)
+                .createdAt(LocalDateTime.now())
+                .build();
+                
+        creditTransactionMapper.insert(transaction);
+        
+        // 更新信用额度
+        agentCreditMapper.update(agentCredit);
+        
+        log.info("信用余额增加成功: agentId={}, amount={}, balanceBefore={}, balanceAfter={}", 
+                agentId, amount, balanceBefore, balanceAfter);
+        
+        return true;
     }
 } 

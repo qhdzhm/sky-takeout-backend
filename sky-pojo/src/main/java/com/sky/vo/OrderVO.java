@@ -51,6 +51,7 @@ public class OrderVO {
     private BigDecimal totalPrice; // 总价格
     private Date createdAt; // 创建时间
     private Date updatedAt; // 更新时间
+    private String selectedOptionalTours; // 选中的可选行程（JSON格式）
     
     // 附加信息
     private String tourName; // 旅行名称

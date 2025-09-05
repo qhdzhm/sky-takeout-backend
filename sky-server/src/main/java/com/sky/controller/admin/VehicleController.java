@@ -6,6 +6,8 @@ import com.sky.result.PageResult;
 import com.sky.result.Result;
 import com.sky.service.VehicleService;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,6 +16,8 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 // CORS现在由全局CorsFilter处理，移除@CrossOrigin注解
 public class VehicleController {
+
+    private static final Logger log = LoggerFactory.getLogger(VehicleController.class);
 
     @Autowired
     private VehicleService vehicleService;

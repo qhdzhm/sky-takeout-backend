@@ -31,30 +31,8 @@ public class VehicleServiceImpl implements VehicleService {
         PageHelper.startPage(vehiclePageQueryDTO.getPage(), vehiclePageQueryDTO.getPageSize());
         Page<Vehicle> page = vehicleMapper.pageQuery(vehiclePageQueryDTO);
         
-        // 获取车辆列表
-        List<Vehicle> vehicles = page.getResult();
-        
-        // 当前日期，用于比较到期日期
-        LocalDate today = LocalDate.now();
-        
-        // 为每个车辆更新状态
-        List<Vehicle> filteredVehicles = new ArrayList<>();
-        for (Vehicle vehicle : vehicles) {
-            // 更新车辆状态
-            updateVehicleStatus(vehicle, today);
-            
-            // 如果指定了状态过滤，只添加匹配的车辆
-            if (vehiclePageQueryDTO.getStatus() == null || vehicle.getStatus().equals(vehiclePageQueryDTO.getStatus())) {
-                filteredVehicles.add(vehicle);
-            }
-        }
-        
-        // 更新总数和过滤后的列表
-        if (vehiclePageQueryDTO.getStatus() != null) {
-            page.setTotal(filteredVehicles.size());
-        }
-        
-        return new PageResult(page.getTotal(), filteredVehicles);
+        // 状态计算已在SQL中完成，直接返回结果
+        return new PageResult(page.getTotal(), page.getResult());
     }
 
     /**

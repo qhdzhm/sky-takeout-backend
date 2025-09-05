@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.PaymentAuditLogMapper">
+
+	<resultMap id="BaseResultMap" type="com.sky.entity.PaymentAuditLog">
+		<id column="id" property="id" />
+		<result column="request_id" property="requestId" />
+		<result column="action" property="action" />
+		<result column="booking_id" property="bookingId" />
+		<result column="order_number" property="orderNumber" />
+		<result column="agent_id" property="agentId" />
+		<result column="operator_id" property="operatorId" />
+		<result column="operator_type" property="operatorType" />
+		<result column="operator_name" property="operatorName" />
+		<result column="amount" property="amount" />
+		<result column="balance_before" property="balanceBefore" />
+		<result column="balance_after" property="balanceAfter" />
+		<result column="note" property="note" />
+		<result column="ip" property="ip" />
+		<result column="created_at" property="createdAt" />
+	</resultMap>
+
+	<!-- 插入支付审计日志 -->
+	<insert id="insert" parameterType="com.sky.entity.PaymentAuditLog" useGeneratedKeys="true" keyProperty="id">
+		INSERT INTO payment_audit_log(request_id, action, booking_id, order_number, agent_id,
+			operator_id, operator_type, operator_name, amount, balance_before, balance_after,
+			note, ip, created_at)
+		VALUES(#{requestId}, #{action}, #{bookingId}, #{orderNumber}, #{agentId},
+			#{operatorId}, #{operatorType}, #{operatorName}, #{amount}, #{balanceBefore}, #{balanceAfter},
+			#{note}, #{ip}, #{createdAt})
+	</insert>
+
+	<!-- 分页查询（后台用） -->
+	<select id="selectPage" resultMap="BaseResultMap">
+		SELECT *
+		FROM payment_audit_log
+		WHERE 1=1
+		<if test="agentId != null">
+			AND agent_id = #{agentId}
+		</if>
+		<if test="action != null and action != ''">
+			AND action = #{action}
+		</if>
+		<if test="startTime != null">
+			AND created_at &gt;= #{startTime}
+		</if>
+		<if test="endTime != null">
+			AND created_at &lt;= #{endTime}
+		</if>
+		ORDER BY created_at DESC
+		LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
+	<select id="countPage" resultType="int">
+		SELECT COUNT(1)
+		FROM payment_audit_log
+		WHERE 1=1
+		<if test="agentId != null">
+			AND agent_id = #{agentId}
+		</if>
+		<if test="action != null and action != ''">
+			AND action = #{action}
+		</if>
+		<if test="startTime != null">
+			AND created_at &gt;= #{startTime}
+		</if>
+		<if test="endTime != null">
+			AND created_at &lt;= #{endTime}
+		</if>
+	</select>
+
+	<!-- 代理查询（用户端/代理端用） -->
+	<select id="selectByAgent" resultMap="BaseResultMap">
+		SELECT * FROM payment_audit_log
+		WHERE agent_id = #{agentId}
+		<if test="action != null and action != ''">
+			AND action = #{action}
+		</if>
+		<if test="startTime != null">
+			AND created_at &gt;= #{startTime}
+		</if>
+		<if test="endTime != null">
+			AND created_at &lt;= #{endTime}
+		</if>
+		ORDER BY created_at DESC
+		LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
+	<select id="countByAgent" resultType="int">
+		SELECT COUNT(1) FROM payment_audit_log
+		WHERE agent_id = #{agentId}
+		<if test="action != null and action != ''">
+			AND action = #{action}
+		</if>
+		<if test="startTime != null">
+			AND created_at &gt;= #{startTime}
+		</if>
+		<if test="endTime != null">
+			AND created_at &lt;= #{endTime}
+		</if>
+	</select>
+
+	<select id="sumAmountByAgent" resultType="java.math.BigDecimal">
+		SELECT COALESCE(SUM(amount),0) FROM payment_audit_log
+		WHERE agent_id = #{agentId}
+		<if test="startTime != null">
+			AND created_at &gt;= #{startTime}
+		</if>
+		<if test="endTime != null">
+			AND created_at &lt;= #{endTime}
+		</if>
+	</select>
+
+</mapper>
+
+

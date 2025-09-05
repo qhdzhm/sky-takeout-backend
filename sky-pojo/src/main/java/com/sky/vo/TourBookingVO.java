@@ -51,6 +51,9 @@ public class TourBookingVO implements Serializable {
     
     @ApiModelProperty("代理商名称")
     private String agentName;
+
+    @ApiModelProperty("操作员ID")
+    private Long operatorId;
     
     @ApiModelProperty("预订日期")
     private LocalDateTime bookingDate;

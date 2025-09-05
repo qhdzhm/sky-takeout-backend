@@ -41,8 +41,8 @@ public class CookieUtil {
      * @param maxAge 过期时间（秒）
      */
     public static void setCookieWithMultiplePaths(HttpServletResponse response, String name, String value, boolean httpOnly, int maxAge) {
-        // 设置到不同路径的Cookie
-        String[] paths = {"/", "/api", "/agent"};
+        // 设置到不同路径的Cookie - 包含用户端路径
+        String[] paths = {"/", "/api", "/agent", "/user"};
         
         for (String path : paths) {
             setCookie(response, name, value, path, httpOnly, maxAge);
@@ -82,47 +82,32 @@ public class CookieUtil {
      * @param cookieName Cookie名称
      */
     public static void clearCookieAllPaths(HttpServletResponse response, String cookieName) {
-        String[] paths = {"/", "/api", "/agent"};
+        String[] paths = {"/", "/api", "/agent", "/user"};
         
-        log.info("清理Cookie: {} 在所有路径下", cookieName);
+        log.debug("清理Cookie: {} 在所有路径下", cookieName);
         
         for (String path : paths) {
-            log.info("清理Cookie: {} 在路径: {}", cookieName, path);
+            log.debug("清理Cookie: {} 在路径: {}", cookieName, path);
             clearCookie(response, cookieName, path);
         }
         
-        log.info("已完成清理Cookie: {} 在所有路径下", cookieName);
+        log.debug("已完成清理Cookie: {} 在所有路径下", cookieName);
     }
     
     /**
-     * 清理单个路径下的Cookie（增强版本，确保彻底清理）
+     * 清理单个路径下的Cookie（简化版本，避免头部过大）
      * @param response HTTP响应
      * @param cookieName Cookie名称
      * @param path Cookie路径
      */
     public static void clearCookie(HttpServletResponse response, String cookieName, String path) {
         try {
-            // 方式1：清理HttpOnly Cookie（localhost域）
-            String httpOnlyLocalhost = String.format("%s=; Path=%s; Domain=localhost; Max-Age=0; HttpOnly; SameSite=Lax", cookieName, path);
-            response.addHeader("Set-Cookie", httpOnlyLocalhost);
-            log.debug("设置HttpOnly清理Cookie(localhost): {}", httpOnlyLocalhost);
+            // 方式1：Set-Cookie头部清理（覆盖HttpOnly和普通Cookie）
+            String clearHeader = String.format("%s=; Path=%s; Max-Age=0; HttpOnly; SameSite=Lax", cookieName, path);
+            response.addHeader("Set-Cookie", clearHeader);
+            log.debug("设置清理Cookie头部: {}", clearHeader);
             
-            // 方式2：清理HttpOnly Cookie（无域）
-            String httpOnlyNoDomain = String.format("%s=; Path=%s; Max-Age=0; HttpOnly; SameSite=Lax", cookieName, path);
-            response.addHeader("Set-Cookie", httpOnlyNoDomain);
-            log.debug("设置HttpOnly清理Cookie(无域): {}", httpOnlyNoDomain);
-            
-            // 方式3：清理普通Cookie（localhost域）
-            String normalLocalhost = String.format("%s=; Path=%s; Domain=localhost; Max-Age=0; SameSite=Lax", cookieName, path);
-            response.addHeader("Set-Cookie", normalLocalhost);
-            log.debug("设置普通清理Cookie(localhost): {}", normalLocalhost);
-            
-            // 方式4：清理普通Cookie（无域）
-            String normalNoDomain = String.format("%s=; Path=%s; Max-Age=0; SameSite=Lax", cookieName, path);
-            response.addHeader("Set-Cookie", normalNoDomain);
-            log.debug("设置普通清理Cookie(无域): {}", normalNoDomain);
-            
-            // 方式5：使用Cookie对象作为额外保障
+            // 方式2：使用Cookie对象作为额外保障
             Cookie cookie = new Cookie(cookieName, "");
             cookie.setPath(path);
             cookie.setMaxAge(0);
@@ -131,7 +116,7 @@ public class CookieUtil {
             response.addCookie(cookie);
             log.debug("设置Cookie对象清理: name={}, path={}, maxAge=0", cookieName, path);
             
-            log.debug("完成清理Cookie: {} 在路径: {} (使用5种方式)", cookieName, path);
+            log.debug("完成清理Cookie: {} 在路径: {} (使用2种方式)", cookieName, path);
         } catch (Exception e) {
             log.error("清理Cookie失败: {} 在路径: {} - {}", cookieName, path, e.getMessage());
         }
@@ -151,13 +136,13 @@ public class CookieUtil {
         
         // 清理当前使用的Cookie
         for (String cookieName : cookieNames) {
-            log.info("正在清理当前Cookie: {}", cookieName);
+            log.debug("正在清理当前Cookie: {}", cookieName);
             clearCookieAllPaths(response, cookieName);
         }
         
         // 清理可能存在的旧Cookie（向后兼容）
         for (String cookieName : legacyCookieNames) {
-            log.info("正在清理兼容Cookie: {}", cookieName);
+            log.debug("正在清理兼容Cookie: {}", cookieName);
             clearCookieAllPaths(response, cookieName);
         }
         
@@ -189,7 +174,7 @@ public class CookieUtil {
         
         // 清理当前使用的Cookie
         for (String cookieName : cookieNames) {
-            log.info("正在清理Cookie: {}", cookieName);
+            log.debug("正在清理Cookie: {}", cookieName);
             clearCookieAllPaths(response, cookieName);
         }
         
@@ -249,14 +234,14 @@ public class CookieUtil {
     public static void clearAdminCookieAllPaths(HttpServletResponse response, String cookieName) {
         String[] paths = {"/", "/admin"};
         
-        log.info("清理管理后台Cookie: {} 在所有路径下", cookieName);
+        log.debug("清理管理后台Cookie: {} 在所有路径下", cookieName);
         
         for (String path : paths) {
-            log.info("清理管理后台Cookie: {} 在路径: {}", cookieName, path);
+            log.debug("清理管理后台Cookie: {} 在路径: {}", cookieName, path);
             clearCookie(response, cookieName, path);
         }
         
-        log.info("已完成清理管理后台Cookie: {} 在所有路径下", cookieName);
+        log.debug("已完成清理管理后台Cookie: {} 在所有路径下", cookieName);
     }
     
     /**
@@ -271,7 +256,7 @@ public class CookieUtil {
         
         // 清理管理后台Cookie
         for (String cookieName : cookieNames) {
-            log.info("正在清理管理后台Cookie: {}", cookieName);
+            log.debug("正在清理管理后台Cookie: {}", cookieName);
             clearAdminCookieAllPaths(response, cookieName);
         }
         

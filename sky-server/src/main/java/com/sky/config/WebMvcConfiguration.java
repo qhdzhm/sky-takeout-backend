@@ -56,12 +56,11 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
                 .addPathPatterns("/admin/**")
                 .excludePathPatterns("/admin/employee/login");
 
-        // 代理商接口拦截器
+        // 代理商接口拦截器（优先级高，先处理代理商请求）
         registry.addInterceptor(jwtTokenAgentInterceptor)
                 .addPathPatterns("/agent/**")  // 代理商相关接口
-                .excludePathPatterns("/agent/login")  // 排除代理商登录
-                .excludePathPatterns("/agent/discount-rate")  // 排除折扣率查询（可能被公开调用）
-                .excludePathPatterns("/agent/*/discount-rate");  // 排除特定代理商折扣率查询
+                .addPathPatterns("/orders/**")  // 代理商也可以访问订单API
+                .excludePathPatterns("/agent/login");  // 仅排除代理商登录，其余均需鉴权
 
         // 普通用户接口拦截器
         registry.addInterceptor(jwtTokenUserInterceptor)
@@ -96,9 +95,7 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
                 .excludePathPatterns("/regions")
                 // 酒店价格和价格计算API也不需要身份验证
                 .excludePathPatterns("/user/bookings/hotel-prices")
-                // 🔧 修复代理商下单问题：移除以下两行排除配置，让订单接口经过JWT拦截器
-                // .excludePathPatterns("/user/bookings/tour/calculate-price")  // 游客价格计算API不需要认证
-                // .excludePathPatterns("/user/bookings/tour/create")  // 游客下单API不需要认证
+                // 订单接口必须鉴权；仅价格计算允许游客模式（在拦截器内放行）
                 // 静态资源和Swagger文档
                 .excludePathPatterns("/")
                 .excludePathPatterns("/error")

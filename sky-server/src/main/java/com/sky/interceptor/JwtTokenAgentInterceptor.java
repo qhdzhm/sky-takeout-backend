@@ -82,24 +82,39 @@ public class JwtTokenAgentInterceptor implements HandlerInterceptor {
             }
         }
         
-        // 2. 校验令牌
+        // 2. 如果没有找到token，判断是否可以放行给其他拦截器处理
+        if (token == null) {
+            String path = request.getRequestURI();
+            // 对于共享的路径（如/orders/**），如果没有代理商token，则放行让用户拦截器处理
+            if (path.startsWith("/orders/")) {
+                log.debug("代理商拦截器：未找到代理商token，放行给用户拦截器处理: {}", path);
+                return true; // 放行，让用户拦截器处理
+            } else {
+                // 对于专属代理商的路径（如/agent/**），必须有token
+                log.warn("代理商接口缺少认证token: {}", path);
+                handleError(response, "需要代理商认证，请登录", 401);
+                return false;
+            }
+        }
+        
+        // 3. 校验令牌
         try {
             log.info("代理商JWT校验:{}", token);
             Claims claims = JwtUtil.parseJWT(jwtProperties.getAgentSecretKey(), token);
             
-            // 3. 获取用户ID、用户名和用户类型
+            // 4. 获取用户ID、用户名和用户类型
             Long userId = Long.valueOf(claims.get(JwtClaimsConstant.USER_ID).toString());
             String username = claims.get("username") != null ? claims.get("username").toString() : null;
             String userType = claims.get("userType") != null ? claims.get("userType").toString() : "agent";
             
-            // 4. 检查用户类型
+            // 5. 检查用户类型
             if (!"agent".equals(userType) && !"agent_operator".equals(userType)) {
                 log.warn("非代理商用户尝试访问代理商接口, 用户类型:{}", userType);
                 handleError(response, "非代理商用户，无权访问此接口", 403);
                 return false;
             }
             
-            // 5. 获取代理商ID
+            // 6. 获取代理商ID
             Long agentId = null;
             if (claims.get(JwtClaimsConstant.AGENT_ID) != null) {
                 agentId = Long.valueOf(claims.get(JwtClaimsConstant.AGENT_ID).toString());
@@ -108,13 +123,13 @@ public class JwtTokenAgentInterceptor implements HandlerInterceptor {
                 agentId = userId;
             }
             
-            // 6. 获取操作员ID（如果存在）
+            // 7. 获取操作员ID（如果存在）
             Long operatorId = null;
             if (claims.get(JwtClaimsConstant.OPERATOR_ID) != null) {
                 operatorId = Long.valueOf(claims.get(JwtClaimsConstant.OPERATOR_ID).toString());
             }
             
-            // 7. 将用户信息存储到ThreadLocal
+            // 8. 将用户信息存储到ThreadLocal
             BaseContext.setCurrentId(userId);
             if (username != null) {
                 BaseContext.setCurrentUsername(username);

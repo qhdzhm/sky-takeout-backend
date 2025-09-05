@@ -24,6 +24,12 @@ public class EmailInvoiceDTO implements Serializable {
      */
     private Long operatorId;
 
+        /**
+         * logo偏好：agent/company（可选）
+         * null 或其他取值则按自动策略：优先代理商头像，失败回退公司logo
+         */
+        private String logoPreference;
+
     /**
      * Invoice详情
      */

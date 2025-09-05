@@ -22,6 +22,7 @@ public class CreditPaymentResultVO implements Serializable {
     private String transactionNo;
     private Long bookingId;
     private BigDecimal amount;
+    private BigDecimal balanceBefore;
     private BigDecimal balanceAfter;
     private String paymentStatus;
 } 

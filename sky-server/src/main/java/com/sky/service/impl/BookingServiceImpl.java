@@ -7,6 +7,8 @@ import com.sky.exception.CustomException;
 import com.sky.mapper.BookingMapper;
 import com.sky.service.BookingService;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +24,8 @@ import java.util.Map;
 @Service
 @Slf4j
 public class BookingServiceImpl implements BookingService {
+    
+    private static final Logger log = LoggerFactory.getLogger(BookingServiceImpl.class);
 
     @Autowired
     private BookingMapper bookingMapper;

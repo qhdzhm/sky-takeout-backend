@@ -2,11 +2,9 @@ package com.sky.controller.user;
 
 import com.sky.constant.JwtClaimsConstant;
 import com.sky.dto.UserLoginDTO;
-import com.sky.dto.UserRegisterDTO;
 import com.sky.entity.User;
 import com.sky.entity.Agent;
 import com.sky.mapper.AgentMapper;
-import com.sky.mapper.UserMapper;
 import com.sky.properties.JwtProperties;
 import com.sky.result.Result;
 import com.sky.service.UserService;
@@ -19,9 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
-import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletResponse;
-import java.net.URLEncoder;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -91,8 +87,8 @@ public class UserController {
                 claims);
 
         // 5. 设置安全Cookie - 正确的双Token模式
-        // Access Token（短期，15分钟）
-        CookieUtil.setCookieWithMultiplePaths(response, "authToken", token, true, 15 * 60);
+        // 🧪 临时测试：Access Token（10秒）- 快速测试自动刷新机制
+        CookieUtil.setCookieWithMultiplePaths(response, "authToken", token, true, 900); // 15分钟
         
         // Refresh Token（长期，7天）- 生成不同的Token
         Map<String, Object> refreshClaims = new HashMap<>();
@@ -118,7 +114,7 @@ public class UserController {
         userInfo.put("isAuthenticated", true);
         
         String userInfoJson = com.alibaba.fastjson.JSON.toJSONString(userInfo);
-        CookieUtil.setUserInfoCookie(response, userInfoJson, 15 * 60);
+        CookieUtil.setUserInfoCookie(response, userInfoJson, 900); // 15分钟，与authToken同步
 
         // 6. 构建响应
         UserLoginVO userLoginVO = UserLoginVO.builder()

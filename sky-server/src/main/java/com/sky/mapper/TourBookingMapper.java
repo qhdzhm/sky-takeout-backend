@@ -72,6 +72,21 @@ public interface TourBookingMapper {
      * @param tourBooking 订单信息
      */
     void update(TourBooking tourBooking);
+
+    /**
+     * 管理端专用：仅更新订单总价
+     * @param bookingId 订单ID
+     * @param totalPrice 新总价
+     * @return 影响行数
+     */
+    @Update("UPDATE tour_bookings SET total_price = #{totalPrice}, updated_at = NOW() WHERE booking_id = #{bookingId}")
+    int updateTotalPrice(@Param("bookingId") Integer bookingId, @Param("totalPrice") java.math.BigDecimal totalPrice);
+
+    /**
+     * 管理端专用：更新可选行程选择(JSON)，不触发价格重算
+     */
+    @Update("UPDATE tour_bookings SET selected_optional_tours = #{selectedOptionalTours}, updated_at = NOW() WHERE booking_id = #{bookingId}")
+    int updateSelectedOptionalTours(@Param("bookingId") Integer bookingId, @Param("selectedOptionalTours") String selectedOptionalTours);
     
     /**
      * 更新订单状态
@@ -168,4 +183,90 @@ public interface TourBookingMapper {
                            @Param("newPrice") Double newPrice,
                            @Param("specialRequests") String specialRequests,
                            @Param("operatorInfo") String operatorInfo);
+
+    // ===== Dashboard统计相关方法 =====
+    
+    /**
+     * 获取指定日期范围的营业数据
+     * @param begin 开始日期
+     * @param end 结束日期
+     * @return 营业数据列表
+     */
+    List<Map<String, Object>> getBusinessDataByDateRange(@Param("begin") java.time.LocalDate begin, 
+                                                         @Param("end") java.time.LocalDate end);
+
+    /**
+     * 获取指定时间范围的订单数据
+     * @param start 开始时间
+     * @param end 结束时间
+     * @return 订单数据
+     */
+    Map<String, Object> getOrderDataByDateRange(@Param("start") java.time.LocalDateTime start, 
+                                               @Param("end") java.time.LocalDateTime end);
+
+    /**
+     * 获取订单状态分布统计
+     * @return 订单状态统计数据
+     */
+    Map<String, Object> getOrderStatusDistribution();
+
+    /**
+     * 获取最受欢迎的产品
+     * @return 热门产品信息
+     */
+    Map<String, Object> getMostPopularTour();
+
+    /**
+     * 根据产品类型获取销售数据
+     * @param tourType 产品类型
+     * @return 销售数据
+     */
+    Map<String, Object> getSalesByTourType(@Param("tourType") String tourType);
+
+    /**
+     * 获取前N个热门产品（按类型）
+     * @param tourType 产品类型
+     * @param limit 限制数量
+     * @return 热门产品列表
+     */
+    List<Map<String, Object>> getTopToursByType(@Param("tourType") String tourType, 
+                                               @Param("limit") int limit);
+
+    /**
+     * 获取平均评分
+     * @return 平均评分
+     */
+    Double getAverageRating();
+
+    /**
+     * 获取热门目的地统计
+     * @return 热门目的地数据
+     */
+    Map<String, Object> getPopularDestinations();
+
+    /**
+     * 用户隐藏订单（软删除）
+     * @param bookingId 订单ID
+     * @param userId 用户ID（权限验证）
+     * @return 影响行数
+     */
+    @Update("UPDATE tour_bookings SET user_hidden = true, user_hidden_at = NOW() WHERE booking_id = #{bookingId} AND (user_id = #{userId} OR agent_id = #{userId})")
+    int hideOrderByUser(@Param("bookingId") Integer bookingId, @Param("userId") Integer userId);
+
+    /**
+     * 用户恢复已隐藏的订单
+     * @param bookingId 订单ID
+     * @param userId 用户ID（权限验证）
+     * @return 影响行数
+     */
+    @Update("UPDATE tour_bookings SET user_hidden = false, user_hidden_at = NULL WHERE booking_id = #{bookingId} AND (user_id = #{userId} OR agent_id = #{userId})")
+    int restoreOrderByUser(@Param("bookingId") Integer bookingId, @Param("userId") Integer userId);
+
+    /**
+     * 获取用户可见的订单（排除隐藏订单）
+     * @param userId 用户ID
+     * @return 订单列表
+     */
+    @Select("SELECT * FROM tour_bookings WHERE (user_id = #{userId} OR agent_id = #{userId}) AND (user_hidden IS NULL OR user_hidden = false) ORDER BY created_at DESC")
+    List<TourBooking> getVisibleOrdersByUser(@Param("userId") Integer userId);
 } 

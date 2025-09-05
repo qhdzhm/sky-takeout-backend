@@ -4,6 +4,7 @@ import lombok.Data;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonAlias;
 
 import java.io.Serializable;
 import java.time.LocalDate;
@@ -23,6 +24,7 @@ public class PassengerDTO implements Serializable {
     
     @ApiModelProperty("乘客姓名")
     @JsonProperty("full_name")
+    @JsonAlias({"fullName", "full_name"})
     private String fullName;
     
     @ApiModelProperty("性别(male-男，female-女，other-其他)")
@@ -34,6 +36,7 @@ public class PassengerDTO implements Serializable {
     
     @ApiModelProperty("是否是儿童")
     @JsonProperty("is_child")
+    @JsonAlias({"isChild", "is_child"})
     private Boolean isChild;
     
     @ApiModelProperty("儿童年龄")
@@ -64,6 +67,7 @@ public class PassengerDTO implements Serializable {
     
     @ApiModelProperty("微信号")
     @JsonProperty("wechat_id")
+    @JsonAlias({"wechatId", "wechat_id"})
     private String wechatId;
     
     @ApiModelProperty("电子邮箱")
@@ -95,6 +99,7 @@ public class PassengerDTO implements Serializable {
     
     @ApiModelProperty("是否为主要乘客")
     @JsonProperty("is_primary")
+    @JsonAlias({"isPrimary", "is_primary"})
     private Boolean isPrimary;
     
     @ApiModelProperty("机票号")

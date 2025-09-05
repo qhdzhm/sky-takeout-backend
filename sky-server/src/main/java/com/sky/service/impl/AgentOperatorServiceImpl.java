@@ -72,6 +72,18 @@ public class AgentOperatorServiceImpl implements AgentOperatorService {
         if (agentOperator.getStatus() == null) {
             agentOperator.setStatus(1);
         }
+        if (agentOperator.getName() == null) {
+            agentOperator.setName("");
+        }
+        if (agentOperator.getEmail() == null) {
+            agentOperator.setEmail("");
+        }
+        if (agentOperator.getPhone() == null) {
+            agentOperator.setPhone("");
+        }
+        if (agentOperator.getPermissions() == null) {
+            agentOperator.setPermissions("{}");
+        }
         
         // 密码加密
         if (agentOperator.getPassword() != null) {

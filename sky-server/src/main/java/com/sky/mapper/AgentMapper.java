@@ -116,4 +116,36 @@ public interface AgentMapper {
      * @param avatar 头像URL
      */
     void updateAvatar(@Param("agentId") Long agentId, @Param("avatar") String avatar);
+
+    // ===== Dashboard统计相关方法 =====
+    
+    /**
+     * 获取代理商总数
+     * @return 代理商总数
+     */
+    Integer count();
+
+    /**
+     * 获取指定时间范围内的新代理商数量
+     * @param start 开始时间
+     * @param end 结束时间
+     * @return 新代理商数量
+     */
+    Integer getNewAgentsByDateRange(@Param("start") java.time.LocalDateTime start, 
+                                   @Param("end") java.time.LocalDateTime end);
+
+    /**
+     * 获取指定时间范围内的活跃代理商数量
+     * @param start 开始时间
+     * @param end 结束时间
+     * @return 活跃代理商数量
+     */
+    Integer getActiveAgentsByDateRange(@Param("start") java.time.LocalDateTime start, 
+                                      @Param("end") java.time.LocalDateTime end);
+
+    /**
+     * 获取代理商表现数据
+     * @return 代理商表现统计
+     */
+    Map<String, Object> getAgentPerformanceData();
 } 

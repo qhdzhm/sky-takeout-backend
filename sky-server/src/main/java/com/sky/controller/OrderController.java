@@ -165,6 +165,8 @@ public class OrderController {
         
         return Result.success(orderVO);
     }
+    
+
 
     /**
      * 取消订单
@@ -650,6 +652,74 @@ public class OrderController {
         } catch (Exception e) {
             log.error("🧪 简化测试失败：{}", e.getMessage(), e);
             return Result.error("测试失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 用户隐藏已取消的订单（软删除）
+     * @param bookingId 订单ID
+     * @return 操作结果
+     */
+    @PutMapping("/{bookingId}/hide")
+    @ApiOperation("隐藏已取消的订单")
+    public Result<String> hideOrder(
+            @ApiParam(name = "bookingId", value = "订单ID", required = true)
+            @PathVariable Integer bookingId) {
+        log.info("用户隐藏订单，订单ID：{}", bookingId);
+        
+        try {
+            // 获取当前用户ID
+            Long currentUserId = BaseContext.getCurrentId();
+            if (currentUserId == null) {
+                return Result.error("用户未登录");
+            }
+            
+            // 调用服务隐藏订单
+            Boolean result = tourBookingService.hideOrder(bookingId, currentUserId.intValue());
+            
+            if (result) {
+                log.info("✅ 订单隐藏成功，订单ID：{}, 用户ID：{}", bookingId, currentUserId);
+                return Result.success("订单已隐藏");
+            } else {
+                return Result.error("隐藏失败，请检查订单状态和权限");
+            }
+        } catch (Exception e) {
+            log.error("隐藏订单失败，订单ID：{}, 错误：{}", bookingId, e.getMessage(), e);
+            return Result.error("操作失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 用户恢复已隐藏的订单
+     * @param bookingId 订单ID
+     * @return 操作结果
+     */
+    @PutMapping("/{bookingId}/restore")
+    @ApiOperation("恢复已隐藏的订单")
+    public Result<String> restoreOrder(
+            @ApiParam(name = "bookingId", value = "订单ID", required = true)
+            @PathVariable Integer bookingId) {
+        log.info("用户恢复隐藏订单，订单ID：{}", bookingId);
+        
+        try {
+            // 获取当前用户ID
+            Long currentUserId = BaseContext.getCurrentId();
+            if (currentUserId == null) {
+                return Result.error("用户未登录");
+            }
+            
+            // 调用服务恢复订单
+            Boolean result = tourBookingService.restoreOrder(bookingId, currentUserId.intValue());
+            
+            if (result) {
+                log.info("✅ 订单恢复成功，订单ID：{}, 用户ID：{}", bookingId, currentUserId);
+                return Result.success("订单已恢复");
+            } else {
+                return Result.error("恢复失败，请检查订单状态和权限");
+            }
+        } catch (Exception e) {
+            log.error("恢复订单失败，订单ID：{}, 错误：{}", bookingId, e.getMessage(), e);
+            return Result.error("操作失败：" + e.getMessage());
         }
     }
 

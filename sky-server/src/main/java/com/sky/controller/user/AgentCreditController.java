@@ -22,6 +22,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+
+import com.sky.mapper.PaymentAuditLogMapper;
+import com.sky.entity.PaymentAuditLog;
 
 /**
  * 代理商信用额度控制器
@@ -34,6 +39,9 @@ public class AgentCreditController {
 
     @Autowired
     private AgentCreditService agentCreditService;
+
+    @Autowired
+    private PaymentAuditLogMapper paymentAuditLogMapper;
 
     /**
      * 获取当前代理商的信用额度信息
@@ -188,6 +196,65 @@ public class AgentCreditController {
         
         PageResult pageResult = new PageResult(total, records);
         return Result.success(pageResult);
+    }
+
+    /**
+     * 获取信用支付审计日志（代理/操作员可见）
+     */
+    @GetMapping("/audit-logs")
+    @ApiOperation("获取信用支付审计日志")
+    @ApiImplicitParams({
+        @ApiImplicitParam(name = "page", value = "页码", required = true, dataType = "java.lang.Integer", paramType = "query"),
+        @ApiImplicitParam(name = "pageSize", value = "每页记录数", required = true, dataType = "java.lang.Integer", paramType = "query"),
+        @ApiImplicitParam(name = "action", value = "动作类型，如credit_payment/refund", dataType = "java.lang.String", paramType = "query"),
+        @ApiImplicitParam(name = "startDate", value = "开始日期(yyyy-MM-dd)", dataType = "java.time.LocalDate", paramType = "query"),
+        @ApiImplicitParam(name = "endDate", value = "结束日期(yyyy-MM-dd)", dataType = "java.time.LocalDate", paramType = "query")
+    })
+    public Result<PageResult> getAuditLogs(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate) {
+
+        // 代理主号用 currentId，操作员用 agentId
+        Long agentId = BaseContext.getCurrentUserType()!=null && BaseContext.getCurrentUserType().contains("operator")
+                ? BaseContext.getCurrentAgentId()
+                : BaseContext.getCurrentId();
+
+        if (agentId == null) {
+            return Result.error("无法获取代理商信息");
+        }
+
+        LocalDateTime startTime = startDate != null ? LocalDateTime.of(startDate, LocalTime.MIN) : null;
+        LocalDateTime endTime = endDate != null ? LocalDateTime.of(endDate, LocalTime.MAX) : null;
+        int offset = (page - 1) * pageSize;
+
+        java.util.List<PaymentAuditLog> list = paymentAuditLogMapper.selectByAgent(agentId, action, startTime, endTime, pageSize, offset);
+        int total = paymentAuditLogMapper.countByAgent(agentId, action, startTime, endTime);
+        return Result.success(new PageResult(total, list));
+    }
+
+    /**
+     * 统计时间区间内信用支付金额汇总（代理/操作员可见）
+     */
+    @GetMapping("/audit-logs/sum")
+    @ApiOperation("统计时间区间内信用支付金额汇总")
+    public Result<java.math.BigDecimal> sumAuditLogs(
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate) {
+
+        Long agentId = BaseContext.getCurrentUserType()!=null && BaseContext.getCurrentUserType().contains("operator")
+                ? BaseContext.getCurrentAgentId()
+                : BaseContext.getCurrentId();
+        if (agentId == null) {
+            return Result.error("无法获取代理商信息");
+        }
+
+        LocalDateTime startTime = startDate != null ? LocalDateTime.of(startDate, LocalTime.MIN) : null;
+        LocalDateTime endTime = endDate != null ? LocalDateTime.of(endDate, LocalTime.MAX) : null;
+        java.math.BigDecimal sum = paymentAuditLogMapper.sumAmountByAgent(agentId, startTime, endTime);
+        return Result.success(sum);
     }
 
     /**

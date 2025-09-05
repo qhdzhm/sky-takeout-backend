@@ -1,10 +1,16 @@
 package com.sky.controller.admin;
 
+import com.sky.annotation.RequireOperatorPermission;
+import com.sky.context.BaseContext;
+import com.sky.dto.AssignOrderDTO;
 import com.sky.dto.TourScheduleBatchSaveDTO;
 import com.sky.dto.TourScheduleOrderDTO;
+import com.sky.entity.Employee;
+import com.sky.mapper.EmployeeMapper;
 import com.sky.result.Result;
+import com.sky.service.OperatorAssignmentService;
 import com.sky.service.TourScheduleOrderService;
-import com.sky.service.TourBookingService;
+import com.sky.vo.OperatorAssignmentVO;
 import com.sky.vo.TourScheduleVO;
 import com.sky.vo.HotelCustomerStatisticsVO;
 import io.swagger.annotations.Api;
@@ -16,6 +22,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +40,10 @@ public class TourScheduleController {
     private TourScheduleOrderService tourScheduleOrderService;
 
     @Autowired
-    private TourBookingService tourBookingService;
+    private OperatorAssignmentService operatorAssignmentService;
+
+    @Autowired
+    private EmployeeMapper employeeMapper;
 
     /**
      * 通过订单ID获取行程排序
@@ -75,6 +85,7 @@ public class TourScheduleController {
      */
     @PostMapping("/batch")
     @ApiOperation("批量保存行程排序")
+    @RequireOperatorPermission(requireTourMaster = true, description = "只有排团主管可以调整行程顺序")
     public Result<Boolean> saveBatchSchedules(@RequestBody TourScheduleBatchSaveDTO batchSaveDTO) {
         log.info("批量保存行程排序: {}", batchSaveDTO);
         boolean result = tourScheduleOrderService.saveBatchSchedules(batchSaveDTO);
@@ -210,5 +221,132 @@ public class TourScheduleController {
             log.error("统计酒店客人信息失败，酒店：{}，日期：{}，错误：{}", hotelName, tourDate, e.getMessage(), e);
             return Result.error("统计酒店客人信息失败：" + e.getMessage());
         }
+    }
+
+    // ====== 操作员分配相关接口 ======
+
+    /**
+     * 获取订单的分配状态（用于前端展示）
+     */
+    @GetMapping("/assignment-status/{bookingId}")
+    @ApiOperation("获取订单的分配状态")
+    public Result<Map<String, Object>> getOrderAssignmentStatus(@PathVariable Integer bookingId) {
+        log.info("获取订单分配状态：{}", bookingId);
+
+        try {
+            OperatorAssignmentVO assignment = operatorAssignmentService.getAssignmentByBookingId(bookingId);
+            Long currentUserId = BaseContext.getCurrentId();
+            boolean isTourMaster = operatorAssignmentService.isTourMaster(currentUserId);
+            boolean hasPermission = operatorAssignmentService.hasPermission(currentUserId, bookingId);
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("assignment", assignment);
+            result.put("isTourMaster", isTourMaster);
+            result.put("hasPermission", hasPermission);
+            result.put("canAssign", isTourMaster);
+            result.put("canOperate", hasPermission || isTourMaster);
+
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("获取订单分配状态失败：{} - {}", bookingId, e.getMessage());
+            return Result.error("获取分配状态失败");
+        }
+    }
+
+    /**
+     * 快速分配订单（在排团表中直接分配）
+     */
+    @PostMapping("/quick-assign")
+    @ApiOperation("快速分配订单")
+    @RequireOperatorPermission(requireTourMaster = true, description = "只有排团主管可以分配订单")
+    public Result<String> quickAssignOrder(@RequestBody AssignOrderDTO assignOrderDTO) {
+        log.info("快速分配订单：{}", assignOrderDTO);
+
+        try {
+            Long currentEmployeeId = BaseContext.getCurrentId();
+            operatorAssignmentService.assignOrder(assignOrderDTO, currentEmployeeId);
+            return Result.success("订单分配成功");
+        } catch (Exception e) {
+            log.error("快速分配订单失败：{} - {}", assignOrderDTO.getBookingId(), e.getMessage());
+            return Result.error("分配失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取可分配的酒店专员列表
+     */
+    @GetMapping("/available-operators")
+    @ApiOperation("获取可分配的酒店专员列表")
+    @RequireOperatorPermission(requireTourMaster = true, description = "只有排团主管可以查看操作员列表")
+    public Result<List<Map<String, Object>>> getAvailableOperators() {
+        log.info("获取可分配的酒店专员列表");
+
+        try {
+            // 查询所有酒店专员
+            List<Employee> hotelOperators = employeeMapper.findByOperatorType("hotel_operator");
+            log.info("查询到 {} 个酒店专员", hotelOperators.size());
+
+            List<Map<String, Object>> operators = new ArrayList<>();
+            for (Employee operator : hotelOperators) {
+                Map<String, Object> operatorInfo = new HashMap<>();
+                operatorInfo.put("id", operator.getId());
+                operatorInfo.put("name", operator.getName());
+                operatorInfo.put("username", operator.getUsername());
+                operators.add(operatorInfo);
+            }
+
+            log.info("返回可分配的酒店专员列表: {}", operators);
+            return Result.success(operators);
+        } catch (Exception e) {
+            log.error("获取酒店专员列表失败：{}", e.getMessage());
+            return Result.error("获取操作员列表失败");
+        }
+    }
+
+    /**
+     * 批量获取订单的分配状态
+     */
+    @PostMapping("/batch-assignment-status")
+    @ApiOperation("批量获取订单的分配状态")
+    public Result<Map<Integer, OperatorAssignmentVO>> getBatchAssignmentStatus(@RequestBody List<Integer> bookingIds) {
+        log.info("批量获取订单分配状态：{}", bookingIds);
+
+        try {
+            Map<Integer, OperatorAssignmentVO> result = new HashMap<>();
+            
+            for (Integer bookingId : bookingIds) {
+                OperatorAssignmentVO assignment = operatorAssignmentService.getAssignmentByBookingId(bookingId);
+                if (assignment != null) {
+                    result.put(bookingId, assignment);
+                }
+            }
+            
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("批量获取订单分配状态失败：{}", e.getMessage());
+            return Result.error("获取分配状态失败");
+        }
+    }
+
+    /**
+     * 检查当前用户对订单的权限
+     */
+    @GetMapping("/check-order-permission/{bookingId}")
+    @ApiOperation("检查当前用户对订单的操作权限")
+    public Result<Map<String, Object>> checkOrderPermission(@PathVariable Integer bookingId) {
+        log.info("检查订单操作权限：{}", bookingId);
+
+        Long currentUserId = BaseContext.getCurrentId();
+        boolean isTourMaster = operatorAssignmentService.isTourMaster(currentUserId);
+        boolean hasPermission = operatorAssignmentService.hasPermission(currentUserId, bookingId);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("isTourMaster", isTourMaster);
+        result.put("hasOrderPermission", hasPermission);
+        result.put("canDrag", isTourMaster); // 只有排团主管可以拖拽
+        result.put("canAssign", isTourMaster); // 只有排团主管可以分配
+        result.put("canViewHotel", hasPermission || isTourMaster); // 有权限或是排团主管可以查看酒店
+
+        return Result.success(result);
     }
 } 

@@ -34,7 +34,9 @@ public class ChatBotController {
     @ApiOperation("发送消息")
     public Result<ChatResponse> sendMessage(@Valid @RequestBody ChatRequest request,
                                           @RequestHeader(value = "X-Current-Page", required = false) String currentPage,
-                                          @RequestHeader(value = "X-Current-URL", required = false) String currentUrl) {
+                                          @RequestHeader(value = "X-Current-URL", required = false) String currentUrl,
+                                          @RequestHeader(value = "X-Request-Priority", required = false) String priority,
+                                          @RequestHeader(value = "X-AI-Provider", required = false) String provider) {
         log.info("收到聊天消息: sessionId={}, userType={}, message={}, currentPage={}", 
                 request.getSessionId(), request.getUserType(), request.getMessage(), currentPage);
         
@@ -72,6 +74,13 @@ public class ChatBotController {
         // 设置当前页面信息到请求中
         request.setCurrentPage(currentPage);
         request.setCurrentUrl(currentUrl);
+        // 仅用于日志分析
+        if (priority != null) {
+            log.debug("AI请求优先级: {}", priority);
+        }
+        if (provider != null) {
+            log.debug("AI提供商: {}", provider);
+        }
         
         ChatResponse response = chatBotService.processMessage(request);
         return Result.success(response);

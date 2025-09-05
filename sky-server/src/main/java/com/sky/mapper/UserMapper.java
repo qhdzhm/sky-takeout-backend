@@ -153,4 +153,46 @@ public interface UserMapper {
      * @return 用户列表
      */
     List<User> getUsersByNameKeyword(@Param("keyword") String keyword);
+
+    // ===== Dashboard统计相关方法 =====
+    
+    /**
+     * 获取指定时间范围内的新用户数量
+     * @param start 开始时间
+     * @param end 结束时间
+     * @return 新用户数量
+     */
+    Integer getNewUsersByDateRange(@Param("start") java.time.LocalDateTime start, 
+                                  @Param("end") java.time.LocalDateTime end);
+
+    /**
+     * 获取指定日期范围的用户注册数据
+     * @param begin 开始日期
+     * @param end 结束日期
+     * @return 用户注册数据列表
+     */
+    List<Map<String, Object>> getUserRegistrationByDateRange(@Param("begin") java.time.LocalDate begin, 
+                                                            @Param("end") java.time.LocalDate end);
+
+    /**
+     * 获取用户类型分布统计
+     * @return 用户类型统计数据
+     */
+    Map<String, Integer> getUserTypeDistribution();
+
+    /**
+     * 获取用户总数
+     * @return 用户总数
+     */
+    @Select("SELECT COUNT(*) FROM users WHERE status = 1")
+    Integer count();
+
+    /**
+     * 获取指定时间范围内的活跃用户数量
+     * @param start 开始时间
+     * @param end 结束时间
+     * @return 活跃用户数量
+     */
+    Integer getActiveUsersByDateRange(@Param("start") java.time.LocalDateTime start, 
+                                     @Param("end") java.time.LocalDateTime end);
 }

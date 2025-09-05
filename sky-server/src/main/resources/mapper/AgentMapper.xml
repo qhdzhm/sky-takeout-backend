@@ -12,9 +12,12 @@
         <result column="phone" property="phone"/>
         <result column="email" property="email"/>
         <result column="avatar" property="avatar"/>
+        <result column="use_avatar_as_logo" property="useAvatarAsLogo"/>
         <result column="discount_rate" property="discountRate"/>
         <result column="discount_level_id" property="discountLevelId"/>
         <result column="status" property="status"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
     <!-- 根据用户名查询代理商 -->
@@ -60,10 +63,10 @@
     <insert id="insert" parameterType="com.sky.entity.Agent" useGeneratedKeys="true" keyProperty="id">
         insert into agents(
             username, password, company_name, contact_person, 
-            phone, email, discount_rate, discount_level_id, status
+            phone, email, avatar, use_avatar_as_logo, discount_rate, discount_level_id, status
         ) values(
             #{username}, #{password}, #{companyName}, #{contactPerson}, 
-            #{phone}, #{email}, #{discountRate}, #{discountLevelId}, #{status}
+            #{phone}, #{email}, #{avatar}, #{useAvatarAsLogo}, #{discountRate}, #{discountLevelId}, #{status}
         )
     </insert>
     
@@ -76,6 +79,7 @@
             <if test="phone != null">phone = #{phone},</if>
             <if test="email != null">email = #{email},</if>
             <if test="avatar != null">avatar = #{avatar},</if>
+            <if test="useAvatarAsLogo != null">use_avatar_as_logo = #{useAvatarAsLogo},</if>
             <if test="discountRate != null">discount_rate = #{discountRate},</if>
             <if test="discountLevelId != null">discount_level_id = #{discountLevelId},</if>
             <if test="status != null">status = #{status},</if>
@@ -146,4 +150,46 @@
     <update id="updateAvatar">
         UPDATE agents SET avatar = #{avatar} WHERE id = #{agentId}
     </update>
+
+    <!-- ===== Dashboard统计相关查询 ===== -->
+    
+    <!-- 获取代理商总数 -->
+    <select id="count" resultType="integer">
+        SELECT COUNT(*) FROM agents WHERE status = 1
+    </select>
+    
+    <!-- 获取指定时间范围内的新代理商数量 -->
+    <select id="getNewAgentsByDateRange" resultType="integer">
+        SELECT COUNT(*) 
+        FROM agents 
+        WHERE created_at BETWEEN #{start} AND #{end}
+        AND status = 1
+    </select>
+    
+    <!-- 获取指定时间范围内的活跃代理商数量 -->
+    <select id="getActiveAgentsByDateRange" resultType="integer">
+        SELECT COUNT(DISTINCT a.id)
+        FROM agents a
+        LEFT JOIN tour_bookings tb ON a.id = tb.agent_id
+        WHERE a.status = 1
+        AND (tb.created_at BETWEEN #{start} AND #{end} OR a.updated_at BETWEEN #{start} AND #{end})
+    </select>
+    
+    <!-- 获取代理商表现数据 -->
+    <select id="getAgentPerformanceData" resultType="map">
+        SELECT 
+            a.id as agentId,
+            a.company_name as companyName,
+            COUNT(tb.booking_id) as totalBookings,
+            SUM(CASE WHEN tb.status = 'completed' THEN tb.total_price ELSE 0 END) as totalRevenue,
+            AVG(tb.total_price) as averageOrderValue
+        FROM agents a
+        LEFT JOIN tour_bookings tb ON a.id = tb.agent_id
+        WHERE a.status = 1
+        AND tb.status IN ('confirmed', 'completed')
+        GROUP BY a.id, a.company_name
+        ORDER BY totalRevenue DESC
+        LIMIT 10
+    </select>
+
 </mapper> 

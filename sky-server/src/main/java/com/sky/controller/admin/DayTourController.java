@@ -9,6 +9,8 @@ import com.sky.service.DayTourService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -27,6 +29,8 @@ import java.util.HashMap;
 @Api(tags = "一日游管理接口")
 @Slf4j
 public class DayTourController {
+
+    private static final Logger log = LoggerFactory.getLogger(DayTourController.class);
 
     @Autowired
     private DayTourService dayTourService;

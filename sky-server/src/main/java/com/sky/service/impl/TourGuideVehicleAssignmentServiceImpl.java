@@ -115,12 +115,7 @@ public class TourGuideVehicleAssignmentServiceImpl implements TourGuideVehicleAs
             throw new BaseException("导游在指定日期已有分配，无法重复分配");
         }
 
-        // 3. 检查车辆可用性
-        if (checkVehicleAssigned(assignmentDTO.getVehicleId(), assignmentDTO.getAssignmentDate())) {
-            throw new BaseException("车辆在指定日期已有分配，无法重复分配");
-        }
-
-        // 4. 获取车辆详细信息
+        // 3. 获取车辆详细信息
         log.info("开始获取车辆信息，车辆ID：{}", assignmentDTO.getVehicleId());
         Vehicle vehicle = vehicleMapper.getById(assignmentDTO.getVehicleId());
         if (vehicle == null) {
@@ -129,12 +124,8 @@ public class TourGuideVehicleAssignmentServiceImpl implements TourGuideVehicleAs
         }
         log.info("车辆信息获取成功：{}", vehicle.getLicensePlate());
 
-        // 5. 检查车辆座位数是否足够
-        log.info("检查车辆座位数，座位数：{}，需要人数：{}", vehicle.getSeatCount(), assignmentDTO.getTotalPeople());
-        if (vehicle.getSeatCount() < assignmentDTO.getTotalPeople()) {
-            log.error("车辆座位数不足，座位数：{}，需要人数：{}", vehicle.getSeatCount(), assignmentDTO.getTotalPeople());
-            throw new BaseException("车辆座位数不足，无法分配");
-        }
+        // 4. 完整的车辆可用性检查（按优先级检查）
+        checkVehicleAvailabilityForAssignment(vehicle, assignmentDTO.getAssignmentDate(), assignmentDTO.getTotalPeople());
 
         // 6. 构建分配实体
         log.info("开始构建分配实体");
@@ -598,6 +589,139 @@ public class TourGuideVehicleAssignmentServiceImpl implements TourGuideVehicleAs
             log.info("车辆状态更新成功");
         } catch (Exception e) {
             log.error("更新车辆状态失败：{}", e.getMessage());
+        }
+    }
+
+    /**
+     * 完整的车辆可用性检查（用于排团分配）
+     * 检查优先级：
+     * 1. 车辆基础状态（rego过期、路检过期、送修状态等）
+     * 2. 车辆是否已被分配
+     * 3. 车辆动态可用性（vehicle_availability表）
+     * 4. 座位数是否足够
+     */
+    private void checkVehicleAvailabilityForAssignment(Vehicle vehicle, LocalDate assignmentDate, Integer peopleCount) {
+        log.info("开始完整的车辆可用性检查：车辆ID={}，日期={}，人数={}", 
+                vehicle.getVehicleId(), assignmentDate, peopleCount);
+
+        // 1. 检查车辆基础状态（最重要的检查）
+        checkVehicleBasicStatus(vehicle, assignmentDate);
+
+        // 2. 检查车辆是否已被分配到其他团
+        if (checkVehicleAssigned(vehicle.getVehicleId(), assignmentDate)) {
+            throw new BaseException("车辆在指定日期已有分配，无法重复分配");
+        }
+
+        // 3. 检查动态可用性（vehicle_availability表）
+        checkVehicleDynamicAvailability(vehicle.getVehicleId(), assignmentDate);
+
+        // 4. 检查座位数是否足够
+        if (vehicle.getSeatCount() != null && vehicle.getSeatCount() < peopleCount) {
+            log.error("车辆座位数不足，座位数：{}，需要人数：{}", vehicle.getSeatCount(), peopleCount);
+            throw new BaseException(String.format("车辆座位数不足，需要%d人，车辆只有%d座", 
+                    peopleCount, vehicle.getSeatCount()));
+        }
+
+        log.info("车辆可用性检查通过");
+    }
+
+    /**
+     * 检查车辆基础状态（车辆管理表中的状态）
+     */
+    private void checkVehicleBasicStatus(Vehicle vehicle, LocalDate assignmentDate) {
+        LocalDate today = LocalDate.now();
+        
+        // 计算动态状态（与VehicleMapper.xml中的逻辑一致）
+        Integer calculatedStatus;
+        
+        if (vehicle.getStatus() != null && vehicle.getStatus() == 0) {
+            calculatedStatus = 0; // 送修中
+        } else if (vehicle.getStatus() != null && vehicle.getStatus() == 2) {
+            calculatedStatus = 2; // 维修中
+        } else if (vehicle.getStatus() != null && vehicle.getStatus() == 3) {
+            calculatedStatus = 3; // 停用
+        } else if (vehicle.getRegoExpiryDate() != null && today.isAfter(vehicle.getRegoExpiryDate())) {
+            calculatedStatus = 4; // 注册过期
+        } else if (vehicle.getInspectionDueDate() != null && today.isAfter(vehicle.getInspectionDueDate())) {
+            calculatedStatus = 5; // 车检过期
+        } else {
+            calculatedStatus = 1; // 可用
+        }
+
+        // 根据状态抛出具体的错误信息
+        switch (calculatedStatus) {
+            case 0:
+                throw new BaseException("车辆正在送修中，暂不可用");
+            case 2:
+                throw new BaseException("车辆正在维修中，暂不可用");
+            case 3:
+                throw new BaseException("车辆已停用，不可分配");
+            case 4:
+                String regoMsg = "车辆注册已过期";
+                if (vehicle.getRegoExpiryDate() != null) {
+                    regoMsg += "（过期日期：" + vehicle.getRegoExpiryDate() + "）";
+                }
+                throw new BaseException(regoMsg + "，请先更新注册");
+            case 5:
+                String inspectionMsg = "车辆路检已过期";
+                if (vehicle.getInspectionDueDate() != null) {
+                    inspectionMsg += "（过期日期：" + vehicle.getInspectionDueDate() + "）";
+                }
+                throw new BaseException(inspectionMsg + "，请先进行车检");
+            case 1:
+                // 可用状态，继续后续检查
+                log.info("车辆基础状态检查通过，状态：可用");
+                break;
+            default:
+                throw new BaseException("车辆状态异常，无法分配");
+        }
+    }
+
+    /**
+     * 检查车辆动态可用性（vehicle_availability表）
+     */
+    private void checkVehicleDynamicAvailability(Long vehicleId, LocalDate assignmentDate) {
+        try {
+            // 检查该日期车辆是否在可用性表中标记为可用
+            // 如果没有记录，则默认可用；如果有记录但状态不是available，则不可用
+            VehicleAvailabilityVO availability = vehicleAvailabilityMapper.getVehicleAvailabilityByDate(vehicleId, assignmentDate);
+            
+            if (availability != null) {
+                String status = availability.getStatus();
+                if (!"available".equals(status)) {
+                    String statusDesc = getAvailabilityStatusDescription(status);
+                    throw new BaseException("车辆在指定日期不可用，状态：" + statusDesc);
+                }
+            }
+            // 如果没有可用性记录，默认认为可用（这是合理的默认行为）
+            
+            log.info("车辆动态可用性检查通过");
+        } catch (Exception e) {
+            if (e instanceof BaseException) {
+                throw e;
+            }
+            log.warn("检查车辆动态可用性时出现异常，默认允许分配：{}", e.getMessage());
+            // 如果查询失败，不阻止分配（容错处理）
+        }
+    }
+
+    /**
+     * 获取可用性状态描述
+     */
+    private String getAvailabilityStatusDescription(String status) {
+        if (status == null) return "未知";
+        
+        switch (status) {
+            case "available":
+                return "可用";
+            case "in_use":
+                return "使用中";
+            case "maintenance":
+                return "维护中";
+            case "out_of_service":
+                return "停用";
+            default:
+                return "未知状态(" + status + ")";
         }
     }
 } 

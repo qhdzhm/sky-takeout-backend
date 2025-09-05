@@ -321,6 +321,12 @@ public class PassengerServiceImpl implements PassengerService {
     public Boolean addPassengerToBooking(Integer bookingId, PassengerDTO passengerDTO) {
         // 打印原始DTO数据以便调试
         log.info("添加乘客到订单的原始DTO数据: {}", passengerDTO);
+        log.info("🔍 详细DTO字段检查:");
+        log.info("  - fullName: '{}' (是否为null: {})", passengerDTO.getFullName(), passengerDTO.getFullName() == null);
+        log.info("  - phone: '{}' (是否为null: {})", passengerDTO.getPhone(), passengerDTO.getPhone() == null);
+        log.info("  - isPrimary: '{}' (是否为null: {})", passengerDTO.getIsPrimary(), passengerDTO.getIsPrimary() == null);
+        log.info("  - isChild: '{}' (是否为null: {})", passengerDTO.getIsChild(), passengerDTO.getIsChild() == null);
+        log.info("  - wechatId: '{}' (是否为null: {})", passengerDTO.getWechatId(), passengerDTO.getWechatId() == null);
         
         // 检查乘客是否有效 - 修改判断逻辑，允许只有联系方式的乘客
         boolean isValidPassenger = false;
@@ -330,13 +336,18 @@ public class PassengerServiceImpl implements PassengerService {
             isValidPassenger = true;
         }
         
-        // 如果有电话号码，则视为有效（用于首次更新乘客信息的场景）
+        // 如果有电话号码但没有姓名，记录警告但不自动设置姓名
         if (passengerDTO.getPhone() != null && !passengerDTO.getPhone().trim().isEmpty()) {
-            isValidPassenger = true;
-            // 如果没有姓名，设置一个默认姓名，避免数据库约束问题
-            if (passengerDTO.getFullName() == null || passengerDTO.getFullName().trim().isEmpty()) {
-                passengerDTO.setFullName(passengerDTO.getPhone());
-                log.info("为只有电话号码的乘客设置默认姓名: {}", passengerDTO.getFullName());
+            if (passengerDTO.getFullName() != null && !passengerDTO.getFullName().trim().isEmpty()) {
+                // 有姓名和电话，正常情况
+                isValidPassenger = true;
+                log.info("乘客信息完整: 姓名='{}', 电话='{}'", passengerDTO.getFullName(), passengerDTO.getPhone());
+            } else {
+                // 只有电话没有姓名，这是异常情况，应该修复前端传递问题
+                log.warn("⚠️ 乘客只有电话号码没有姓名，这通常表示前端数据传递有问题: phone='{}', fullName=null", passengerDTO.getPhone());
+                // 不自动设置姓名，而是跳过此乘客
+                log.warn("⚠️ 跳过此乘客，等待前端修复数据传递问题");
+                return false;
             }
         }
         

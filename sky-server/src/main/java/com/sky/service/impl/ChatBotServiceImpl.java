@@ -3,10 +3,12 @@ package com.sky.service.impl;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import com.sky.constant.MessageConstant;
 import com.sky.dto.ChatRequest;
 import com.sky.dto.GroupTourDTO;
 import com.sky.dto.OrderInfo;
 import com.sky.entity.ChatMessage;
+import com.sky.entity.SystemNotification;
 import com.sky.entity.TourBooking;
 import com.sky.entity.Passenger;
 import com.sky.mapper.ChatMessageMapper;
@@ -32,6 +34,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
+import javax.sound.midi.SysexMessage;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -41,6 +44,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Arrays;
+import java.nio.charset.StandardCharsets;
+import org.springframework.util.DigestUtils;
 
 /**
  * 聊天机器人服务实现类
@@ -49,23 +54,7 @@ import java.util.Arrays;
 @Slf4j
 public class ChatBotServiceImpl implements ChatBotService {
     
-    @Value("${deepseek.api.key:}")
-    private String deepseekApiKey;
     
-    @Value("${deepseek.api.base-url:https://api.deepseek.com}")
-    private String deepseekBaseUrl;
-    
-    @Value("${deepseek.model:deepseek-chat}")
-    private String deepseekModel;
-    
-    @Value("${deepseek.timeout:30000}")
-    private int deepseekTimeout;
-    
-    @Value("${deepseek.max-tokens:150}")
-    private int deepseekMaxTokens;
-    
-    @Value("${deepseek.temperature:0.7}")
-    private double deepseekTemperature;
     
     // Qwen API配置
     @Value("${qwen.api.key:}")
@@ -77,7 +66,7 @@ public class ChatBotServiceImpl implements ChatBotService {
     @Value("${qwen.model:qwen-turbo}")
     private String qwenModel;
     
-    @Value("${qwen.timeout:30000}")
+    @Value("${qwen.timeout:90000}")
     private int qwenTimeout;
     
     @Value("${qwen.max-tokens:2000}")
@@ -86,56 +75,7 @@ public class ChatBotServiceImpl implements ChatBotService {
     @Value("${qwen.temperature:0.7}")
     private double qwenTemperature;
     
-    @Value("${flight.api.aviationstack.api-key:}")
-    private String aviationStackApiKey;
     
-    @Value("${flight.api.aviationstack.base-url:http://api.aviationstack.com/v1}")
-    private String aviationStackBaseUrl;
-    
-    @Value("${flight.api.aviationstack.enabled:false}")
-    private boolean aviationStackEnabled;
-    
-    @Value("${weather.openweathermap.api-key:}")
-    private String weatherApiKey;
-    
-    @Value("${weather.openweathermap.base-url:http://api.openweathermap.org/data/2.5}")
-    private String weatherApiBaseUrl;
-    
-    @Value("${weather.openweathermap.enabled:false}")
-    private boolean weatherApiEnabled;
-    
-    @Value("${weather.openweathermap.cache-duration:600}")
-    private int weatherCacheDuration;
-    
-    // 新增：百度搜索API配置（用于获取外部信息）
-    @Value("${baidu.search.api-key:}")
-    private String baiduSearchApiKey;
-    
-    @Value("${baidu.search.base-url:https://aip.baidubce.com/rest/2.0}")
-    private String baiduSearchBaseUrl;
-    
-    @Value("${baidu.search.enabled:false}")
-    private boolean baiduSearchEnabled;
-    
-    // 新增：汇率API配置
-    @Value("${exchange.api.key:}")
-    private String exchangeApiKey;
-    
-    @Value("${exchange.api.base-url:https://api.exchangerate-api.com/v4}")
-    private String exchangeApiBaseUrl;
-    
-    @Value("${exchange.api.enabled:false}")
-    private boolean exchangeApiEnabled;
-    
-    // 新增：新闻API配置
-    @Value("${news.api.key:}")
-    private String newsApiKey;
-    
-    @Value("${news.api.base-url:https://newsapi.org/v2}")
-    private String newsApiBaseUrl;
-    
-    @Value("${news.api.enabled:false}")
-    private boolean newsApiEnabled;
     
     @Autowired
     private ChatMessageMapper chatMessageMapper;
@@ -190,10 +130,7 @@ public class ChatBotServiceImpl implements ChatBotService {
             log.warn("Qwen API Key未配置，聊天功能将受限");
         }
         
-        // 保留DeepSeek作为备用
-        if (deepseekApiKey != null && !deepseekApiKey.isEmpty()) {
-            log.info("DeepSeek AI服务作为备用，模型: {}", deepseekModel);
-        }
+        // 备用通道已移除
     }
     
     @Override
@@ -203,13 +140,50 @@ public class ChatBotServiceImpl implements ChatBotService {
             if (!checkRateLimit(request.getSessionId(), request.getUserId())) {
                 return ChatResponse.error("请求过于频繁，请稍后再试", "RATE_LIMIT");
             }
+            // 1.1 同参去重：短时间内相同文本不重复解析（30秒缓存）
+            try {
+                String raw = (request.getMessage() == null ? "" : request.getMessage().trim());
+                String keyRaw = (request.getSessionId() == null ? "guest" : request.getSessionId()) + "|" + raw;
+                String md5 = DigestUtils.md5DigestAsHex(keyRaw.getBytes(StandardCharsets.UTF_8));
+                String dedupKey = "chatbot:dedup:" + md5;
+                String existed = redisTemplate.opsForValue().get(dedupKey);
+                if (existed != null) {
+                    log.info("检测到同参重复消息，直接返回提示: key={}", dedupKey);
+                    return ChatResponse.success("我刚刚已经解析过这条信息，结果已展示。如需重新解析，请稍作修改后再发送。");
+                }
+                // 写入去重键，存活30秒
+                redisTemplate.opsForValue().set(dedupKey, "1", Duration.ofSeconds(30));
+            } catch (Exception ignore) {
+                // redis 不可用时跳过
+            }
             
-            // 2. 检查是否为结构化订单信息
+            // 2. 预处理：裁剪与下单无关的“行程安排”长段
+            try {
+                String msg = request.getMessage();
+                if (msg != null) {
+                    String trimmed = msg;
+                    int idx = Math.max(trimmed.indexOf("行程安排："), trimmed.indexOf("行程安排:"));
+                    if (idx >= 0) {
+                        String head = trimmed.substring(0, idx);
+                        trimmed = head + "行程安排：(详见产品页)";
+                        int remarkIdx = Math.max(msg.indexOf("备注："), msg.indexOf("备注:"));
+                        if (remarkIdx > idx) {
+                            trimmed = trimmed + "\n" + msg.substring(remarkIdx);
+                        }
+                        log.info("已裁剪行程安排长段，原长={}，现长={}", msg.length(), trimmed.length());
+                        request.setMessage(trimmed);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("裁剪行程安排预处理失败: {}", e.getMessage());
+            }
+
+            // 3. 检查是否为结构化订单信息
             if (isStructuredOrderData(request.getMessage())) {
                 return handleOrderData(request);
             }
             
-            // 3. 普通问答处理
+            // 4. 普通问答处理
             return handleGeneralQuestion(request);
             
         } catch (Exception e) {
@@ -247,70 +221,15 @@ public class ChatBotServiceImpl implements ChatBotService {
             return true; // 允许请求通过
         }
     }
-    
-    /**
-     * 调用DeepSeek AI服务
-     */
-    private String callDeepSeekAI(String prompt) {
-        if (deepseekApiKey == null || deepseekApiKey.isEmpty()) {
-            throw new RuntimeException("DeepSeek API Key未配置");
-        }
-        
-        try {
-            JSONObject requestBody = new JSONObject();
-            requestBody.put("model", deepseekModel);
-            
-            JSONArray messages = new JSONArray();
-            JSONObject message = new JSONObject();
-            message.put("role", "user");
-            message.put("content", prompt);
-            messages.add(message);
-            
-            requestBody.put("messages", messages);
-            requestBody.put("max_tokens", deepseekMaxTokens);
-            requestBody.put("temperature", deepseekTemperature);
 
-            RequestBody body = RequestBody.create(
-                requestBody.toString(), 
-                MediaType.get("application/json; charset=utf-8")
-            );
-
-            Request request = new Request.Builder()
-                .url(deepseekBaseUrl + "/chat/completions")
-                .addHeader("Authorization", "Bearer " + deepseekApiKey)
-                .addHeader("Content-Type", "application/json")
-                .post(body)
-                .build();
-
-            try (Response response = httpClient.newCall(request).execute()) {
-                if (!response.isSuccessful()) {
-                    throw new RuntimeException("DeepSeek API调用失败: " + response.code() + " " + response.message());
-                }
-
-                String responseBody = response.body().string();
-                JSONObject jsonResponse = JSON.parseObject(responseBody);
-                
-                String content = jsonResponse.getJSONArray("choices")
-                    .getJSONObject(0)
-                    .getJSONObject("message")
-                    .getString("content");
-                
-                // 清理DeepSeek响应中的markdown代码块标记
-                if (content.startsWith("```json")) {
-                    content = content.substring(7); // 移除 "```json"
-                }
-                if (content.endsWith("```")) {
-                    content = content.substring(0, content.length() - 3); // 移除结尾的 "```"
-                }
-                content = content.trim(); // 去除首尾空白
-                
-                return content;
-            }
-        } catch (IOException e) {
-            log.error("DeepSeek API调用异常", e);
-            throw new RuntimeException("DeepSeek AI调用失败: " + e.getMessage());
-        }
+    // 已停用功能的最小桩实现，避免编译期符号缺失
+    private boolean isExchangeRateQuery(String message) { return false; }
+    private boolean isTravelNewsQuery(String message) { return false; }
+    private String getWeatherInfo(String message) {
+        return "天气查询功能已暂停，可在产品页查看目的地天气建议。";
     }
+    
+    // DeepSeek 备用通道已移除
 
     /**
      * 调用Qwen AI服务 (阿里云DashScope OpenAI兼容API)
@@ -505,7 +424,11 @@ public class ChatBotServiceImpl implements ChatBotService {
      * 检查是否为结构化订单数据（主入口方法）
      */
     private boolean isStructuredOrderData(String message) {
-        // 优先使用AI智能识别
+        // 先用传统规则快速判断，命中则直接返回，避免一次AI调用
+        if (isStructuredOrderDataTraditional(message)) {
+            return true;
+        }
+        // 再回退到AI识别，处理自然语言长文本等复杂情况
         return isStructuredOrderDataWithAI(message);
     }
     
@@ -889,23 +812,23 @@ public class ChatBotServiceImpl implements ChatBotService {
             
             // 1. 优先处理天气查询
             if (isWeatherQueryRequest(message)) {
-                String weatherResponse = getWeatherInfo(request.getMessage());
-                saveChatMessage(request, weatherResponse, 4, null); // 4代表天气查询
-                return ChatResponse.success(weatherResponse);
+                String paused = "天气查询功能已暂停，可在产品页查看目的地天气建议。";
+                saveChatMessage(request, paused, 4, null);
+                return ChatResponse.success(paused);
             }
             
             // 2. 新增：汇率查询
             if (isExchangeRateQuery(message)) {
-                String exchangeResponse = getExchangeRateInfo(request.getMessage());
-                saveChatMessage(request, exchangeResponse, 5, null); // 5代表汇率查询
-                return ChatResponse.success(exchangeResponse);
+                String paused = "汇率查询功能已暂停，如需换算请使用外部工具。";
+                saveChatMessage(request, paused, 5, null);
+                return ChatResponse.success(paused);
             }
             
             // 3. 新增：旅游相关新闻查询
             if (isTravelNewsQuery(message)) {
-                String newsResponse = getTravelNewsInfo(request.getMessage());
-                saveChatMessage(request, newsResponse, 6, null); // 6代表新闻查询
-                return ChatResponse.success(newsResponse);
+                String paused = "旅游资讯功能已暂停。";
+                saveChatMessage(request, paused, 6, null);
+                return ChatResponse.success(paused);
             }
             
             // 4. 新增：实时交通信息查询
@@ -1123,7 +1046,7 @@ public class ChatBotServiceImpl implements ChatBotService {
      */
     private boolean containsSpecificBusinessData(String response) {
         if (response == null) return false;
-        
+
         // 检查是否包含航班号模式（字母+数字组合）
         if (response.matches(".*[A-Z]{2}\\d{3,4}.*")) {
             return true;
@@ -1177,6 +1100,7 @@ public class ChatBotServiceImpl implements ChatBotService {
         } catch (Exception e) {
             log.error("从AI响应提取客户姓名失败: {}", e.getMessage(), e);
         }
+
         return null;
     }
     
@@ -3020,8 +2944,8 @@ public class ChatBotServiceImpl implements ChatBotService {
             }
         }
         
-        // 最后的备用方案：尝试原有的姓名+电话格式（不包含护照号）
-        Pattern namePhonePattern = Pattern.compile("([\\u4e00-\\u9fa5a-zA-Z\\s]+)([+\\d\\s-]+)");
+        // 最后的备用方案：尝试单个姓名+电话格式（不包含护照号，不含空格的单一姓名）
+        Pattern namePhonePattern = Pattern.compile("([\\u4e00-\\u9fa5a-zA-Z]+)\\s*([+\\d\\s-]+)");
         Matcher namePhoneMatcher = namePhonePattern.matcher(line);
         
         if (namePhoneMatcher.find()) {
@@ -3034,14 +2958,64 @@ public class ChatBotServiceImpl implements ChatBotService {
                         .phone(phone)
                         .build());
                 log.info("简单格式解析出客户: 姓名={}, 电话={}", name, phone);
+                return; // 成功解析，直接返回
             }
         }
+        
+        // 处理多个姓名+一个电话的情况（如：黄静鸣 陈硕熙 0414348557）
+        Pattern multiNamePhonePattern = Pattern.compile("(.+?)\\s+([+]?\\d[\\d\\s-]{7,})$");
+        Matcher multiNameMatcher = multiNamePhonePattern.matcher(line);
+        
+        if (multiNameMatcher.find()) {
+            String namesStr = multiNameMatcher.group(1).trim();
+            String phone = multiNameMatcher.group(2).trim().replaceAll("[\\s-]", "");
+            
+            if (isValidPhone(phone)) {
+                // 按空格分割姓名
+                String[] names = namesStr.split("\\s+");
+                for (String singleName : names) {
+                    singleName = singleName.trim();
+                    if (!singleName.isEmpty() && isValidSingleName(singleName)) {
+                        customers.add(OrderInfo.CustomerInfo.builder()
+                                .name(singleName)
+                                .phone(names.length == 1 ? phone : "") // 只有一个姓名时才设置电话
+                                .build());
+                        log.info("多姓名格式解析出客户: 姓名={}, 电话={}", singleName, names.length == 1 ? phone : "");
+                    }
+                }
+                
+                // 如果有多个姓名，将电话号码分配给第一个乘客
+                if (names.length > 1 && !customers.isEmpty()) {
+                    OrderInfo.CustomerInfo firstCustomer = customers.get(customers.size() - names.length);
+                    if (firstCustomer != null && (firstCustomer.getPhone() == null || firstCustomer.getPhone().isEmpty())) {
+                        OrderInfo.CustomerInfo updatedFirstCustomer = OrderInfo.CustomerInfo.builder()
+                                .name(firstCustomer.getName())
+                                .passport(firstCustomer.getPassport())
+                                .phone(phone)
+                                .build();
+                        customers.set(customers.size() - names.length, updatedFirstCustomer);
+                        log.info("为第一个乘客更新电话: 姓名={}, 电话={}", firstCustomer.getName(), phone);
+                    }
+                }
+                return; // 成功解析，直接返回
+            }
+        }
+        
+        log.warn("客户信息不完整，跳过: 姓名=null, 护照=null, 电话=null");
     }
     
     /**
      * 验证是否为有效姓名
      */
     private boolean isValidName(String name) {
+        return name != null && name.length() >= 2 && name.length() <= 10 && 
+               name.matches("[\\u4e00-\\u9fa5a-zA-Z]+");
+    }
+    
+    /**
+     * 验证单个姓名是否有效（不含空格）
+     */
+    private boolean isValidSingleName(String name) {
         return name != null && name.length() >= 2 && name.length() <= 10 && 
                name.matches("[\\u4e00-\\u9fa5a-zA-Z]+");
     }
@@ -3499,97 +3473,7 @@ public class ChatBotServiceImpl implements ChatBotService {
      */
     @SuppressWarnings("unused")
     private OrderInfo.FlightInfo queryFlightFromRealAPI(String flightNumber) {
-        // 检查是否启用真实API
-        if (!aviationStackEnabled) {
-            log.debug("AviationStack API未启用，跳过真实API查询");
-            return null;
-        }
-        
-        // 检查API密钥是否配置
-        if (aviationStackApiKey == null || aviationStackApiKey.isEmpty() || 
-            "YOUR_AVIATIONSTACK_API_KEY".equals(aviationStackApiKey)) {
-            log.warn("AviationStack API Key未配置，跳过真实API查询");
-            return null;
-        }
-        
-        try {
-            // 构建请求URL - 查询特定航班号
-            String url = String.format("%s/flights?access_key=%s&flight_iata=%s&limit=1", 
-                aviationStackBaseUrl, aviationStackApiKey, flightNumber);
-            
-            log.info("调用AviationStack API查询航班: {}", flightNumber);
-            
-            // 使用Spring的RestTemplate发送HTTP请求
-            org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
-            org.springframework.http.ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
-            
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                // 解析JSON响应
-                com.alibaba.fastjson.JSONObject jsonResponse = com.alibaba.fastjson.JSON.parseObject(response.getBody());
-                
-                // 检查API调用是否成功
-                if (jsonResponse.getBooleanValue("success")) {
-                    com.alibaba.fastjson.JSONArray data = jsonResponse.getJSONArray("data");
-                    
-                    if (data != null && data.size() > 0) {
-                        com.alibaba.fastjson.JSONObject flightData = data.getJSONObject(0);
-                        
-                        // 提取航班信息
-                        com.alibaba.fastjson.JSONObject departure = flightData.getJSONObject("departure");
-                        com.alibaba.fastjson.JSONObject arrival = flightData.getJSONObject("arrival");
-                        com.alibaba.fastjson.JSONObject airline = flightData.getJSONObject("airline");
-                        
-                        String depTime = null;
-                        String arrTime = null;
-                        String depAirport = null;
-                        String arrAirport = null;
-                        String airlineName = null;
-                        
-                        // 解析出发信息
-                        if (departure != null) {
-                            depTime = parseDateTime(departure.getString("scheduled"));
-                            depAirport = departure.getString("iata");
-                        }
-                        
-                        // 解析到达信息
-                        if (arrival != null) {
-                            arrTime = parseDateTime(arrival.getString("scheduled"));
-                            arrAirport = arrival.getString("iata");
-                        }
-                        
-                        // 解析航空公司信息
-                        if (airline != null) {
-                            airlineName = airline.getString("name");
-                        }
-                        
-                        OrderInfo.FlightInfo flightInfo = OrderInfo.FlightInfo.builder()
-                                .flightNumber(flightNumber)
-                                .departureTime(depTime)
-                                .arrivalTime(arrTime)
-                                .departureAirport(depAirport)
-                                .arrivalAirport(arrAirport)
-                                .airline(airlineName)
-                                .status("Scheduled")
-                                .build();
-                        
-                        log.info("AviationStack API成功返回航班{}信息: 起飞时间={}, 抵达时间={}, 航空公司={}", 
-                            flightNumber, depTime, arrTime, airlineName);
-                        
-                        return flightInfo;
-                    } else {
-                        log.warn("AviationStack API未找到航班{}的信息", flightNumber);
-                    }
-                } else {
-                    log.warn("AviationStack API调用失败: {}", jsonResponse.getString("error"));
-                }
-            } else {
-                log.warn("AviationStack API响应异常: {}", response.getStatusCode());
-            }
-            
-        } catch (Exception e) {
-            log.error("调用AviationStack API失败: {}", e.getMessage(), e);
-        }
-        
+        // 航班实时查询已停用
         return null;
     }
     
@@ -4456,370 +4340,6 @@ public class ChatBotServiceImpl implements ChatBotService {
         return true;
     }
     
-    /**
-     * 获取天气信息
-     */
-    private String getWeatherInfo(String message) {
-        try {
-            // 提取城市名（塔斯马尼亚相关城市）
-            String cityName = extractCityName(message);
-            if (cityName == null) {
-                cityName = "Hobart"; // 默认霍巴特
-            }
-            
-            // 尝试从真实API获取天气信息
-            WeatherInfo weatherInfo = getWeatherFromAPI(cityName);
-            
-            if (weatherInfo != null) {
-                return formatWeatherResponse(weatherInfo, cityName);
-            } else {
-                // API失败时，返回通用天气建议
-                return getGeneralWeatherAdvice(cityName);
-            }
-            
-        } catch (Exception e) {
-            log.error("获取天气信息失败: {}", e.getMessage(), e);
-            return getGeneralWeatherAdvice("塔斯马尼亚");
-        }
-    }
-    
-    /**
-     * 从消息中提取城市名
-     */
-    private String extractCityName(String message) {
-        String lowerMessage = message.toLowerCase();
-        
-        // 塔斯马尼亚主要城市和景点
-        String[][] cityMappings = {
-            {"霍巴特", "hobart"},
-            {"朗塞斯顿", "launceston"}, 
-            {"德文港", "devonport"},
-            {"伯尼", "burnie"},
-            {"酒杯湾", "freycinet"},
-            {"摇篮山", "cradle mountain"},
-            {"布鲁尼岛", "bruny island"},
-            {"惠灵顿山", "mount wellington"},
-            {"里奇蒙", "richmond"},
-            {"斯特拉恩", "strahan"},
-            {"塔斯马尼亚", "hobart"}  // 默认用霍巴特代表塔斯马尼亚
-        };
-        
-        for (String[] mapping : cityMappings) {
-            if (lowerMessage.contains(mapping[0])) {
-                return mapping[1];
-            }
-        }
-        
-        return null;
-    }
-    
-    /**
-     * 从OpenWeatherMap API获取天气信息
-     */
-    private WeatherInfo getWeatherFromAPI(String cityName) {
-        if (!weatherApiEnabled || weatherApiKey == null || weatherApiKey.isEmpty() || 
-            "YOUR_OPENWEATHERMAP_API_KEY".equals(weatherApiKey)) {
-            log.warn("OpenWeatherMap API未配置或未启用");
-            return null;
-        }
-        
-        try {
-            // 先检查缓存
-            String cacheKey = "weather:" + cityName.toLowerCase();
-            String cachedData = redisTemplate.opsForValue().get(cacheKey);
-            
-            if (cachedData != null) {
-                log.info("从缓存获取天气信息: {}", cityName);
-                return JSON.parseObject(cachedData, WeatherInfo.class);
-            }
-            
-            // 构建API请求URL
-            String url = String.format("%s/weather?q=%s,AU&appid=%s&units=metric&lang=zh_cn", 
-                weatherApiBaseUrl, cityName, weatherApiKey);
-            
-            log.info("请求OpenWeatherMap天气API: {}", cityName);
-            
-            // 发送HTTP请求
-            RestTemplate restTemplate = new RestTemplate();
-            org.springframework.http.ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
-            
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                // 解析天气数据
-                WeatherInfo weatherInfo = parseWeatherResponse(response.getBody());
-                
-                if (weatherInfo != null) {
-                    // 缓存结果
-                    redisTemplate.opsForValue().set(cacheKey, JSON.toJSONString(weatherInfo), 
-                        Duration.ofSeconds(weatherCacheDuration));
-                    
-                    log.info("成功获取{}天气信息: {}°C, {}", cityName, weatherInfo.getTemperature(), weatherInfo.getDescription());
-                    return weatherInfo;
-                }
-            } else {
-                log.warn("OpenWeatherMap API响应异常: {}", response.getStatusCode());
-            }
-            
-        } catch (Exception e) {
-            log.error("调用OpenWeatherMap API失败: {}", e.getMessage(), e);
-        }
-        
-        return null;
-    }
-    
-    /**
-     * 解析OpenWeatherMap API响应
-     */
-    private WeatherInfo parseWeatherResponse(String responseBody) {
-        try {
-            com.alibaba.fastjson.JSONObject jsonResponse = com.alibaba.fastjson.JSON.parseObject(responseBody);
-            
-            // 检查响应是否成功
-            if (jsonResponse.getIntValue("cod") != 200) {
-                log.warn("OpenWeatherMap API返回错误: {}", jsonResponse.getString("message"));
-                return null;
-            }
-            
-            // 提取天气信息
-            com.alibaba.fastjson.JSONObject main = jsonResponse.getJSONObject("main");
-            com.alibaba.fastjson.JSONArray weather = jsonResponse.getJSONArray("weather");
-            com.alibaba.fastjson.JSONObject wind = jsonResponse.getJSONObject("wind");
-            
-            WeatherInfo weatherInfo = new WeatherInfo();
-            
-            if (main != null) {
-                weatherInfo.setTemperature(main.getDoubleValue("temp"));
-                weatherInfo.setFeelsLike(main.getDoubleValue("feels_like"));
-                weatherInfo.setMinTemperature(main.getDoubleValue("temp_min"));
-                weatherInfo.setMaxTemperature(main.getDoubleValue("temp_max"));
-                weatherInfo.setHumidity(main.getIntValue("humidity"));
-                weatherInfo.setPressure(main.getIntValue("pressure"));
-            }
-            
-            if (weather != null && weather.size() > 0) {
-                com.alibaba.fastjson.JSONObject weatherObj = weather.getJSONObject(0);
-                weatherInfo.setDescription(weatherObj.getString("description"));
-                weatherInfo.setIcon(weatherObj.getString("icon"));
-                weatherInfo.setMain(weatherObj.getString("main"));
-            }
-            
-            if (wind != null) {
-                weatherInfo.setWindSpeed(wind.getDoubleValue("speed"));
-                weatherInfo.setWindDirection(wind.getIntValue("deg"));
-            }
-            
-            // 设置时间戳
-            weatherInfo.setTimestamp(System.currentTimeMillis() / 1000);
-            
-            return weatherInfo;
-            
-        } catch (Exception e) {
-            log.error("解析天气API响应失败: {}", e.getMessage(), e);
-            return null;
-        }
-    }
-    
-    /**
-     * 格式化天气响应信息
-     */
-    private String formatWeatherResponse(WeatherInfo weather, String cityName) {
-        StringBuilder response = new StringBuilder();
-        
-        // 获取中文城市名
-        String chineseCityName = getChineseCityName(cityName);
-        
-        response.append("🌤️ **").append(chineseCityName).append("实时天气**\n\n");
-        
-        // 基本天气信息
-        response.append("🌡️ **当前气温**: ").append(Math.round(weather.getTemperature())).append("°C\n");
-        response.append("🌈 **天气状况**: ").append(weather.getDescription()).append("\n");
-        
-        if (weather.getFeelsLike() != null && weather.getFeelsLike() != 0) {
-            response.append("👤 **体感温度**: ").append(Math.round(weather.getFeelsLike())).append("°C\n");
-        }
-        
-        if (weather.getMinTemperature() != null && weather.getMaxTemperature() != null) {
-            response.append("📊 **温度范围**: ").append(Math.round(weather.getMinTemperature()))
-                     .append("°C ~ ").append(Math.round(weather.getMaxTemperature())).append("°C\n");
-        }
-        
-        if (weather.getHumidity() != null && weather.getHumidity() > 0) {
-            response.append("💧 **湿度**: ").append(weather.getHumidity()).append("%\n");
-        }
-        
-        if (weather.getWindSpeed() != null && weather.getWindSpeed() > 0) {
-            response.append("🌬️ **风速**: ").append(String.format("%.1f", weather.getWindSpeed())).append(" m/s\n");
-        }
-        
-        response.append("\n");
-        
-        // 旅游建议
-        response.append("🎒 **旅游建议**:\n");
-        response.append(getTravelAdvice(weather)).append("\n\n");
-        
-        // 数据来源
-        response.append("📡 *数据来源: OpenWeatherMap*");
-        
-        return response.toString();
-    }
-    
-    /**
-     * 获取中文城市名
-     */
-    private String getChineseCityName(String englishName) {
-        switch (englishName.toLowerCase()) {
-            case "hobart": return "霍巴特";
-            case "launceston": return "朗塞斯顿";
-            case "devonport": return "德文港";
-            case "burnie": return "伯尼";
-            case "freycinet": return "酒杯湾";
-            case "cradle mountain": return "摇篮山";
-            case "bruny island": return "布鲁尼岛";
-            case "mount wellington": return "惠灵顿山";
-            case "richmond": return "里奇蒙";
-            case "strahan": return "斯特拉恩";
-            default: return englishName;
-        }
-    }
-    
-    /**
-     * 根据天气状况提供旅游建议
-     */
-    private String getTravelAdvice(WeatherInfo weather) {
-        double temp = weather.getTemperature();
-        String description = weather.getDescription();
-        String main = weather.getMain();
-        
-        StringBuilder advice = new StringBuilder();
-        
-        // 温度建议
-        if (temp < 5) {
-            advice.append("• 🧥 气温较低，建议穿厚外套、毛衣等保暖衣物\n");
-        } else if (temp < 15) {
-            advice.append("• 👕 气温适中偏凉，建议穿长袖+外套，方便增减\n");
-        } else if (temp < 25) {
-            advice.append("• 🌞 气温宜人，适合户外活动，建议穿轻便舒适衣物\n");
-        } else {
-            advice.append("• ☀️ 气温较高，建议穿轻薄透气衣物，注意防晒\n");
-        }
-        
-        // 天气状况建议
-        if (main != null) {
-            switch (main.toLowerCase()) {
-                case "rain":
-                case "drizzle":
-                    advice.append("• 🌧️ 有降雨，建议携带雨具，选择室内活动或有遮挡的景点\n");
-                    break;
-                case "snow":
-                    advice.append("• ❄️ 有降雪，路面可能湿滑，注意安全，适合观赏雪景\n");
-                    break;
-                case "clear":
-                    advice.append("• ☀️ 天气晴朗，是户外游览的绝佳时机\n");
-                    break;
-                case "clouds":
-                    advice.append("• ☁️ 多云天气，适合拍照，光线柔和\n");
-                    break;
-            }
-        }
-        
-        // 湿度建议
-        if (weather.getHumidity() != null) {
-            if (weather.getHumidity() > 80) {
-                advice.append("• 💧 湿度较高，体感可能较闷，注意适当补水\n");
-            } else if (weather.getHumidity() < 40) {
-                advice.append("• 🏜️ 湿度较低，注意保湿，多喝水\n");
-            }
-        }
-        
-        // 风速建议
-        if (weather.getWindSpeed() != null && weather.getWindSpeed() > 5) {
-            advice.append("• 🌬️ 风力较大，户外活动注意防风保暖\n");
-        }
-        
-        return advice.length() > 0 ? advice.toString().trim() : "• 🌟 当前天气适宜旅游，祝您玩得愉快！";
-    }
-    
-    /**
-     * 获取通用天气建议（API不可用时的后备方案）
-     */
-    private String getGeneralWeatherAdvice(String cityName) {
-        String chineseCityName = getChineseCityName(cityName);
-        
-        return "🌤️ **" + chineseCityName + "天气提醒**\n\n" +
-               "抱歉，暂时无法获取实时天气信息。以下是塔斯马尼亚的一般天气建议：\n\n" +
-               "❄️ **冬季 (6-8月)**:\n" +
-               "• 气温: 5-15°C，早晚较冷\n" +
-               "• 建议: 多层穿衣，防风外套必备\n" +
-               "• 优点: 人少景美，空气清新\n\n" +
-               "🌸 **春季 (9-11月)**:\n" +
-               "• 气温: 8-18°C，变化较大\n" +
-               "• 建议: 准备增减衣物\n" +
-               "• 优点: 野花盛开，风景如画\n\n" +
-               "☀️ **夏季 (12-2月)**:\n" +
-               "• 气温: 15-25°C，舒适宜人\n" +
-               "• 建议: 轻便衣物+防晒用品\n" +
-               "• 优点: 户外活动最佳时节\n\n" +
-               "🍂 **秋季 (3-5月)**:\n" +
-               "• 气温: 10-20°C，色彩斑斓\n" +
-               "• 建议: 长袖+轻薄外套\n" +
-               "• 优点: 摄影绝佳，避开人流\n\n" +
-               "💡 **小提示**: 塔斯马尼亚天气变化快，建议随时关注天气预报并准备多层衣物！\n\n" +
-               "想获取实时天气？请稍后重试或查看官方天气预报。";
-    }
-    
-    /**
-     * 天气信息实体类
-     */
-    public static class WeatherInfo {
-        private Double temperature;        // 当前温度
-        private Double feelsLike;         // 体感温度
-        private Double minTemperature;    // 最低温度
-        private Double maxTemperature;    // 最高温度
-        private Integer humidity;         // 湿度
-        private Integer pressure;         // 气压
-        private String description;       // 天气描述
-        private String icon;             // 天气图标
-        private String main;             // 主要天气状况
-        private Double windSpeed;        // 风速
-        private Integer windDirection;   // 风向
-        private Long timestamp;          // 时间戳
-        
-        // Getters and Setters
-        public Double getTemperature() { return temperature; }
-        public void setTemperature(Double temperature) { this.temperature = temperature; }
-        
-        public Double getFeelsLike() { return feelsLike; }
-        public void setFeelsLike(Double feelsLike) { this.feelsLike = feelsLike; }
-        
-        public Double getMinTemperature() { return minTemperature; }
-        public void setMinTemperature(Double minTemperature) { this.minTemperature = minTemperature; }
-        
-        public Double getMaxTemperature() { return maxTemperature; }
-        public void setMaxTemperature(Double maxTemperature) { this.maxTemperature = maxTemperature; }
-        
-        public Integer getHumidity() { return humidity; }
-        public void setHumidity(Integer humidity) { this.humidity = humidity; }
-        
-        public Integer getPressure() { return pressure; }
-        public void setPressure(Integer pressure) { this.pressure = pressure; }
-        
-        public String getDescription() { return description; }
-        public void setDescription(String description) { this.description = description; }
-        
-        public String getIcon() { return icon; }
-        public void setIcon(String icon) { this.icon = icon; }
-        
-        public String getMain() { return main; }
-        public void setMain(String main) { this.main = main; }
-        
-        public Double getWindSpeed() { return windSpeed; }
-        public void setWindSpeed(Double windSpeed) { this.windSpeed = windSpeed; }
-        
-        public Integer getWindDirection() { return windDirection; }
-        public void setWindDirection(Integer windDirection) { this.windDirection = windDirection; }
-        
-        public Long getTimestamp() { return timestamp; }
-        public void setTimestamp(Long timestamp) { this.timestamp = timestamp; }
-    }
     
     /**
      * 检查是否为产品查询请求
@@ -5156,279 +4676,67 @@ public class ChatBotServiceImpl implements ChatBotService {
     /**
      * 判断是否为汇率查询
      */
-    private boolean isExchangeRateQuery(String message) {
-        String[] exchangeKeywords = {
-            "汇率", "汇率查询", "exchange rate", "currency", "澳元", "人民币", "美元", "汇率换算",
-            "澳币", "aud", "cny", "usd", "货币", "兑换", "换算"
-        };
-        
-        for (String keyword : exchangeKeywords) {
-            if (message.contains(keyword)) {
-                return true;
-            }
-        }
-        return false;
-    }
+    // 已移除：汇率查询相关方法
     
     /**
      * 获取汇率信息
      */
-    private String getExchangeRateInfo(String message) {
-        try {
-            // 提取货币对
-            String[] currencies = extractCurrencyPair(message);
-            String fromCurrency = currencies[0];
-            String toCurrency = currencies[1];
-            
-            // 优先使用API查询
-            if (exchangeApiEnabled && exchangeApiKey != null && !exchangeApiKey.isEmpty()) {
-                return getExchangeRateFromAPI(fromCurrency, toCurrency);
-            }
-            
-            // 如果API不可用，返回基本汇率信息
-            return getBasicExchangeRateInfo(fromCurrency, toCurrency);
-            
-        } catch (Exception e) {
-            log.error("获取汇率信息失败: {}", e.getMessage(), e);
-            return "抱歉，暂时无法获取汇率信息。不过，我可以告诉您，在计划塔斯马尼亚旅行时，" +
-                   "建议您提前了解澳元汇率变化，这样可以更好地规划旅行预算。您还可以询问我们的旅游产品和价格信息！";
-        }
-    }
+    // 已移除：汇率信息获取
     
     /**
      * 从消息中提取货币对
      */
-    private String[] extractCurrencyPair(String message) {
-        // 默认查询澳元对人民币汇率
-        String from = "AUD";  // 澳元
-        String to = "CNY";    // 人民币
-        
-        // 根据消息内容智能识别货币对
-        if (message.contains("美元") || message.contains("usd")) {
-            if (message.contains("澳元") || message.contains("aud")) {
-                from = "USD";
-                to = "AUD";
-            } else {
-                from = "USD";
-                to = "CNY";
-            }
-        } else if (message.contains("人民币") && message.contains("澳元")) {
-            from = "CNY";
-            to = "AUD";
-        }
-        
-        return new String[]{from, to};
-    }
+    // 已移除：货币对解析
     
     /**
      * 从API获取汇率
      */
-    private String getExchangeRateFromAPI(String from, String to) {
-        try {
-            String url = exchangeApiBaseUrl + "/latest/" + from;
-            
-            Request request = new Request.Builder()
-                    .url(url)
-                    .addHeader("User-Agent", "TravelBot/1.0")
-                    .build();
-            
-            try (Response response = httpClient.newCall(request).execute()) {
-                if (response.isSuccessful() && response.body() != null) {
-                    String responseBody = response.body().string();
-                    return parseExchangeRateResponse(responseBody, from, to);
-                }
-            }
-        } catch (Exception e) {
-            log.error("API获取汇率失败: {}", e.getMessage(), e);
-        }
-        
-        return getBasicExchangeRateInfo(from, to);
-    }
+    // 已移除：汇率API调用
     
     /**
      * 解析汇率API响应
      */
-    private String parseExchangeRateResponse(String responseBody, String from, String to) {
-        try {
-            JSONObject json = JSON.parseObject(responseBody);
-            JSONObject rates = json.getJSONObject("rates");
-            
-            if (rates != null && rates.containsKey(to)) {
-                double rate = rates.getDoubleValue(to);
-                return formatExchangeRateResponse(from, to, rate);
-            }
-        } catch (Exception e) {
-            log.error("解析汇率响应失败: {}", e.getMessage(), e);
-        }
-        
-        return getBasicExchangeRateInfo(from, to);
-    }
+    // 已移除：汇率响应解析
     
     /**
      * 格式化汇率响应
      */
-    private String formatExchangeRateResponse(String from, String to, double rate) {
-        String fromName = getCurrencyName(from);
-        String toName = getCurrencyName(to);
-        
-        StringBuilder response = new StringBuilder();
-        response.append("💱 实时汇率信息：\n\n");
-        response.append(String.format("1 %s = %.4f %s\n", fromName, rate, toName));
-        response.append(String.format("1 %s = %.4f %s\n\n", toName, 1/rate, fromName));
-        
-        // 添加旅游相关建议
-        if ("AUD".equals(from) || "AUD".equals(to)) {
-            response.append("🏝️ 塔斯马尼亚旅游小贴士：\n");
-            response.append("• 澳洲大部分地方都支持刷卡，建议携带少量现金\n");
-            response.append("• 我们的旅游产品价格已包含GST，无隐形费用\n");
-            response.append("• 想了解具体的旅游套餐价格吗？我可以为您推荐合适的产品！");
-        }
-        
-        return response.toString();
-    }
+    // 已移除：汇率响应格式化
     
     /**
      * 获取货币名称
      */
-    private String getCurrencyName(String code) {
-        switch (code.toUpperCase()) {
-            case "AUD": return "澳元";
-            case "CNY": return "人民币";
-            case "USD": return "美元";
-            case "EUR": return "欧元";
-            case "GBP": return "英镑";
-            case "JPY": return "日元";
-            default: return code;
-        }
-    }
+    // 已移除：货币名映射
     
     /**
      * 获取基本汇率信息
      */
-    private String getBasicExchangeRateInfo(String from, String to) {
-        return "💱 汇率信息：\n\n" +
-               "抱歉，无法获取实时汇率数据。建议您通过银行或专业金融应用查询最新汇率。\n\n" +
-               "🏝️ 塔斯马尼亚旅游支付小贴士：\n" +
-               "• 我们接受多种支付方式，包括信用卡支付\n" +
-               "• 澳洲旅游时建议携带少量现金备用\n" +
-               "• 想了解我们的旅游产品价格吗？我可以为您详细介绍！";
-    }
+    // 已移除：基础汇率信息
     
     /**
      * 判断是否为旅游新闻查询
      */
-    private boolean isTravelNewsQuery(String message) {
-        String[] newsKeywords = {
-            "新闻", "资讯", "消息", "最新", "动态", "news", "塔斯马尼亚新闻",
-            "旅游新闻", "景点新闻", "开放时间", "活动", "节庆", "festival"
-        };
-        
-        for (String keyword : newsKeywords) {
-            if (message.contains(keyword)) {
-                return true;
-            }
-        }
-        return false;
-    }
+    // 已移除：新闻查询判定
     
     /**
      * 获取旅游新闻信息
      */
-    private String getTravelNewsInfo(String message) {
-        try {
-            // 如果启用了新闻API，尝试获取实时新闻
-            if (newsApiEnabled && newsApiKey != null && !newsApiKey.isEmpty()) {
-                return getTravelNewsFromAPI(message);
-            }
-            
-            // 否则返回塔斯马尼亚旅游相关的固定信息
-            return getTasmanianTravelNews();
-            
-        } catch (Exception e) {
-            log.error("获取旅游新闻失败: {}", e.getMessage(), e);
-            return getTasmanianTravelNews();
-        }
-    }
+    // 已移除：新闻内容获取
     
     /**
      * 从API获取旅游新闻
      */
-    private String getTravelNewsFromAPI(String message) {
-        try {
-            String query = "Tasmania travel OR 塔斯马尼亚旅游";
-            String url = newsApiBaseUrl + "/everything?q=" + java.net.URLEncoder.encode(query, "UTF-8") +
-                        "&language=en&sortBy=publishedAt&pageSize=5";
-            
-            Request request = new Request.Builder()
-                    .url(url)
-                    .addHeader("X-API-Key", newsApiKey)
-                    .addHeader("User-Agent", "TravelBot/1.0")
-                    .build();
-            
-            try (Response response = httpClient.newCall(request).execute()) {
-                if (response.isSuccessful() && response.body() != null) {
-                    String responseBody = response.body().string();
-                    return parseNewsResponse(responseBody);
-                }
-            }
-        } catch (Exception e) {
-            log.error("从API获取新闻失败: {}", e.getMessage(), e);
-        }
-        
-        return getTasmanianTravelNews();
-    }
+    // 已移除：新闻API获取
     
     /**
      * 解析新闻API响应
      */
-    private String parseNewsResponse(String responseBody) {
-        try {
-            JSONObject json = JSON.parseObject(responseBody);
-            JSONArray articles = json.getJSONArray("articles");
-            
-            if (articles != null && articles.size() > 0) {
-                StringBuilder news = new StringBuilder();
-                news.append("📰 塔斯马尼亚旅游最新资讯：\n\n");
-                
-                for (int i = 0; i < Math.min(3, articles.size()); i++) {
-                    JSONObject article = articles.getJSONObject(i);
-                    String title = article.getString("title");
-                    String description = article.getString("description");
-                    
-                    news.append(String.format("%d. %s\n", i + 1, title));
-                    if (description != null && description.length() > 0) {
-                        news.append(String.format("   %s\n\n", 
-                            description.length() > 100 ? description.substring(0, 100) + "..." : description));
-                    }
-                }
-                
-                news.append("💡 想了解更多塔斯马尼亚的旅游信息吗？我可以为您推荐最适合的旅游路线！");
-                return news.toString();
-            }
-        } catch (Exception e) {
-            log.error("解析新闻响应失败: {}", e.getMessage(), e);
-        }
-        
-        return getTasmanianTravelNews();
-    }
+    // 已移除：新闻响应解析
     
     /**
      * 获取塔斯马尼亚旅游新闻
      */
-    private String getTasmanianTravelNews() {
-        return "📰 塔斯马尼亚旅游资讯：\n\n" +
-               "🏝️ 塔斯马尼亚是澳洲的旅游瑰宝，四季皆宜旅游\n" +
-               "🌺 夏季（12-2月）是薰衣草盛开的季节\n" +
-               "🍁 秋季（3-5月）可以欣赏到美丽的秋叶\n" +
-               "❄️ 冬季（6-8月）是观赏极光的最佳时期\n" +
-               "🌸 春季（9-11月）万物复苏，气候宜人\n\n" +
-               "🎯 我们提供全年的旅游服务，包括：\n" +
-               "• 摇篮山-圣克莱尔湖国家公园\n" +
-               "• 亚瑟港历史遗址\n" +
-               "• 惠灵顿山\n" +
-               "• 萨拉曼卡市场\n\n" +
-               "想了解具体的行程安排吗？我可以为您定制专属的塔斯马尼亚之旅！";
-    }
+    // 已移除：固定旅游新闻
     
     /**
      * 判断是否为交通查询

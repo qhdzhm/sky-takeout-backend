@@ -4,6 +4,7 @@ import com.sky.entity.SystemNotification;
 import com.sky.mapper.SystemNotificationMapper;
 import com.sky.service.NotificationService;
 import com.sky.webSocket.AdminWebSocketServer;
+import com.sky.webSocket.UserWebSocketServer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -284,6 +285,61 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
+    public void createAgentOrderChangeNotification(Long agentId, Long operatorId, Long orderId,
+                                                   String orderNumber, String changeTitle, String changeDetail) {
+        if (agentId == null) {
+            log.warn("createAgentOrderChangeNotification 缺少 agentId，忽略");
+            return;
+        }
+
+        String title = changeTitle != null ? changeTitle : "订单变更";
+        String content = String.format("订单 %s 有更新：%s",
+                orderNumber != null ? orderNumber : String.valueOf(orderId),
+                changeDetail != null ? changeDetail : "详情请查看订单");
+
+        // 1) 始终通知中介主号
+        SystemNotification notifyAgent = SystemNotification.builder()
+                .type(31)
+                .title(title)
+                .content(content)
+                .icon("🔔")
+                .relatedId(orderId)
+                .relatedType("order")
+                .level(2)
+                .isRead(0)
+                .receiverRole(3)
+                .receiverId(agentId)
+                .createTime(LocalDateTime.now())
+                .expireTime(LocalDateTime.now().plusDays(7))
+                .build();
+        notificationMapper.insert(notifyAgent);
+        sendRealTimeNotification("agent_order_change", notifyAgent);
+
+        // 2) 若存在操作员，仅通知该操作员（只接收自己下的订单）
+        if (operatorId != null) {
+            SystemNotification notifyOperator = SystemNotification.builder()
+                    .type(31)
+                    .title(title)
+                    .content(content)
+                    .icon("🔔")
+                    .relatedId(orderId)
+                    .relatedType("order")
+                    .level(2)
+                    .isRead(0)
+                    .receiverRole(3)
+                    .receiverId(operatorId)
+                    .createTime(LocalDateTime.now())
+                    .expireTime(LocalDateTime.now().plusDays(7))
+                    .build();
+            notificationMapper.insert(notifyOperator);
+            sendRealTimeNotification("agent_order_change", notifyOperator);
+        }
+
+        log.info("🔔 发送代理商端订单变更通知(主号+操作员): agentId={}, operatorId={}, orderId={}, title={}, detail={}",
+                agentId, operatorId, orderId, title, changeDetail);
+    }
+
+    @Override
     public Integer getUnreadCount(Integer receiverRole, Long receiverId) {
         return notificationMapper.getUnreadCount(receiverRole, receiverId);
     }
@@ -340,9 +396,9 @@ public class NotificationServiceImpl implements NotificationService {
                     AdminWebSocketServer.createNotificationMessage("system_notification", notification.getTitle(), data)
                 );
             } else if (notification.getReceiverRole() == 3 && notification.getReceiverId() != null) {
-                // 发送给特定用户
-                AdminWebSocketServer.sendMessage(notification.getReceiverId(),
-                    AdminWebSocketServer.createNotificationMessage("system_notification", notification.getTitle(), data)
+                // 发送给代理端（用户前台的WebSocket）
+                UserWebSocketServer.sendMessage(notification.getReceiverId(),
+                    UserWebSocketServer.createMessage("system_notification", notification.getTitle(), data)
                 );
             }
 

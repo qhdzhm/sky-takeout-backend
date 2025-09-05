@@ -20,6 +20,8 @@ import com.sky.service.PaymentService;
 import com.sky.service.AgentCreditService;
 import com.sky.service.TourBookingService;
 import com.sky.service.NotificationService;
+import com.sky.mapper.PaymentAuditLogMapper;
+import com.sky.entity.PaymentAuditLog;
 import com.sky.vo.CreditPaymentResultVO;
 import com.sky.vo.PriceDetailVO;
 import lombok.extern.slf4j.Slf4j;
@@ -63,6 +65,8 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Autowired
     private NotificationService notificationService;
+    @Autowired
+    private PaymentAuditLogMapper paymentAuditLogMapper;
 
     /**
      * 创建支付
@@ -194,13 +198,14 @@ public class PaymentServiceImpl implements PaymentService {
         // 更新原支付状态为已退款
         paymentMapper.updateStatus(id, "refunded");
         
-        // 更新订单支付状态
-        // 无论是全额退款还是部分退款，数据库状态都设为"refunded"
-        // 但可以在note字段或其他方式记录是否为部分退款
-        paymentMapper.updateBookingPaymentStatus(originalPayment.getBookingId(), "refunded");
+        // 更新订单支付状态：区分部分/全额退款
+        String newPaymentStatus = refundDTO.getAmount() != null && originalPayment.getAmount() != null
+                && refundDTO.getAmount().compareTo(originalPayment.getAmount()) < 0 ? "partial" : "refunded";
+        paymentMapper.updateBookingPaymentStatus(originalPayment.getBookingId(), newPaymentStatus);
         
         // 如果是部分退款，可以在日志或其他地方记录
-        if (refundDTO.getAmount().compareTo(originalPayment.getAmount()) < 0) {
+        if (refundDTO.getAmount() != null && originalPayment.getAmount() != null &&
+            refundDTO.getAmount().compareTo(originalPayment.getAmount()) < 0) {
             log.info("部分退款：订单ID={}, 原金额={}, 退款金额={}", 
                     originalPayment.getBookingId(), 
                     originalPayment.getAmount(), 
@@ -223,7 +228,7 @@ public class PaymentServiceImpl implements PaymentService {
         // 获取订单信息
         Integer bookingId = creditPaymentDTO.getBookingId().intValue();
         
-        // 🔒 添加分布式锁，防止同一订单的并发支付
+        // 🔒 JVM 级锁（建议后续替换为分布式锁/行级锁）
         String lockKey = "payment_lock_" + bookingId;
         synchronized (lockKey.intern()) {
             // 首先检查订单是否已经支付
@@ -238,6 +243,21 @@ public class PaymentServiceImpl implements PaymentService {
                 return true; // 返回true表示支付成功（因为订单已经是支付状态）
             }
             
+            // 🔒 归属校验：当前主体必须与订单所属代理一致；操作员仅能支付自己下的单
+            Long currentAgentIdCtx = BaseContext.getCurrentAgentId();
+            String currentUserType = BaseContext.getCurrentUserType();
+            Long currentOperatorIdCtx = BaseContext.getCurrentOperatorId();
+            if (existingBooking.getAgentId() == null || currentAgentIdCtx == null ||
+                !currentAgentIdCtx.equals(existingBooking.getAgentId().longValue())) {
+                throw new CustomException("无权支付该订单");
+            }
+            if ("agent_operator".equals(currentUserType)) {
+                if (existingBooking.getOperatorId() == null || currentOperatorIdCtx == null ||
+                    !currentOperatorIdCtx.equals(existingBooking.getOperatorId())) {
+                    throw new CustomException("操作员仅能支付自己下的订单");
+                }
+            }
+            
             log.info("🔒 获取支付锁成功，开始处理订单 {} 的支付", bookingId);
             
             // 获取当前用户信息
@@ -246,45 +266,9 @@ public class PaymentServiceImpl implements PaymentService {
             Long agentId = BaseContext.getCurrentAgentId();
             Long operatorId = BaseContext.getCurrentOperatorId();
             
-            // 获取订单实际金额 - 需要根据用户类型决定使用哪个价格
-            BigDecimal actualOrderAmount;
-            
-            if ("agent_operator".equals(userType)) {
-                // 操作员支付：使用实际折扣价格（actualPaymentPrice）
-                // 这里需要重新计算价格，获取actualPaymentPrice
-                // 从订单中获取基本信息
-                TourBooking booking = tourBookingMapper.getById(bookingId);
-                if (booking == null) {
-                    log.error("订单ID {} 不存在", bookingId);
-                    throw new CustomException("订单不存在，请联系客服");
-                }
-                
-                // 使用统一价格计算方法重新计算价格详情，获取实际支付价格
-                Map<String, Object> priceResult = tourBookingService.calculateUnifiedPrice(
-                    booking.getTourId(), 
-                    booking.getTourType(), 
-                    agentId, 
-                    booking.getAdultCount(), 
-                    booking.getChildCount(), 
-                    booking.getHotelLevel(), 
-                    booking.getHotelRoomCount(),
-                    null,  // userId参数
-                    null,  // roomTypes
-                    null,  // childrenAges
-                    null   // selectedOptionalTours
-                );
-                
-                actualOrderAmount = BigDecimal.ZERO;
-                if (priceResult != null && priceResult.get("data") != null) {
-                    Map<String, Object> data = (Map<String, Object>) priceResult.get("data");
-                    actualOrderAmount = (BigDecimal) data.get("totalPrice");
-                }
-                log.info("操作员支付，使用实际折扣价格: {}", actualOrderAmount);
-            } else {
-                // 代理商主账号或普通用户：使用订单中记录的价格
-                actualOrderAmount = tourBookingMapper.getOrderAmount(bookingId);
-                log.info("代理商主账号支付，使用订单价格: {}", actualOrderAmount);
-            }
+            // 💰 统一金额来源：使用订单固化金额
+            BigDecimal actualOrderAmount = tourBookingMapper.getOrderAmount(bookingId);
+            log.info("统一使用订单固化金额作为信用支付金额: {}", actualOrderAmount);
             
             if (actualOrderAmount == null) {
                 log.error("订单ID {} 不存在或未找到金额信息", bookingId);
@@ -344,7 +328,13 @@ public class PaymentServiceImpl implements PaymentService {
                 paymentDTO.setIsCreditPayment(true);
                 paymentDTO.setCreditTransactionId(result.getTransactionId().intValue());
                 
-                // 插入支付记录
+                // 幂等校验：若该订单已存在完成的信用支付记录，直接返回成功（建议唯一索引约束）
+                int completedCount = paymentMapper.countCompletedAgentCreditPayments(bookingId);
+                if (completedCount > 0) {
+                    log.warn("⚠️ 发现已完成的信用支付记录，返回成功避免重复扣款，订单ID: {}", bookingId);
+                    return true;
+                }
+                
                 paymentMapper.insert(paymentDTO);
                 
                 // 🔥 重要：调用统一的支付成功处理逻辑（包括同步到排团表）
@@ -391,6 +381,27 @@ public class PaymentServiceImpl implements PaymentService {
                         
                         log.info("🔔 已发送支付成功通知: 订单ID={}, 操作者={} ({}), 金额={}", 
                                 bookingId, operatorName, operatorType, actualOrderAmount);
+
+                        // 🧾 支付审计日志
+                        try {
+                            PaymentAuditLog audit = PaymentAuditLog.builder()
+                                .requestId(java.util.UUID.randomUUID().toString())
+                                .action("credit_payment")
+                                .bookingId(bookingId)
+                                .orderNumber(orderNumber)
+                                .agentId(currentAgentIdCtx)
+                                .operatorId(currentOperatorIdCtx)
+                                .operatorType(operatorType)
+                                .operatorName(operatorName)
+                                .amount(actualOrderAmount)
+                                .balanceBefore(result.getBalanceBefore())
+                                .balanceAfter(result.getBalanceAfter())
+                                .note("信用支付成功")
+                                .ip(null)
+                                .createdAt(LocalDateTime.now())
+                                .build();
+                            paymentAuditLogMapper.insert(audit);
+                        } catch (Exception ignore) {}
                     }
                 } catch (Exception e) {
                     log.error("❌ 发送支付成功通知失败: {}", e.getMessage(), e);

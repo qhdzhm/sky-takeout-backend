@@ -158,4 +158,22 @@ public interface TourBookingService {
      * @return 是否成功
      */
     Boolean confirmOrderByAdmin(Integer bookingId, Double adjustedPrice, String adjustmentReason);
+
+    /**
+     * 用户隐藏订单（软删除）
+     * 
+     * @param bookingId 订单ID
+     * @param userId 用户ID
+     * @return 是否成功
+     */
+    Boolean hideOrder(Integer bookingId, Integer userId);
+
+    /**
+     * 用户恢复已隐藏的订单
+     * 
+     * @param bookingId 订单ID
+     * @param userId 用户ID
+     * @return 是否成功
+     */
+    Boolean restoreOrder(Integer bookingId, Integer userId);
 } 

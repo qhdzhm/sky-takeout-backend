@@ -27,6 +27,8 @@ import io.swagger.annotations.ApiParam;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.MediaType;
+import javax.servlet.http.HttpServletResponse;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -60,6 +62,61 @@ public class BookingController {
     
     @Autowired
     private DayTourMapper dayTourMapper;
+    /**
+     * 下载确认单PDF（仅已确认的订单）
+     */
+    @GetMapping(value = "/{id}/confirmation.pdf")
+    @ApiOperation("下载确认单PDF")
+    public void downloadConfirmationPdf(@PathVariable Integer id, HttpServletResponse response,
+                                        @RequestParam(required = false) String logoPreference) {
+        log.info("下载确认单PDF，订单ID：{}", id);
+        TourBooking booking = bookingService.getBookingById(id);
+        if (booking == null) {
+            throw new RuntimeException("订单不存在");
+        }
+        // 只有已确认的订单允许下载
+        if (!"confirmed".equals(booking.getStatus())) {
+            throw new RuntimeException("只有已确认的订单才能下载确认单");
+        }
+        try {
+            byte[] pdfBytes = emailService.renderConfirmationPdf(id.longValue(), logoPreference);
+            response.setContentType(MediaType.APPLICATION_PDF_VALUE);
+            String fileName = (booking.getOrderNumber() != null ? booking.getOrderNumber() : ("CONFIRM_" + id)) + ".pdf";
+            response.setHeader("Content-Disposition", "attachment; filename=" + fileName);
+            response.getOutputStream().write(pdfBytes);
+            response.getOutputStream().flush();
+        } catch (Exception e) {
+            log.error("生成确认单PDF失败", e);
+            throw new RuntimeException("生成确认单失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 下载发票PDF（仅已支付的订单）
+     */
+    @GetMapping(value = "/{id}/invoice.pdf")
+    @ApiOperation("下载发票PDF")
+    public void downloadInvoicePdf(@PathVariable Integer id, HttpServletResponse response) {
+        log.info("下载发票PDF，订单ID：{}", id);
+        TourBooking booking = bookingService.getBookingById(id);
+        if (booking == null) {
+            throw new RuntimeException("订单不存在");
+        }
+        if (!"paid".equals(booking.getPaymentStatus())) {
+            throw new RuntimeException("只有已支付的订单才能下载发票");
+        }
+        try {
+            byte[] pdfBytes = emailService.renderInvoicePdf(id.longValue());
+            response.setContentType(MediaType.APPLICATION_PDF_VALUE);
+            String fileName = (booking.getOrderNumber() != null ? booking.getOrderNumber() : ("INVOICE_" + id)) + ".pdf";
+            response.setHeader("Content-Disposition", "attachment; filename=" + fileName);
+            response.getOutputStream().write(pdfBytes);
+            response.getOutputStream().flush();
+        } catch (Exception e) {
+            log.error("生成发票PDF失败", e);
+            throw new RuntimeException("生成发票失败: " + e.getMessage());
+        }
+    }
 
     /**
      * 创建预订
@@ -339,56 +396,23 @@ public class BookingController {
                 return Result.error("订单已支付，无需重复支付");
             }
             
-            // 🔒 安全验证：后端重新计算订单实际价格，不信任前端传来的价格
-            Long agentId = BaseContext.getCurrentAgentId();
-            Long userId = BaseContext.getCurrentId();
-            String userType = BaseContext.getCurrentUserType();
-            
-            // 重新计算订单实际应付金额
-            BigDecimal actualAmount;
-            if ("agent_operator".equals(userType) && agentId != null) {
-                // 操作员：使用代理商折扣价
-                Map<String, Object> priceResult = tourBookingService.calculateUnifiedPrice(
-                    booking.getTourId(), 
-                    booking.getTourType(), 
-                    agentId, 
-                    booking.getAdultCount(), 
-                    booking.getChildCount(), 
-                    booking.getHotelLevel(), 
-                    booking.getHotelRoomCount(),
-                    userId,
-                    null, // roomTypes
-                    null, // childrenAges
-                    null  // selectedOptionalTours
-                );
-                actualAmount = BigDecimal.ZERO;
-                if (priceResult != null && priceResult.get("data") != null) {
-                    Map<String, Object> data = (Map<String, Object>) priceResult.get("data");
-                    actualAmount = (BigDecimal) data.get("totalPrice");
-                }
-                log.info("操作员支付验证，重新计算的实际价格: {}", actualAmount);
-            } else {
-                // 其他用户：重新计算价格
-                Map<String, Object> priceResult = tourBookingService.calculateUnifiedPrice(
-                    booking.getTourId(), 
-                    booking.getTourType(), 
-                    agentId, 
-                    booking.getAdultCount(), 
-                    booking.getChildCount(), 
-                    booking.getHotelLevel(), 
-                    booking.getHotelRoomCount(),
-                    userId,
-                    null, // roomTypes
-                    null, // childrenAges
-                    null  // selectedOptionalTours
-                );
-                actualAmount = BigDecimal.ZERO;
-                if (priceResult != null && priceResult.get("data") != null) {
-                    Map<String, Object> data = (Map<String, Object>) priceResult.get("data");
-                    actualAmount = (BigDecimal) data.get("totalPrice");
-                }
-                log.info("支付验证，重新计算的实际价格: {}", actualAmount);
+            // 🔒 归属校验：当前主体必须与订单所属代理一致；操作员仅能支付自己下的单
+            Long currentAgentId = BaseContext.getCurrentAgentId();
+            String currentUserType = BaseContext.getCurrentUserType();
+            Long currentOperatorId = BaseContext.getCurrentOperatorId();
+            if (booking.getAgentId() == null || currentAgentId == null ||
+                !currentAgentId.equals(booking.getAgentId().longValue())) {
+                return Result.error("无权支付该订单");
             }
+            if ("agent_operator".equals(currentUserType)) {
+                if (booking.getOperatorId() == null || currentOperatorId == null ||
+                    !currentOperatorId.equals(booking.getOperatorId())) {
+                    return Result.error("操作员仅能支付自己下的订单");
+                }
+            }
+            
+            // 💰 统一金额来源：订单固化金额
+            BigDecimal actualAmount = booking.getTotalPrice() != null ? booking.getTotalPrice() : BigDecimal.ZERO;
             
             // 验证前端传来的金额是否与实际计算金额一致（允许小数点误差）
             if (paymentDTO.getAmount() != null) {
@@ -440,68 +464,34 @@ public class BookingController {
         log.info("根据订单号支付订单，订单号：{}, 支付数据: {}", orderNumber, paymentDTO);
         
         try {
-            // 查询订单
-            TourBooking booking = bookingService.getBookingById(Integer.parseInt(orderNumber.replace("HT", "")));
-            
-            if (booking == null) {
+            // 查询订单（按订单号）
+            TourBookingVO bookingVO = tourBookingService.getByOrderNumber(orderNumber);
+            if (bookingVO == null) {
                 return Result.error("订单不存在");
             }
             
             // 只有未支付的订单可以支付
-            if (!"unpaid".equals(booking.getPaymentStatus())) {
+            if (!"unpaid".equals(bookingVO.getPaymentStatus())) {
                 return Result.error("订单已支付，无需重复支付");
             }
             
-            // 🔒 安全验证：后端重新计算订单实际价格，不信任前端传来的价格
-            Long agentId = BaseContext.getCurrentAgentId();
-            Long userId = BaseContext.getCurrentId();
-            String userType = BaseContext.getCurrentUserType();
-            
-            // 重新计算订单实际应付金额
-            BigDecimal actualAmount;
-            if ("agent_operator".equals(userType) && agentId != null) {
-                // 操作员：使用代理商折扣价
-                Map<String, Object> priceResult = tourBookingService.calculateUnifiedPrice(
-                    booking.getTourId(), 
-                    booking.getTourType(), 
-                    agentId, 
-                    booking.getAdultCount(), 
-                    booking.getChildCount(), 
-                    booking.getHotelLevel(), 
-                    booking.getHotelRoomCount(),
-                    userId,
-                    null, // roomTypes
-                    null, // childrenAges
-                    null  // selectedOptionalTours
-                );
-                actualAmount = BigDecimal.ZERO;
-                if (priceResult != null && priceResult.get("data") != null) {
-                    Map<String, Object> data = (Map<String, Object>) priceResult.get("data");
-                    actualAmount = (BigDecimal) data.get("totalPrice");
-                }
-                log.info("操作员订单号支付验证，重新计算的实际价格: {}", actualAmount);
-            } else {
-                // 其他用户：重新计算价格
-                Map<String, Object> priceResult = tourBookingService.calculateUnifiedPrice(
-                    booking.getTourId(), 
-                    booking.getTourType(), 
-                    agentId, 
-                    booking.getAdultCount(), 
-                    booking.getChildCount(), 
-                    booking.getHotelLevel(), 
-                    booking.getHotelRoomCount(),
-                    userId,
-                    null, // roomTypes
-                    null, // childrenAges
-                    null  // selectedOptionalTours
-                );
-                actualAmount = BigDecimal.ZERO;
-                if (priceResult != null && priceResult.get("data") != null) {
-                    Map<String, Object> data = (Map<String, Object>) priceResult.get("data");
-                    actualAmount = (BigDecimal) data.get("totalPrice");
-                }
-                log.info("订单号支付验证，重新计算的实际价格: {}", actualAmount);
+            // 🔒 归属校验：当前主体必须与订单所属代理一致；操作员仅能支付自己下的单
+            Long currentAgentId = BaseContext.getCurrentAgentId();
+            String currentUserType = BaseContext.getCurrentUserType();
+            Long currentOperatorId = BaseContext.getCurrentOperatorId();
+            if (bookingVO.getAgentId() == null || currentAgentId == null ||
+                !currentAgentId.equals(Long.valueOf(bookingVO.getAgentId()))) {
+                return Result.error("无权支付该订单");
             }
+            if ("agent_operator".equals(currentUserType)) {
+                if (bookingVO.getOperatorId() == null || currentOperatorId == null ||
+                    !currentOperatorId.equals(bookingVO.getOperatorId())) {
+                    return Result.error("操作员仅能支付自己下的订单");
+                }
+            }
+            
+            // 💰 统一金额来源：订单固化金额
+            BigDecimal actualAmount = bookingVO.getTotalPrice() != null ? bookingVO.getTotalPrice() : BigDecimal.ZERO;
             
             // 验证前端传来的金额是否与实际计算金额一致（允许小数点误差）
             if (paymentDTO.getAmount() != null) {
@@ -521,11 +511,11 @@ public class BookingController {
             
             // 检查支付数据
             if (paymentDTO.getBookingId() == null) {
-                paymentDTO.setBookingId(booking.getBookingId());
+                paymentDTO.setBookingId(bookingVO.getBookingId());
             }
             
             // 调用支付服务
-            Boolean result = tourBookingService.payBooking(booking.getBookingId(), paymentDTO);
+            Boolean result = tourBookingService.payBooking(bookingVO.getBookingId(), paymentDTO);
             
             if (result) {
                 return Result.success(true);

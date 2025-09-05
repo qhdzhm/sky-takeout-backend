@@ -76,11 +76,11 @@ sky:
     admin-token-name: token
 
     user-secret-key: itheima
-    user-ttl: 3600000  # 60分钟 (60 * 60 * 1000)
+    user-ttl: 900000   # 15分钟 (15 * 60 * 1000) 
     user-token-name: authentication
     
     agent-secret-key: tasmania
-    agent-ttl: 3600000  # 60分钟 (60 * 60 * 1000)
+    agent-ttl: 900000   # 15分钟 (15 * 60 * 1000)
     agent-token-name: agent-token
     
     # Refresh Token配置

@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sky.mapper.PriceModificationRequestMapper">
+
+    <!-- 基础结果映射 -->
+    <resultMap id="BaseResultMap" type="com.sky.entity.PriceModificationRequest">
+        <id column="id" property="id"/>
+        <result column="booking_id" property="bookingId"/>
+        <result column="original_price" property="originalPrice"/>
+        <result column="new_price" property="newPrice"/>
+        <result column="price_difference" property="priceDifference"/>
+        <result column="modification_type" property="modificationType"/>
+        <result column="status" property="status"/>
+        <result column="reason" property="reason"/>
+        <result column="created_by_admin" property="createdByAdmin"/>
+        <result column="agent_response" property="agentResponse"/>
+        <result column="agent_note" property="agentNote"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="processed_at" property="processedAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <!-- VO结果映射 -->
+    <resultMap id="VOResultMap" type="com.sky.vo.PriceModificationVO">
+        <id column="id" property="id"/>
+        <result column="booking_id" property="bookingId"/>
+        <result column="order_number" property="orderNumber"/>
+        <result column="original_price" property="originalPrice"/>
+        <result column="new_price" property="newPrice"/>
+        <result column="price_difference" property="priceDifference"/>
+        <result column="modification_type" property="modificationType"/>
+        <result column="status" property="status"/>
+        <result column="reason" property="reason"/>
+        <result column="created_by_admin" property="createdByAdmin"/>
+        <result column="created_by_admin_name" property="createdByAdminName"/>
+        <result column="agent_response" property="agentResponse"/>
+        <result column="agent_note" property="agentNote"/>
+        <result column="agent_id" property="agentId"/>
+        <result column="agent_name" property="agentName"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="processed_at" property="processedAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <!-- 插入价格修改请求 -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO price_modification_requests (
+            booking_id, original_price, new_price, price_difference,
+            modification_type, status, reason, created_by_admin,
+            created_at
+        ) VALUES (
+            #{bookingId}, #{originalPrice}, #{newPrice}, #{priceDifference},
+            #{modificationType}, #{status}, #{reason}, #{createdByAdmin},
+            #{createdAt}
+        )
+    </insert>
+
+    <!-- 根据ID查询 -->
+    <select id="getById" resultMap="BaseResultMap">
+        SELECT * FROM price_modification_requests WHERE id = #{id}
+    </select>
+
+    <!-- 根据订单ID查询 -->
+    <select id="getByBookingId" resultMap="BaseResultMap">
+        SELECT * FROM price_modification_requests 
+        WHERE booking_id = #{bookingId}
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 更新价格修改请求 -->
+    <update id="update">
+        UPDATE price_modification_requests
+        <set>
+            <if test="status != null">status = #{status},</if>
+            <if test="agentResponse != null">agent_response = #{agentResponse},</if>
+            <if test="agentNote != null">agent_note = #{agentNote},</if>
+            <if test="processedAt != null">processed_at = #{processedAt},</if>
+            updated_at = NOW()
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 分页查询（管理后台用） -->
+    <select id="selectPage" resultMap="VOResultMap">
+        SELECT 
+            pmr.*,
+            tb.order_number,
+            tb.agent_id,
+            a.company_name as agent_name,
+            e.name as created_by_admin_name
+        FROM price_modification_requests pmr
+                    LEFT JOIN tour_bookings tb ON pmr.booking_id = tb.booking_id
+        LEFT JOIN agents a ON tb.agent_id = a.id
+        LEFT JOIN employees e ON pmr.created_by_admin = e.id
+        <where>
+            <if test="status != null and status != ''">
+                AND pmr.status = #{status}
+            </if>
+            <if test="modificationType != null and modificationType != ''">
+                AND pmr.modification_type = #{modificationType}
+            </if>
+            <if test="startTime != null">
+                AND pmr.created_at >= #{startTime}
+            </if>
+            <if test="endTime != null">
+                AND pmr.created_at &lt;= #{endTime}
+            </if>
+        </where>
+        ORDER BY pmr.created_at DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <!-- 统计数量（管理后台用） -->
+    <select id="countPage" resultType="int">
+        SELECT COUNT(*)
+        FROM price_modification_requests pmr
+                    LEFT JOIN tour_bookings tb ON pmr.booking_id = tb.booking_id
+        <where>
+            <if test="status != null and status != ''">
+                AND pmr.status = #{status}
+            </if>
+            <if test="modificationType != null and modificationType != ''">
+                AND pmr.modification_type = #{modificationType}
+            </if>
+            <if test="startTime != null">
+                AND pmr.created_at >= #{startTime}
+            </if>
+            <if test="endTime != null">
+                AND pmr.created_at &lt;= #{endTime}
+            </if>
+        </where>
+    </select>
+
+    <!-- 代理商查询 -->
+    <select id="selectByAgent" resultMap="VOResultMap">
+        SELECT 
+            pmr.*,
+            tb.order_number,
+            tb.agent_id,
+            a.company_name as agent_name,
+            e.name as created_by_admin_name
+        FROM price_modification_requests pmr
+                    LEFT JOIN tour_bookings tb ON pmr.booking_id = tb.booking_id
+        LEFT JOIN agents a ON tb.agent_id = a.id
+        LEFT JOIN employees e ON pmr.created_by_admin = e.id
+        <where>
+            AND tb.agent_id = #{agentId}
+            <if test="status != null and status != ''">
+                AND pmr.status = #{status}
+            </if>
+            <if test="startTime != null">
+                AND pmr.created_at >= #{startTime}
+            </if>
+            <if test="endTime != null">
+                AND pmr.created_at &lt;= #{endTime}
+            </if>
+        </where>
+        ORDER BY pmr.created_at DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <!-- 代理商统计数量 -->
+    <select id="countByAgent" resultType="int">
+        SELECT COUNT(*)
+        FROM price_modification_requests pmr
+                    LEFT JOIN tour_bookings tb ON pmr.booking_id = tb.booking_id
+        <where>
+            AND tb.agent_id = #{agentId}
+            <if test="status != null and status != ''">
+                AND pmr.status = #{status}
+            </if>
+            <if test="startTime != null">
+                AND pmr.created_at >= #{startTime}
+            </if>
+            <if test="endTime != null">
+                AND pmr.created_at &lt;= #{endTime}
+            </if>
+        </where>
+    </select>
+
+    <!-- 更新代理商响应 -->
+    <update id="updateAgentResponse">
+        UPDATE price_modification_requests
+        SET agent_response = #{agentResponse},
+            agent_note = #{agentNote},
+            processed_at = #{processedAt},
+            status = CASE 
+                WHEN #{agentResponse} = 'approved' THEN 'approved'
+                WHEN #{agentResponse} = 'rejected' THEN 'rejected'
+                ELSE status
+            END,
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 更新状态 -->
+    <update id="updateStatus">
+        UPDATE price_modification_requests
+        SET status = #{status},
+            processed_at = #{processedAt},
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 代理商根据订单ID查询 -->
+    <select id="selectByBookingId" resultMap="VOResultMap">
+        SELECT 
+            pmr.*,
+            tb.order_number,
+            tb.agent_id,
+            a.company_name as agent_name,
+            e.name as created_by_admin_name
+        FROM price_modification_requests pmr
+        LEFT JOIN tour_bookings tb ON pmr.booking_id = tb.booking_id
+        LEFT JOIN agents a ON tb.agent_id = a.id
+        LEFT JOIN employees e ON pmr.created_by_admin = e.id
+        <where>
+            AND tb.agent_id = #{agentId}
+            AND pmr.booking_id = #{bookingId}
+            <if test="status != null and status != ''">
+                AND pmr.status = #{status}
+            </if>
+        </where>
+        ORDER BY pmr.created_at DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <!-- 代理商根据订单ID统计 -->
+    <select id="countByBookingId" resultType="int">
+        SELECT COUNT(*)
+        FROM price_modification_requests pmr
+        LEFT JOIN tour_bookings tb ON pmr.booking_id = tb.booking_id
+        <where>
+            AND tb.agent_id = #{agentId}
+            AND pmr.booking_id = #{bookingId}
+            <if test="status != null and status != ''">
+                AND pmr.status = #{status}
+            </if>
+        </where>
+    </select>
+
+</mapper>

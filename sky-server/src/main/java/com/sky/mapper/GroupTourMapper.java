@@ -472,4 +472,28 @@ public interface GroupTourMapper {
             "departure_address AS departureAddress, guide_fee AS guideFee, guide_id AS guideId " +
             "FROM group_tours WHERE is_active = 1 ORDER BY id LIMIT 10")
     List<GroupTourDTO> findAllActive();
+
+    // ===== Dashboard统计相关方法 =====
+    
+    /**
+     * 获取团队游产品总数
+     * @return 产品总数
+     */
+    @Select("SELECT COUNT(*) FROM group_tours")
+    Integer count();
+
+    /**
+     * 根据状态获取团队游产品数量
+     * @param status 状态
+     * @return 产品数量
+     */
+    @Select("SELECT COUNT(*) FROM group_tours WHERE is_active = #{status}")
+    Integer countByStatus(Integer status);
+
+    /**
+     * 获取团队游产品平均价格
+     * @return 平均价格
+     */
+    @Select("SELECT AVG(price) FROM group_tours WHERE is_active = 1")
+    java.math.BigDecimal getAveragePrice();
 } 

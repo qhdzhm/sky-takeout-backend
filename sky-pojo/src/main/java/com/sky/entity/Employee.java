@@ -1,6 +1,5 @@
 package com.sky.entity;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -48,4 +47,15 @@ public class Employee implements Serializable {
     private String guideLevel; // 导游等级
     private String department; // 部门
     private Boolean status; // 状态
+    
+    // ====== 操作员分工管理字段 ======
+    
+    // 操作员类型：tour_master-排团主管, hotel_operator-酒店专员, general-普通员工
+    private String operatorType;
+    
+    // 是否是当前排团主管（全局唯一，系统中只能有一个）
+    private Boolean isTourMaster;
+    
+    // 是否有分配订单权限
+    private Boolean canAssignOrders;
 }

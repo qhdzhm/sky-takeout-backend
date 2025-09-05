@@ -63,4 +63,28 @@ public interface DayTourMapper {
      */
     @Update("update day_tours set is_active = #{status} where day_tour_id = #{id}")
     void updateStatus(Integer id, Integer status);
+
+    // ===== Dashboard统计相关方法 =====
+    
+    /**
+     * 获取一日游产品总数
+     * @return 产品总数
+     */
+    @Select("SELECT COUNT(*) FROM day_tours")
+    Integer count();
+
+    /**
+     * 根据状态获取一日游产品数量
+     * @param status 状态
+     * @return 产品数量
+     */
+    @Select("SELECT COUNT(*) FROM day_tours WHERE is_active = #{status}")
+    Integer countByStatus(Integer status);
+
+    /**
+     * 获取一日游产品平均价格
+     * @return 平均价格
+     */
+    @Select("SELECT AVG(price) FROM day_tours WHERE is_active = 1")
+    java.math.BigDecimal getAveragePrice();
 } 

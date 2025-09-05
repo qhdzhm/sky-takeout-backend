@@ -20,6 +20,14 @@ import com.sky.dto.GroupTourDTO;
 import com.sky.entity.DayTour;
 import com.sky.service.PassengerService;
 import com.sky.service.TourBookingService;
+import com.sky.service.AgentCreditService;
+import com.sky.service.PriceModificationService;
+import com.sky.vo.AgentCreditVO;
+import com.sky.mapper.PaymentAuditLogMapper;
+import com.sky.mapper.PriceModificationRequestMapper;
+import com.sky.entity.PaymentAuditLog;
+import com.sky.entity.PriceModificationRequest;
+import java.util.UUID;
 import com.sky.service.EmailService;
 import com.sky.service.HotelPriceService;
 import com.sky.service.NotificationService;
@@ -84,8 +92,7 @@ public class TourBookingServiceImpl implements TourBookingService {
     @Autowired
     private HotelPriceService hotelPriceService;
 
-    @Autowired
-    private NotificationService notificationService;
+    // 已在上方声明
 
     @Autowired
     private UserMapper userMapper;
@@ -103,6 +110,15 @@ public class TourBookingServiceImpl implements TourBookingService {
     private TourItineraryMapper tourItineraryMapper;
     
     @Autowired
+    private AgentCreditService agentCreditService;
+    
+    @Autowired
+    private PaymentAuditLogMapper paymentAuditLogMapper;
+    
+    @Autowired
+    private PriceModificationRequestMapper priceModificationRequestMapper;
+    
+    @Autowired
     private EmailService emailService;
     
     @Autowired
@@ -116,6 +132,9 @@ public class TourBookingServiceImpl implements TourBookingService {
     
     @Autowired
     private OrderService orderService;
+
+    @Autowired
+    private NotificationService notificationService;
 
     /**
      * 根据ID查询旅游订单
@@ -307,25 +326,9 @@ public class TourBookingServiceImpl implements TourBookingService {
         } catch (Exception e) {
             // BaseContext调用失败，但现在订单创建需要认证，这不应该发生
             log.error("❌ 获取用户认证信息失败，这是一个异常情况！", e);
-            
-            // 检查前端是否传递了有效的代理商ID
-            if (tourBookingDTO.getAgentId() != null) {
-                log.warn("⚠️ BaseContext失败但前端提供了代理商ID: {}, 可能存在认证问题", tourBookingDTO.getAgentId());
-                // 暂时使用前端传递的代理商ID，但记录警告
-                tourBooking.setAgentId(tourBookingDTO.getAgentId());
-                log.info("临时使用前端传递的代理商ID: {}", tourBookingDTO.getAgentId());
-            } else {
-                log.error("❌ BaseContext失败且前端未提供代理商ID，这是游客模式但订单创建已不支持游客模式");
-                tourBooking.setAgentId(null);
-            }
-            
-            // 用户ID处理
-            if (tourBookingDTO.getUserId() != null) {
-                tourBooking.setUserId(tourBookingDTO.getUserId());
-                log.info("异常情况下使用前端传递的用户ID: {}", tourBookingDTO.getUserId());
-            } else {
-                tourBooking.setUserId(null);
-            }
+            // 不再信任前端传递的代理商ID，订单创建必须基于已验证的BaseContext
+            log.error("❌ 获取用户认证信息失败，拒绝创建订单：不信任前端提供的agentId/operatorId");
+            throw new BusinessException("未登录或认证无效，无法创建订单");
         }
         
         // 确保groupSize被设置
@@ -551,10 +554,12 @@ public class TourBookingServiceImpl implements TourBookingService {
             return false;
         }
         
-        // 🔍 获取更新前的订单状态（用于支付状态变化检测）
+        // 🔍 获取更新前的订单状态（用于支付状态变化检测和价格变化检测）
         TourBooking originalBooking = tourBookingMapper.getById(tourBookingDTO.getBookingId());
         String originalPaymentStatus = originalBooking != null ? originalBooking.getPaymentStatus() : null;
-        log.info("🔍 订单更新前支付状态检查，订单ID: {}, 原始支付状态: {}", tourBookingDTO.getBookingId(), originalPaymentStatus);
+        BigDecimal originalPrice = originalBooking != null ? originalBooking.getTotalPrice() : null;
+        log.info("🔍 订单更新前状态检查，订单ID: {}, 原始支付状态: {}, 原始价格: {}", 
+                tourBookingDTO.getBookingId(), originalPaymentStatus, originalPrice);
         
         // 获取必要的字段值
         Integer tourId = tourBookingDTO.getTourId();
@@ -566,8 +571,8 @@ public class TourBookingServiceImpl implements TourBookingService {
             groupSize = tourBookingDTO.getPassengers().size();
         }
         
-        // 如果修改了旅游类型、旅游ID或人数，重新计算价格
-        if (tourId != null || tourType != null || groupSize != null) {
+        // 仅当未显式传入总价时才自动重算价格；若前端（如管理后台）已给出 totalPrice，则尊重手工改价
+        if (tourBookingDTO.getTotalPrice() == null && (tourId != null || tourType != null || groupSize != null)) {
             
             // 获取当前订单信息，确保有必要的数据用于价格计算
             TourBooking currentBooking = tourBookingMapper.getById(tourBookingDTO.getBookingId());
@@ -597,6 +602,15 @@ public class TourBookingServiceImpl implements TourBookingService {
         
         // 更新订单基本信息
         tourBookingMapper.update(tourBooking);
+
+        // 若传入了 totalPrice，则再强制落库一次，避免通用 update 映射出于安全策略忽略了价格字段
+        if (tourBookingDTO.getTotalPrice() != null) {
+            try {
+                tourBookingMapper.updateTotalPrice(tourBookingDTO.getBookingId(), tourBookingDTO.getTotalPrice());
+            } catch (Exception e) {
+                log.warn("价格字段单独更新失败，将以通用更新为准: bookingId={}, err={}", tourBookingDTO.getBookingId(), e.getMessage());
+            }
+        }
         
         // 🔍 获取更新后的订单状态（检测支付状态变化）
         TourBooking updatedBooking = tourBookingMapper.getById(tourBookingDTO.getBookingId());
@@ -624,7 +638,7 @@ public class TourBookingServiceImpl implements TourBookingService {
             }
         }
         // 🆕 检测支付状态变化：如果从未支付变为已支付，同步订单到排团表
-        else if (!"paid".equals(originalPaymentStatus) && "paid".equals(newPaymentStatus)) {
+        if (!"paid".equals(originalPaymentStatus) && "paid".equals(newPaymentStatus)) {
             try {
                 log.info("🎉 检测到支付状态从未支付变为已支付，开始同步订单到排团表，订单ID: {}", tourBookingDTO.getBookingId());
                 
@@ -643,6 +657,56 @@ public class TourBookingServiceImpl implements TourBookingService {
             }
         }
         
+        // 🆕 处理价格变化：降价自动退款，涨价需要确认
+        try {
+            if (tourBookingDTO.getTotalPrice() != null && originalPrice != null) {
+                BigDecimal newPrice = tourBookingDTO.getTotalPrice();
+                BigDecimal priceDifference = newPrice.subtract(originalPrice);
+                
+                // 只有价格真的发生变化时才处理
+                if (priceDifference.compareTo(BigDecimal.ZERO) != 0) {
+                    log.info("💰 检测到价格变化：订单ID={}, 原价={}, 新价={}, 差额={}", 
+                            tourBookingDTO.getBookingId(), originalPrice, newPrice, priceDifference);
+                    
+                    String changeReason = tourBookingDTO.getSpecialRequests() != null ? 
+                            tourBookingDTO.getSpecialRequests().trim() : "管理员调价";
+                    
+                    if (priceDifference.compareTo(BigDecimal.ZERO) < 0) {
+                        // 降价：自动退款 + 通知
+                        processPriceDecrease(originalBooking, newPrice, priceDifference.abs(), changeReason);
+                    } else {
+                        // 涨价：创建确认请求 + 通知
+                        processPriceIncrease(originalBooking, newPrice, priceDifference, changeReason);
+                    }
+                    return true; // 价格变化处理完成，提前返回
+                }
+            }
+            
+            // 非价格变化的其他修改通知
+            String changeTitle = "订单修改";
+            String changeDetail = "订单信息已修改";
+            if (tourBookingDTO.getSpecialRequests() != null) {
+                changeDetail = "备注更新：" + tourBookingDTO.getSpecialRequests();
+            } else if (tourBookingDTO.getPickupLocation() != null || tourBookingDTO.getDropoffLocation() != null) {
+                changeDetail = "接送信息已更新";
+            } else if (tourBookingDTO.getPassengers() != null) {
+                changeDetail = "乘客信息已更新";
+            }
+            TourBooking notifyBooking = tourBookingMapper.getById(tourBookingDTO.getBookingId());
+            if (notifyBooking != null) {
+                notificationService.createAgentOrderChangeNotification(
+                        notifyBooking.getAgentId() != null ? notifyBooking.getAgentId().longValue() : null,
+                        notifyBooking.getOperatorId(),
+                        notifyBooking.getBookingId().longValue(),
+                        notifyBooking.getOrderNumber(),
+                        changeTitle,
+                        changeDetail
+                );
+            }
+        } catch (Exception e) {
+            log.error("❌ 处理订单变更失败: {}", e.getMessage(), e);
+        }
+
         // 🔄 同步更新排团表（管理后台修改订单）
         try {
             TourBooking currentBooking = tourBookingMapper.getById(tourBookingDTO.getBookingId());
@@ -757,9 +821,13 @@ public class TourBookingServiceImpl implements TourBookingService {
                 return false;
             }
             
-            // 更新订单状态为已取消
-            tourBooking.setStatus("cancelled");
-            tourBooking.setUpdatedAt(LocalDateTime.now());
+            // 使用专门的方法更新订单状态为已取消
+            int statusUpdateResult = tourBookingMapper.updateStatus(bookingId, "cancelled");
+            if (statusUpdateResult <= 0) {
+                log.error("更新订单状态失败，订单ID: {}", bookingId);
+                return false;
+            }
+            log.info("✅ 订单状态已更新为cancelled，影响行数: {}", statusUpdateResult);
             
             // 添加取消原因到special_requests字段
             String cancelReason = "用户取消 - " + LocalDateTime.now();
@@ -770,8 +838,9 @@ public class TourBookingServiceImpl implements TourBookingService {
                 specialRequests = "取消原因: " + cancelReason;
             }
             tourBooking.setSpecialRequests(specialRequests);
+            tourBooking.setUpdatedAt(LocalDateTime.now());
             
-            // 更新订单
+            // 更新其他字段（除了状态）
             tourBookingMapper.update(tourBooking);
             
             // 🔔 发送订单取消通知
@@ -820,6 +889,18 @@ public class TourBookingServiceImpl implements TourBookingService {
         } catch (Exception e) {
             log.error("❌ 发送订单确认通知失败: {}", e.getMessage(), e);
         }
+
+        // 🆕 同步通知代理端（主号必收，若有操作员，仅通知该操作员）
+        try {
+            notificationService.createAgentOrderChangeNotification(
+                    tourBooking.getAgentId() != null ? tourBooking.getAgentId().longValue() : null,
+                    tourBooking.getOperatorId(),
+                    tourBooking.getBookingId().longValue(),
+                    tourBooking.getOrderNumber(),
+                    "订单已确认",
+                    "订单已确认，可进行支付"
+            );
+        } catch (Exception ignore) {}
         
         return true;
     }
@@ -855,6 +936,18 @@ public class TourBookingServiceImpl implements TourBookingService {
         } catch (Exception e) {
             log.error("❌ 发送订单完成通知失败: {}", e.getMessage(), e);
         }
+
+        // 🆕 同步通知代理端
+        try {
+            notificationService.createAgentOrderChangeNotification(
+                    tourBooking.getAgentId() != null ? tourBooking.getAgentId().longValue() : null,
+                    tourBooking.getOperatorId(),
+                    tourBooking.getBookingId().longValue(),
+                    tourBooking.getOrderNumber(),
+                    "订单已完成",
+                    "订单已完成，感谢您的配合"
+            );
+        } catch (Exception ignore) {}
         
         return true;
     }
@@ -986,6 +1079,18 @@ public class TourBookingServiceImpl implements TourBookingService {
                 log.error("❌ 发送订单支付成功通知失败: {}", e.getMessage(), e);
             }
             
+            // 🆕 通知代理商端：支付成功
+            try {
+                notificationService.createAgentOrderChangeNotification(
+                        tourBooking.getAgentId() != null ? tourBooking.getAgentId().longValue() : null,
+                        tourBooking.getOperatorId(),
+                        tourBooking.getBookingId().longValue(),
+                        tourBooking.getOrderNumber(),
+                        "支付成功",
+                        String.format("已支付金额：$%.2f", tourBooking.getTotalPrice() != null ? tourBooking.getTotalPrice() : BigDecimal.ZERO)
+                );
+            } catch (Exception ignore) {}
+
             // 🔔 支付成功后异步发送确认信和发票邮件（不阻塞响应）
             try {
                 emailAsyncService.sendEmailsAfterPaymentAsync(bookingId.longValue(), tourBooking);
@@ -1194,8 +1299,26 @@ public class TourBookingServiceImpl implements TourBookingService {
                 // 继续执行后续逻辑，不中断订单更新
             }
         }
+
+        // 🆕 给代理商端发送订单变更通知（价格/备注/接送等修改）
+        try {
+            String detail = "订单信息已更新";
+            if (updateDTO.getSpecialRequests() != null) {
+                detail = "备注更新：" + updateDTO.getSpecialRequests();
+            } else if (updateDTO.getPickupLocation() != null || updateDTO.getDropoffLocation() != null) {
+                detail = "接送信息已更新";
+            }
+            notificationService.createAgentOrderChangeNotification(
+                    updatedBooking.getAgentId() != null ? updatedBooking.getAgentId().longValue() : null,
+                    updatedBooking.getOperatorId(),
+                    updatedBooking.getBookingId().longValue(),
+                    updatedBooking.getOrderNumber(),
+                    "订单修改",
+                    detail
+            );
+        } catch (Exception ignore) {}
         // 🆕 检测支付状态变化：如果从未支付变为已支付，同步订单到排团表
-        else if (!"paid".equals(originalPaymentStatus) && "paid".equals(newPaymentStatus)) {
+        if (!"paid".equals(originalPaymentStatus) && "paid".equals(newPaymentStatus)) {
             try {
                 log.info("🎉 用户端检测到支付状态从未支付变为已支付，开始同步订单到排团表，订单ID: {}", updateDTO.getBookingId());
                 
@@ -1527,13 +1650,13 @@ public class TourBookingServiceImpl implements TourBookingService {
             // 直接更新排团表中该订单的所有记录的联系人信息
             int updatedCount = tourScheduleOrderMapper.updateContactInfoByBookingId(
                 bookingId, finalContactPerson, finalContactPhone);
-            
+
             if (updatedCount > 0) {
                 log.info("✅ 成功更新排团表联系人信息: 订单ID={}, 更新记录数={}, 联系人=\"{}\", 电话=\"{}\"", 
                         bookingId, updatedCount, finalContactPerson, finalContactPhone);
             } else {
                 log.warn("⚠️ 未找到需要更新的排团记录: 订单ID={}", bookingId);
-            }
+            } 
         } catch (Exception e) {
             log.error("❌ 直接更新排团表联系人信息失败: 订单ID={}, 错误: {}", bookingId, e.getMessage(), e);
             throw e;
@@ -3020,35 +3143,26 @@ public class TourBookingServiceImpl implements TourBookingService {
                 throw new BusinessException("订单确认失败，请检查订单状态或价格设置");
             }
             
-            // 7. 发送确认单给客户（异步）
+            // 7. 不在确认阶段发送确认单邮件；仅在付款成功后发送（见 payBooking -> sendEmailsAfterPaymentAsync）
+            log.info("📧 已按策略禁用‘确认时发邮件’，将于付款成功后自动发送确认单与发票: 订单ID={}", bookingId);
+
+            // 同步给代理端一条订单变化通知（包含价格调整信息）
             try {
-                EmailConfirmationDTO emailDTO = new EmailConfirmationDTO();
-                emailDTO.setOrderId(Long.valueOf(bookingId));
-                
-                // 根据订单类型设置收件人类型
-                if (tourBooking.getAgentId() != null && tourBooking.getOperatorId() != null) {
-                    // 操作员下单
-                    emailDTO.setRecipientType("operator");
-                    emailDTO.setAgentId(Long.valueOf(tourBooking.getAgentId()));
-                    emailDTO.setOperatorId(tourBooking.getOperatorId());
-                } else if (tourBooking.getAgentId() != null) {
-                    // 代理商主账号下单
-                    emailDTO.setRecipientType("agent");
-                    emailDTO.setAgentId(Long.valueOf(tourBooking.getAgentId()));
-                } else {
-                    // 普通用户下单 - 暂时跳过邮件发送
-                    log.info("普通用户订单，暂不发送确认邮件，订单ID: {}", bookingId);
-                    emailDTO = null;
-                }
-                
-                if (emailDTO != null) {
-                    // 🚀 异步发送确认邮件（不阻塞主线程）
-                    emailAsyncService.sendConfirmationEmailAsync(emailDTO);
-                    log.info("✅ 确认邮件已提交异步发送，订单ID: {}", bookingId);
-                }
+                String title = adjustedPrice != null ? "订单已确认并调整价格" : "订单已确认";
+                String detail = adjustedPrice != null
+                        ? String.format("订单已确认，价格调整为 $%.2f。%s", adjustedPrice,
+                                (adjustmentReason != null ? ("原因: " + adjustmentReason) : ""))
+                        : "订单已确认，可进行支付";
+                notificationService.createAgentOrderChangeNotification(
+                        tourBooking.getAgentId() != null ? tourBooking.getAgentId().longValue() : null,
+                        tourBooking.getOperatorId(),
+                        tourBooking.getBookingId().longValue(),
+                        tourBooking.getOrderNumber(),
+                        title,
+                        detail
+                );
             } catch (Exception e) {
-                log.error("❌ 发送确认邮件失败，但订单确认成功，订单ID: {}, 错误: {}", bookingId, e.getMessage());
-                // 不影响订单确认流程
+                log.warn("⚠️ 创建代理通知失败（确认阶段）: {}", e.getMessage());
             }
             
             log.info("✅ 订单确认完成，订单号: {}, 确认时间: {}", tourBooking.getOrderNumber(), LocalDateTime.now());
@@ -3093,5 +3207,248 @@ public class TourBookingServiceImpl implements TourBookingService {
         }
         
         return "customer@example.com"; // 默认邮箱
+    }
+
+    /**
+     * 用户隐藏订单（软删除）
+     * 
+     * @param bookingId 订单ID
+     * @param userId 用户ID
+     * @return 是否成功
+     */
+    @Override
+    @Transactional
+    public Boolean hideOrder(Integer bookingId, Integer userId) {
+        log.info("用户隐藏订单: bookingId={}, userId={}", bookingId, userId);
+        
+        try {
+            // 检查订单是否存在和权限
+            TourBooking tourBooking = tourBookingMapper.getById(bookingId);
+            if (tourBooking == null) {
+                log.error("订单不存在: {}", bookingId);
+                return false;
+            }
+            
+            // 权限验证：只能隐藏自己的订单
+            if (!userId.equals(tourBooking.getUserId()) && !userId.equals(tourBooking.getAgentId())) {
+                log.error("无权限隐藏此订单: bookingId={}, userId={}, orderUserId={}, orderAgentId={}", 
+                         bookingId, userId, tourBooking.getUserId(), tourBooking.getAgentId());
+                return false;
+            }
+            
+            // 只有已取消的订单才能隐藏
+            if (!"cancelled".equals(tourBooking.getStatus())) {
+                log.error("只能隐藏已取消的订单: bookingId={}, status={}", bookingId, tourBooking.getStatus());
+                return false;
+            }
+            
+            // 执行隐藏操作
+            int result = tourBookingMapper.hideOrderByUser(bookingId, userId);
+            if (result > 0) {
+                log.info("✅ 订单隐藏成功: bookingId={}", bookingId);
+                return true;
+            } else {
+                log.error("❌ 订单隐藏失败: bookingId={}", bookingId);
+                return false;
+            }
+        } catch (Exception e) {
+            log.error("隐藏订单出错: bookingId={}, userId={}, 错误: {}", bookingId, userId, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * 用户恢复已隐藏的订单
+     * 
+     * @param bookingId 订单ID
+     * @param userId 用户ID
+     * @return 是否成功
+     */
+    @Override
+    @Transactional
+    public Boolean restoreOrder(Integer bookingId, Integer userId) {
+        log.info("用户恢复隐藏订单: bookingId={}, userId={}", bookingId, userId);
+        
+        try {
+            // 执行恢复操作
+            int result = tourBookingMapper.restoreOrderByUser(bookingId, userId);
+            if (result > 0) {
+                log.info("✅ 订单恢复成功: bookingId={}", bookingId);
+                return true;
+            } else {
+                log.error("❌ 订单恢复失败（可能订单不存在或无权限）: bookingId={}", bookingId);
+                return false;
+            }
+        } catch (Exception e) {
+            log.error("恢复订单出错: bookingId={}, userId={}, 错误: {}", bookingId, userId, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * 处理降价：自动退款 + 通知
+     * 
+     * @param booking 当前订单信息
+     * @param newPrice 新价格
+     * @param refundAmount 退款金额（绝对值）
+     * @param reason 修改原因
+     */
+    @Transactional
+    private void processPriceDecrease(TourBooking booking, BigDecimal newPrice, BigDecimal refundAmount, String reason) {
+        log.info("🔻 处理降价：订单ID={}, 原价={}, 新价={}, 退款={}", 
+                booking.getBookingId(), booking.getTotalPrice(), newPrice, refundAmount);
+
+        try {
+            // 1. 更新订单价格
+            booking.setTotalPrice(newPrice);
+            tourBookingMapper.updateTotalPrice(booking.getBookingId(), newPrice);
+
+            // 2. 退款到代理商信用账户 - 获取余额信息
+            BigDecimal balanceBefore = null;
+            BigDecimal balanceAfter = null;
+            
+            if (booking.getAgentId() != null) {
+                // 获取退款前余额
+                AgentCreditVO creditInfoBefore = agentCreditService.getCreditInfo(Long.valueOf(booking.getAgentId()));
+                balanceBefore = creditInfoBefore != null ? creditInfoBefore.getDepositBalance() : BigDecimal.ZERO;
+                
+                boolean refundResult = agentCreditService.addCredit(
+                        Long.valueOf(booking.getAgentId()), 
+                        refundAmount, 
+                        String.format("订单%s降价退款：%s", booking.getOrderNumber(), reason)
+                );
+                
+                if (!refundResult) {
+                    log.error("❌ 退款失败：代理商ID={}, 退款金额={}", booking.getAgentId(), refundAmount);
+                    throw new BusinessException("退款处理失败");
+                }
+                
+                // 获取退款后余额
+                AgentCreditVO creditInfoAfter = agentCreditService.getCreditInfo(Long.valueOf(booking.getAgentId()));
+                balanceAfter = creditInfoAfter != null ? creditInfoAfter.getDepositBalance() : BigDecimal.ZERO;
+            }
+
+            // 3. 记录审计日志 - 包含完整操作者和余额信息
+            Integer currentAdminId = getCurrentAdminId();
+            String currentUsername = BaseContext.getCurrentUsername();
+            String operatorInfo = String.format("管理员: %s (ID: %s)", 
+                    currentUsername != null ? currentUsername : "未知", currentAdminId);
+            
+            PaymentAuditLog auditLog = PaymentAuditLog.builder()
+                    .requestId(UUID.randomUUID().toString())
+                    .action("price_decrease")
+                    .bookingId(booking.getBookingId())
+                    .orderNumber(booking.getOrderNumber())
+                    .agentId(booking.getAgentId() != null ? Long.valueOf(booking.getAgentId()) : null)
+                    .operatorId(currentAdminId != null ? Long.valueOf(currentAdminId) : null)
+                    .operatorType("admin")
+                    .operatorName(currentUsername != null ? currentUsername : "管理员")
+                    .amount(refundAmount.negate()) // 负数表示退款
+                    .balanceBefore(balanceBefore)
+                    .balanceAfter(balanceAfter)
+                    .note(String.format("订单降价自动退款：%s [操作人: %s]", reason, operatorInfo))
+                    .ip(getClientIP())
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            paymentAuditLogMapper.insert(auditLog);
+
+            // 4. 发送通知给代理商
+            String notificationMessage = String.format(
+                    "您的订单 %s 价格已调整，降价 ¥%.2f，已自动退款到信用账户。原因：%s",
+                    booking.getOrderNumber(), refundAmount, reason
+            );
+            notificationService.createAgentOrderChangeNotification(
+                    booking.getAgentId() != null ? booking.getAgentId().longValue() : null,
+                    booking.getOperatorId(),
+                    booking.getBookingId().longValue(),
+                    booking.getOrderNumber(),
+                    "订单降价通知",
+                    notificationMessage
+            );
+
+            log.info("✅ 降价处理完成：订单ID={}, 退款金额={}", booking.getBookingId(), refundAmount);
+
+        } catch (Exception e) {
+            log.error("❌ 降价处理失败：订单ID={}, 错误: {}", booking.getBookingId(), e.getMessage(), e);
+            throw new BusinessException("降价处理失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 处理涨价：创建确认请求 + 通知
+     * 
+     * @param booking 当前订单信息
+     * @param newPrice 新价格
+     * @param increaseAmount 涨价金额
+     * @param reason 修改原因
+     */
+    @Transactional
+    private void processPriceIncrease(TourBooking booking, BigDecimal newPrice, BigDecimal increaseAmount, String reason) {
+        log.info("🔺 处理涨价：订单ID={}, 原价={}, 新价={}, 涨价={}", 
+                booking.getBookingId(), booking.getTotalPrice(), newPrice, increaseAmount);
+
+        try {
+            // 1. 创建价格修改请求
+            PriceModificationRequest request = PriceModificationRequest.builder()
+                    .bookingId(booking.getBookingId())
+                    .originalPrice(booking.getTotalPrice())
+                    .newPrice(newPrice)
+                    .priceDifference(increaseAmount)
+                    .modificationType("increase")
+                    .status("pending")
+                    .reason(reason)
+                    .createdByAdmin(getCurrentAdminId())
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            priceModificationRequestMapper.insert(request);
+
+            // 2. 涨价不立即记录audit日志，等用户确认后再记录
+            log.info("💡 涨价请求已创建，audit记录将在用户确认后生成");
+
+            // 3. 发送通知给代理商
+            String notificationMessage = String.format(
+                    "您的订单 %s 价格需要调整，涨价 ¥%.2f，请在订单详情中确认是否同意补款。原因：%s",
+                    booking.getOrderNumber(), increaseAmount, reason
+            );
+            notificationService.createAgentOrderChangeNotification(
+                    booking.getAgentId() != null ? booking.getAgentId().longValue() : null,
+                    booking.getOperatorId(),
+                    booking.getBookingId().longValue(),
+                    booking.getOrderNumber(),
+                    "订单涨价确认",
+                    notificationMessage
+            );
+
+            log.info("✅ 涨价请求创建完成：订单ID={}, 涨价金额={}", booking.getBookingId(), increaseAmount);
+
+        } catch (Exception e) {
+            log.error("❌ 涨价请求创建失败：订单ID={}, 错误: {}", booking.getBookingId(), e.getMessage(), e);
+            throw new BusinessException("涨价请求创建失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取当前管理员ID
+     */
+    private Integer getCurrentAdminId() {
+        try {
+            Long currentId = BaseContext.getCurrentId();
+            return currentId != null ? currentId.intValue() : null;
+        } catch (Exception e) {
+            log.warn("获取管理员ID失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 获取客户端IP
+     */
+    private String getClientIP() {
+        try {
+            // 这里可以从请求上下文获取IP，暂时返回默认值
+            return "127.0.0.1";
+        } catch (Exception e) {
+            return "unknown";
+        }
     }
 } 

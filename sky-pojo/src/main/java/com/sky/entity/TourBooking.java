@@ -155,4 +155,32 @@ public class TourBooking implements Serializable {
     
     // 用户选择的可选项目（JSON字符串）
     private String selectedOptionalTours;
+    
+    // 用户端是否隐藏（软删除标记）
+    private Boolean userHidden;
+    
+    // 用户隐藏时间
+    private LocalDateTime userHiddenAt;
+    
+    // ====== 操作员分工管理字段 ======
+    
+    // 分配给的酒店专员ID
+    private Long assignedOperatorId;
+    
+    // 分配时间
+    private LocalDateTime assignedAt;
+    
+    // 分配人ID（排团主管）
+    private Long assignedBy;
+    
+    // 分配状态（unassigned：未分配，assigned：已分配，transferred：已转移）
+    private String assignmentStatus;
+    
+    // ====== 关联查询字段（非数据库字段） ======
+    
+    // 分配的操作员姓名
+    private String assignedOperatorName;
+    
+    // 分配人姓名
+    private String assignedByName;
 }

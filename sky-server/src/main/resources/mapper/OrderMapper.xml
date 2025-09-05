@@ -41,6 +41,8 @@
         <result column="total_price" property="totalPrice"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
+        <!-- 可选行程选择 -->
+        <result column="selected_optional_tours" property="selectedOptionalTours"/>
         <!-- 附加信息 -->
         <result column="tour_name" property="tourName"/>
         <result column="tour_location" property="tourLocation"/>
@@ -61,7 +63,7 @@
             tb.service_type, tb.group_size, tb.adult_count, tb.child_count, tb.luggage_count, tb.passenger_contact, tb.contact_person,
             tb.contact_phone, tb.hotel_level, tb.room_type, tb.hotel_room_count, tb.room_details,
             tb.special_requests, tb.itinerary_details, tb.status, tb.payment_status, tb.total_price,
-            tb.created_at, tb.updated_at,
+            tb.selected_optional_tours, tb.created_at, tb.updated_at,
             CASE 
                 WHEN tb.tour_type = 'day_tour' THEN dt.name
                 WHEN tb.tour_type = 'group_tour' THEN gt.title
@@ -129,6 +131,9 @@
     <select id="pageQuery" resultMap="orderVoMap" parameterType="com.sky.dto.OrderPageQueryDTO">
         <include refid="baseOrderSelect"/>
         <where>
+            <!-- 🔒 重要：过滤掉用户已隐藏的订单 -->
+            AND (tb.user_hidden IS NULL OR tb.user_hidden = false)
+            
             <if test="userId != null">
                 AND tb.user_id = #{userId}
             </if>

@@ -82,4 +82,16 @@ public interface NotificationService {
     void createDetailedOrderNotification(Long orderId, String operatorName, String operatorType, 
                                        String contactPerson, String orderNumber, 
                                        String actionType, String actionDetail);
+
+    /**
+     * 代理商端订单变更通知（定向给agent或operator）
+     * @param agentId 代理商ID（必填）
+     * @param operatorId 操作员ID（可选，为空表示主号）
+     * @param orderId 订单ID
+     * @param orderNumber 订单号
+     * @param changeTitle 标题
+     * @param changeDetail 变更详情
+     */
+    void createAgentOrderChangeNotification(Long agentId, Long operatorId, Long orderId,
+                                            String orderNumber, String changeTitle, String changeDetail);
 } 

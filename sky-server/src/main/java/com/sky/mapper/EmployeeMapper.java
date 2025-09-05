@@ -101,4 +101,31 @@ public interface EmployeeMapper {
      */
     @Update("update employees set current_customer_count = #{count}, update_time = now() where id = #{id} and role in (1, 2, 3)")
     void updateCustomerServiceCurrentCount(Long id, Integer count);
+
+    // ===== Dashboard统计相关方法 =====
+    
+    /**
+     * 获取员工总数
+     * @return 员工总数
+     */
+    @Select("SELECT COUNT(*) FROM employees")
+    Integer count();
+
+    /**
+     * 根据状态获取员工数量
+     * @param status 员工状态
+     * @return 员工数量
+     */
+    @Select("SELECT COUNT(*) FROM employees WHERE status = #{status}")
+    Integer countByStatus(Integer status);
+
+    // ===== 操作员分工相关方法 =====
+
+    /**
+     * 根据操作员类型查询员工
+     * @param operatorType 操作员类型（如 hotel_operator, tour_master）
+     * @return 对应类型的员工列表
+     */
+    @Select("SELECT * FROM employees WHERE operator_type = #{operatorType} AND status = 1 ORDER BY name")
+    List<Employee> findByOperatorType(String operatorType);
 }

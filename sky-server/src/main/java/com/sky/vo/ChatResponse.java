@@ -57,117 +57,146 @@ public class ChatResponse {
      */
     private Integer messageType;
     
+    // Setter methods for compatibility
+    public void setSuccess(Boolean success) {
+        this.success = success;
+    }
+    
+    public void setMessage(String message) {
+        this.message = message;
+    }
+    
+    public void setErrorCode(String errorCode) {
+        this.errorCode = errorCode;
+    }
+    
+    public void setExtractedData(String extractedData) {
+        this.extractedData = extractedData;
+    }
+    
+    public void setRedirectUrl(String redirectUrl) {
+        this.redirectUrl = redirectUrl;
+    }
+    
+    public void setOrderData(String orderData) {
+        this.orderData = orderData;
+    }
+    
+    public void setMessageType(Integer messageType) {
+        this.messageType = messageType;
+    }
+
     /**
      * 创建成功响应
      */
     public static ChatResponse success(String message) {
-        return ChatResponse.builder()
-                .success(true)
-                .message(message)
-                .messageType(1) // 默认为普通对话
-                .build();
+        ChatResponse r = new ChatResponse();
+        r.setSuccess(true);
+        r.setMessage(message);
+        r.setMessageType(1);
+        return r;
     }
     
     /**
      * 创建错误响应
      */
     public static ChatResponse error(String message) {
-        return ChatResponse.builder()
-                .success(false)
-                .message(message)
-                .messageType(1)
-                .build();
+        ChatResponse r = new ChatResponse();
+        r.setSuccess(false);
+        r.setMessage(message);
+        r.setMessageType(1);
+        return r;
     }
     
     /**
      * 创建错误响应（带错误代码）
      */
     public static ChatResponse error(String message, String errorCode) {
-        return ChatResponse.builder()
-                .success(false)
-                .message(message)
-                .errorCode(errorCode)
-                .messageType(1)
-                .build();
+        ChatResponse r = new ChatResponse();
+        r.setSuccess(false);
+        r.setMessage(message);
+        r.setErrorCode(errorCode);
+        r.setMessageType(1);
+        return r;
     }
     
     /**
      * 创建订单处理成功响应
      */
     public static ChatResponse orderSuccess(String message, String extractedData, String redirectUrl) {
-        return ChatResponse.builder()
-                .success(true)
-                .message(message)
-                .extractedData(extractedData)
-                .redirectUrl(redirectUrl)
-                .messageType(2) // 订单处理消息
-                .build();
+        ChatResponse r = new ChatResponse();
+        r.setSuccess(true);
+        r.setMessage(message);
+        r.setExtractedData(extractedData);
+        r.setRedirectUrl(redirectUrl);
+        r.setMessageType(2);
+        return r;
     }
     
     /**
      * 创建产品推荐响应
      */
     public static ChatResponse productRecommendation(String message, String productData) {
-        return ChatResponse.builder()
-                .success(true)
-                .message(message)
-                .orderData(productData)
-                .messageType(3) // 产品推荐消息
-                .build();
+        ChatResponse r = new ChatResponse();
+        r.setSuccess(true);
+        r.setMessage(message);
+        r.setOrderData(productData);
+        r.setMessageType(3);
+        return r;
     }
     
     /**
      * 创建天气查询响应
      */
     public static ChatResponse weatherResponse(String message) {
-        return ChatResponse.builder()
-                .success(true)
-                .message(message)
-                .messageType(4) // 天气查询消息
-                .build();
+        ChatResponse r = new ChatResponse();
+        r.setSuccess(true);
+        r.setMessage(message);
+        r.setMessageType(4);
+        return r;
     }
     
     /**
      * 创建汇率查询响应
      */
     public static ChatResponse exchangeRateResponse(String message) {
-        return ChatResponse.builder()
-                .success(true)
-                .message(message)
-                .messageType(5) // 汇率查询消息
-                .build();
+        ChatResponse r = new ChatResponse();
+        r.setSuccess(true);
+        r.setMessage(message);
+        r.setMessageType(5);
+        return r;
     }
     
     /**
      * 创建新闻查询响应
      */
     public static ChatResponse newsResponse(String message) {
-        return ChatResponse.builder()
-                .success(true)
-                .message(message)
-                .messageType(6) // 新闻查询消息
-                .build();
+        ChatResponse r = new ChatResponse();
+        r.setSuccess(true);
+        r.setMessage(message);
+        r.setMessageType(6);
+        return r;
     }
     
     /**
      * 创建交通查询响应
      */
     public static ChatResponse trafficResponse(String message) {
-        return ChatResponse.builder()
-                .success(true)
-                .message(message)
-                .messageType(7) // 交通查询消息
-                .build();
+        ChatResponse r = new ChatResponse();
+        r.setSuccess(true);
+        r.setMessage(message);
+        r.setMessageType(7);
+        return r;
     }
     
     /**
      * 创建攻略查询响应
      */
     public static ChatResponse travelGuideResponse(String message) {
-        return ChatResponse.builder()
-                .success(true)
-                .message(message)
-                .messageType(8) // 攻略查询消息
-                .build();
+        ChatResponse r = new ChatResponse();
+        r.setSuccess(true);
+        r.setMessage(message);
+        r.setMessageType(8);
+        return r;
     }
 } 

@@ -60,7 +60,7 @@ public class EmailAsyncServiceImpl implements EmailAsyncService {
             // 从订单信息中获取用户类型信息
             Long agentId = tourBooking.getAgentId() != null ? tourBooking.getAgentId().longValue() : null;
             Long operatorId = tourBooking.getOperatorId() != null ? tourBooking.getOperatorId().longValue() : null;
-            Long userId = tourBooking.getUserId() != null ? tourBooking.getUserId().longValue() : null;
+            // Long userId = tourBooking.getUserId() != null ? tourBooking.getUserId().longValue() : null;
             
             // 确定收件人类型和实际的代理商ID、操作员ID
             String recipientType;
@@ -97,6 +97,7 @@ public class EmailAsyncServiceImpl implements EmailAsyncService {
                 invoiceDTO.setAgentId(actualAgentId);
                 invoiceDTO.setOperatorId(actualOperatorId);
                 invoiceDTO.setInvoiceDetails(invoiceDetails);
+                // 保留扩展点：未来可按需外部传入logoPreference，这里不强行设置
                 
                 emailService.sendInvoiceEmail(invoiceDTO);
                 log.info("✅ 支付后发票邮件发送成功: orderId={}, agentId={}", orderId, actualAgentId);
@@ -112,6 +113,7 @@ public class EmailAsyncServiceImpl implements EmailAsyncService {
                 confirmationDTO.setAgentId(actualAgentId);
                 confirmationDTO.setOperatorId(actualOperatorId);
                 confirmationDTO.setOrderDetails(orderDetails);
+                // 保留扩展点：未来可按需外部传入logoPreference，这里不强行设置
                 
                 emailService.sendConfirmationEmail(confirmationDTO);
                 

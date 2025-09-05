@@ -675,6 +675,26 @@ public class OrderServiceImpl implements OrderService {
                 
                 log.info("🔔 已发送订单状态修改通知: 订单ID={}, 客户={}, 修改内容={}", 
                         bookingId, customerName, changeType);
+                
+                // 🆕 同步通知代理端（主号必收；若有操作员，仅通知对应操作员）
+                try {
+                    TourBooking tb = tourBookingMapper.getById(bookingId);
+                    Long agentId = tb != null && tb.getAgentId() != null ? tb.getAgentId().longValue() : null;
+                    Long operatorId = tb != null ? tb.getOperatorId() : null;
+                    String orderNumber = existingOrder.getOrderNumber();
+                    notificationService.createAgentOrderChangeNotification(
+                        agentId,
+                        operatorId,
+                        Long.valueOf(bookingId),
+                        orderNumber,
+                        "订单状态更新",
+                        changeType
+                    );
+                    log.info("🔔 已同步通知代理端订单状态变更: bookingId={}, agentId={}, operatorId={}, detail={}",
+                            bookingId, agentId, operatorId, changeType);
+                } catch (Exception ne) {
+                    log.error("❌ 通知代理端订单状态变更失败: bookingId={}, error={}", bookingId, ne.getMessage(), ne);
+                }
             } catch (Exception e) {
                 log.error("❌ 发送订单状态修改通知失败: {}", e.getMessage(), e);
             }

@@ -68,4 +68,10 @@ public interface PaymentMapper {
      * @return 支付列表
      */
     Page<PaymentDTO> getPaymentPage(PaymentPageQueryDTO pageQueryDTO);
+
+    /**
+     * 幂等检查：统计某订单已完成的信用支付记录数
+     */
+    @Select("SELECT COUNT(1) FROM payments WHERE booking_id = #{bookingId} AND status = 'completed' AND payment_method = 'agent_credit'")
+    int countCompletedAgentCreditPayments(@Param("bookingId") Integer bookingId);
 } 

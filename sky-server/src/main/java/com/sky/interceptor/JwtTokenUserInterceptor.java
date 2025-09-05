@@ -48,6 +48,14 @@ public class JwtTokenUserInterceptor implements HandlerInterceptor {
         String requestURI = request.getRequestURI();
         log.debug("拦截请求: {}", requestURI);
         
+        // 🔧 新增：检查是否已经被代理商拦截器验证过
+        Long existingUserId = BaseContext.getCurrentId();
+        String existingUserType = BaseContext.getCurrentUserType();
+        if (existingUserId != null && "agent".equals(existingUserType)) {
+            log.info("⚡ 代理商已通过认证，用户拦截器跳过验证: userId={}, path={}", existingUserId, requestURI);
+            return true; // 代理商已验证，跳过用户验证
+        }
+        
         // 检查是否是不需要验证的公共API路径
         if(requestURI.contains("/user/login") || 
            requestURI.contains("/user/register") || 
@@ -130,10 +138,9 @@ public class JwtTokenUserInterceptor implements HandlerInterceptor {
         }
 
         if (token == null) {
-            // 🔧 修复代理商下单问题：支持游客模式访问订单相关接口
-            if (requestURI.contains("/user/bookings/tour/calculate-price") || 
-                requestURI.contains("/user/bookings/tour/create")) {
-                log.info("✅ 游客模式访问订单接口: {}", requestURI);
+            // 仅允许未登录访问“计算价格”接口；创建订单必须登录
+            if (requestURI.contains("/user/bookings/tour/calculate-price")) {
+                log.info("✅ 游客模式访问计算价格接口: {}", requestURI);
                 // 游客模式，清空BaseContext确保没有用户信息
                 BaseContext.setCurrentId(null);
                 BaseContext.setCurrentUserType(null);
@@ -142,7 +149,7 @@ public class JwtTokenUserInterceptor implements HandlerInterceptor {
                 BaseContext.setCurrentUsername(null);
                 return true;
             }
-            
+
             //未携带token，不通过，响应401状态码
             log.debug("用户jwt校验:token为空");
             response.setStatus(401);
@@ -265,6 +272,15 @@ public class JwtTokenUserInterceptor implements HandlerInterceptor {
             }
         }
         return null;
+    }
+    
+    /**
+     * 目标资源方法执行完成后：清理ThreadLocal，避免上下文串号
+     */
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
+        BaseContext.removeAll();
+        log.debug("🧹 用户端请求完成，已清理BaseContext");
     }
 } 
 

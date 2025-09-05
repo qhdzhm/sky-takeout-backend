@@ -56,4 +56,21 @@ public interface VehicleMapper {
      */
     @Select("SELECT * FROM vehicles WHERE status = 1 ORDER BY vehicle_id")
     List<Vehicle> getAllActiveVehicles();
+
+    // ===== Dashboard统计相关方法 =====
+    
+    /**
+     * 获取车辆总数
+     * @return 车辆总数
+     */
+    @Select("SELECT COUNT(*) FROM vehicles")
+    Integer count();
+
+    /**
+     * 根据状态获取车辆数量
+     * @param status 车辆状态
+     * @return 车辆数量
+     */
+    @Select("SELECT COUNT(*) FROM vehicles WHERE status = #{status}")
+    Integer countByStatus(String status);
 }

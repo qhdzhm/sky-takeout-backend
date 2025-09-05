@@ -119,11 +119,30 @@
         )
     </insert>
     
-    <!-- 更新订单 - 仅允许更新不影响价格的字段 -->
+    <!-- 更新订单 - 管理后台专用更新方法，允许更新所有必要字段 -->
     <update id="update" parameterType="com.sky.entity.TourBooking">
         update tour_bookings
         <set>
-            <!-- 航班信息 - 不影响价格 -->
+            <!-- 基础日期信息 - 管理后台可修改 -->
+            <if test="tourStartDate != null">tour_start_date = #{tourStartDate},</if>
+            <if test="tourEndDate != null">tour_end_date = #{tourEndDate},</if>
+            
+            <!-- 人数信息 - 管理后台可修改 -->
+            <if test="adultCount != null">adult_count = #{adultCount},</if>
+            <if test="childCount != null">child_count = #{childCount},</if>
+            <if test="groupSize != null">group_size = #{groupSize},</if>
+            
+            <!-- 住宿信息 - 管理后台可修改 -->
+            <if test="hotelLevel != null">hotel_level = #{hotelLevel},</if>
+            <if test="roomType != null">room_type = #{roomType},</if>
+            <if test="hotelRoomCount != null">hotel_room_count = #{hotelRoomCount},</if>
+            <if test="hotelCheckInDate != null">hotel_check_in_date = #{hotelCheckInDate},</if>
+            <if test="hotelCheckOutDate != null">hotel_check_out_date = #{hotelCheckOutDate},</if>
+            
+            <!-- 行程选择 - 管理后台可修改 -->
+            <if test="selectedOptionalTours != null">selected_optional_tours = #{selectedOptionalTours},</if>
+            
+            <!-- 航班信息 -->
             <if test="flightNumber != null">flight_number = #{flightNumber},</if>
             <if test="arrivalDepartureTime != null">arrival_departure_time = #{arrivalDepartureTime},</if>
             <if test="arrivalLandingTime != null">arrival_landing_time = #{arrivalLandingTime},</if>
@@ -131,36 +150,31 @@
             <if test="departureDepartureTime != null">departure_departure_time = #{departureDepartureTime},</if>
             <if test="departureLandingTime != null">departure_landing_time = #{departureLandingTime},</if>
             
-            <!-- 联系人信息 - 不影响价格 -->
+            <!-- 联系人信息 -->
             <if test="passengerContact != null">passenger_contact = #{passengerContact},</if>
             <if test="contactPerson != null">contact_person = #{contactPerson},</if>
             <if test="contactPhone != null">contact_phone = #{contactPhone},</if>
             
-            <!-- 接送信息 - 不影响价格 -->
+            <!-- 接送信息 -->
             <if test="pickupDate != null">pickup_date = #{pickupDate},</if>
             <if test="dropoffDate != null">dropoff_date = #{dropoffDate},</if>
             <if test="pickupLocation != null">pickup_location = #{pickupLocation},</if>
             <if test="dropoffLocation != null">dropoff_location = #{dropoffLocation},</if>
+            <if test="serviceType != null">service_type = #{serviceType},</if>
             
-            <!-- 行李和其他信息 - 不影响价格 -->
+            <!-- 订单状态 - 管理后台可修改 -->
+            <if test="status != null">status = #{status},</if>
+            <if test="paymentStatus != null">payment_status = #{paymentStatus},</if>
+            <if test="totalPrice != null">total_price = #{totalPrice},</if>
+            
+            <!-- 其他信息 -->
             <if test="luggageCount != null">luggage_count = #{luggageCount},</if>
             <if test="roomDetails != null">room_details = #{roomDetails},</if>
             <if test="specialRequests != null">special_requests = #{specialRequests},</if>
             <if test="itineraryDetails != null">itinerary_details = #{itineraryDetails},</if>
             
-            <!-- 系统字段 - 仅允许更新时间，其他系统字段通过专门的业务方法更新 -->
-            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
-            
-            <!-- 注意：以下系统字段被禁止通过通用更新方法修改，防止用户绕过前端直接修改 -->
-            <!-- status - 通过专门的业务方法（confirm, cancel, complete等）修改 -->
-            <!-- paymentStatus - 通过支付流程修改 -->
-            <!-- totalPrice - 通过价格计算流程修改，用户无权直接修改 -->
-            
-            <!-- 注意：以下字段被移除，因为它们会影响价格计算 -->
-            <!-- tourId, tourStartDate, tourEndDate, serviceType, groupSize -->
-            <!-- adultCount, childCount, hotelLevel, roomType, hotelRoomCount -->
-            <!-- hotelCheckInDate, hotelCheckOutDate, selectedOptionalTours -->
-            <!-- 已允许修改：pickupDate, dropoffDate, pickupLocation, dropoffLocation -->
+            <!-- 系统字段 -->
+            updated_at = NOW()
         </set>
         where booking_id = #{bookingId}
     </update>
@@ -250,4 +264,129 @@
                 AND #{newPrice} &lt;= (total_price * 10)  /* 不超过原价的10倍 */
             </if>
     </update>
+
+    <!-- ===== Dashboard统计相关查询 ===== -->
+    
+    <!-- 获取指定日期范围的营业数据 -->
+    <select id="getBusinessDataByDateRange" resultType="map">
+        SELECT 
+            DATE(created_at) AS date,
+            COUNT(*) AS orders,
+            SUM(CASE WHEN status = 'completed' THEN total_price ELSE 0 END) AS revenue,
+            COUNT(CASE WHEN status = 'completed' THEN 1 END) AS completed
+        FROM tour_bookings 
+        WHERE DATE(created_at) BETWEEN #{begin} AND #{end}
+        GROUP BY DATE(created_at)
+        ORDER BY date
+    </select>
+    
+    <!-- 获取指定时间范围的订单数据 -->
+    <select id="getOrderDataByDateRange" resultType="map">
+        SELECT 
+            COUNT(*) as totalOrders,
+            SUM(CASE WHEN status = 'completed' THEN total_price ELSE 0 END) as totalRevenue,
+            COUNT(CASE WHEN status = 'pending' THEN 1 END) as pendingOrders,
+            COUNT(CASE WHEN status = 'confirmed' THEN 1 END) as confirmedOrders,
+            COUNT(CASE WHEN status = 'completed' THEN 1 END) as completedOrders,
+            COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelledOrders
+        FROM tour_bookings 
+        WHERE created_at BETWEEN #{start} AND #{end}
+    </select>
+    
+    <!-- 获取订单状态分布统计 -->
+    <select id="getOrderStatusDistribution" resultType="map">
+        SELECT 
+            SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+            SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) as confirmed,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+            SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled
+        FROM tour_bookings
+    </select>
+    
+    <!-- 获取最受欢迎的产品 -->
+    <select id="getMostPopularTour" resultType="map">
+        SELECT 
+            tb.tour_id as tourId,
+            CASE 
+                WHEN tb.tour_type = 'day_tour' THEN dt.name
+                WHEN tb.tour_type = 'group_tour' THEN gt.title
+                ELSE 'Unknown'
+            END as tourName,
+            COUNT(*) as bookingCount,
+            SUM(tb.total_price) as totalRevenue
+        FROM tour_bookings tb
+        LEFT JOIN day_tours dt ON tb.tour_type = 'day_tour' AND tb.tour_id = dt.day_tour_id
+        LEFT JOIN group_tours gt ON tb.tour_type = 'group_tour' AND tb.tour_id = gt.group_tour_id
+        WHERE tb.status IN ('confirmed', 'completed')
+        GROUP BY tb.tour_id, tb.tour_type
+        ORDER BY bookingCount DESC
+        LIMIT 1
+    </select>
+    
+    <!-- 根据产品类型获取销售数据 -->
+    <select id="getSalesByTourType" resultType="map">
+        SELECT 
+            COUNT(*) as bookings,
+            SUM(total_price) as revenue,
+            AVG(total_price) as averagePrice
+        FROM tour_bookings 
+        WHERE tour_type = #{tourType} 
+        AND status IN ('confirmed', 'completed')
+    </select>
+    
+    <!-- 获取前N个热门产品（按类型） -->
+    <select id="getTopToursByType" resultType="map">
+        SELECT 
+            tb.tour_id as tourId,
+            CASE 
+                WHEN tb.tour_type = 'day_tour' THEN dt.name
+                WHEN tb.tour_type = 'group_tour' THEN gt.title
+                ELSE 'Unknown'
+            END as tourName,
+            COUNT(*) as bookingCount,
+            SUM(tb.total_price) as revenue,
+            CASE 
+                WHEN tb.tour_type = 'day_tour' THEN dt.rating
+                WHEN tb.tour_type = 'group_tour' THEN gt.rating
+                ELSE 0
+            END as rating
+        FROM tour_bookings tb
+        LEFT JOIN day_tours dt ON tb.tour_type = 'day_tour' AND tb.tour_id = dt.day_tour_id
+        LEFT JOIN group_tours gt ON tb.tour_type = 'group_tour' AND tb.tour_id = gt.group_tour_id
+        WHERE tb.tour_type = #{tourType}
+        AND tb.status IN ('confirmed', 'completed')
+        GROUP BY tb.tour_id, tb.tour_type
+        ORDER BY bookingCount DESC
+        LIMIT #{limit}
+    </select>
+    
+    <!-- 获取平均评分 -->
+    <select id="getAverageRating" resultType="double">
+        SELECT AVG(rating) FROM (
+            SELECT dt.rating as rating FROM tour_bookings tb
+            JOIN day_tours dt ON tb.tour_type = 'day_tour' AND tb.tour_id = dt.day_tour_id
+            WHERE tb.status IN ('confirmed', 'completed')
+            UNION ALL
+            SELECT gt.rating as rating FROM tour_bookings tb
+            JOIN group_tours gt ON tb.tour_type = 'group_tour' AND tb.tour_id = gt.group_tour_id
+            WHERE tb.status IN ('confirmed', 'completed')
+        ) as all_ratings
+    </select>
+    
+    <!-- 获取热门目的地统计 -->
+    <select id="getPopularDestinations" resultType="map">
+        SELECT 
+            location as destination,
+            COUNT(*) as bookingCount,
+            SUM(total_price) as revenue
+        FROM tour_bookings tb
+        LEFT JOIN day_tours dt ON tb.tour_type = 'day_tour' AND tb.tour_id = dt.day_tour_id
+        LEFT JOIN group_tours gt ON tb.tour_type = 'group_tour' AND tb.tour_id = gt.group_tour_id
+        WHERE tb.status IN ('confirmed', 'completed')
+        AND (dt.location IS NOT NULL OR gt.location IS NOT NULL)
+        GROUP BY COALESCE(dt.location, gt.location)
+        ORDER BY bookingCount DESC
+        LIMIT 10
+    </select>
+
 </mapper> 

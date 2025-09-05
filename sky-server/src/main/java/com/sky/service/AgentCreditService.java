@@ -80,4 +80,14 @@ public interface AgentCreditService {
      * @return 还款结果
      */
     CreditRepaymentResultVO repayCredit(Long agentId, CreditRepaymentDTO repaymentDTO);
+    
+    /**
+     * 增加代理商信用余额（用于退款等场景）
+     *
+     * @param agentId 代理商ID
+     * @param amount 增加金额
+     * @param note 备注说明
+     * @return 是否成功
+     */
+    boolean addCredit(Long agentId, BigDecimal amount, String note);
 } 

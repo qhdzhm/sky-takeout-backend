@@ -81,4 +81,46 @@
         LIMIT 20
     </select>
 
+    <!-- ===== Dashboard统计相关查询 ===== -->
+    
+    <!-- 获取指定时间范围内的新用户数量 -->
+    <select id="getNewUsersByDateRange" resultType="integer">
+        SELECT COUNT(*) 
+        FROM users 
+        WHERE created_at BETWEEN #{start} AND #{end}
+        AND status = 1
+    </select>
+    
+    <!-- 获取指定日期范围的用户注册数据 -->
+    <select id="getUserRegistrationByDateRange" resultType="map">
+        SELECT 
+            DATE(created_at) as date,
+            COUNT(*) as newUsers
+        FROM users 
+        WHERE DATE(created_at) BETWEEN #{begin} AND #{end}
+        AND status = 1
+        GROUP BY DATE(created_at)
+        ORDER BY date
+    </select>
+    
+    <!-- 获取用户类型分布统计 -->
+    <select id="getUserTypeDistribution" resultType="map">
+        SELECT 
+            -- 普通用户（含NULL当regular）
+            (SELECT COUNT(*) FROM users WHERE status = 1 AND (user_type = 'regular' OR user_type IS NULL)) AS regular,
+            -- 代理商数量直接来自 agents 表
+            (SELECT COUNT(*) FROM agents WHERE status = 1) AS agent,
+            -- VIP 用户
+            (SELECT COUNT(*) FROM users WHERE status = 1 AND user_type = 'vip') AS vip
+    </select>
+    
+    <!-- 获取指定时间范围内的活跃用户数量 -->
+    <select id="getActiveUsersByDateRange" resultType="integer">
+        SELECT COUNT(DISTINCT u.user_id)
+        FROM users u
+        LEFT JOIN tour_bookings tb ON u.user_id = tb.user_id
+        WHERE u.status = 1
+        AND (tb.created_at BETWEEN #{start} AND #{end} OR u.updated_at BETWEEN #{start} AND #{end})
+    </select>
+
 </mapper>

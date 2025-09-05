@@ -9,12 +9,12 @@ import com.sky.entity.User;
 import com.sky.mapper.AgentMapper;
 import com.sky.properties.JwtProperties;
 import com.sky.result.Result;
-import com.sky.service.AgentService;
+// import com.sky.service.AgentService;
 import com.sky.service.AgentOperatorService;
 import com.sky.service.DiscountService;
 import com.sky.service.UserService;
 import com.sky.utils.JwtUtil;
-import com.sky.vo.AgentLoginVO;
+// import com.sky.vo.AgentLoginVO;
 import com.sky.vo.UserLoginVO;
 import com.sky.context.BaseContext;
 import com.sky.mapper.UserMapper;
@@ -31,10 +31,10 @@ import java.util.List;
 import java.util.Map;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.Cookie;
+// import javax.servlet.http.Cookie;
 import io.jsonwebtoken.Claims;
 import java.time.LocalDateTime;
-import java.util.Map;
+// import java.util.Map;
 import com.sky.utils.CookieUtil;
 
 /**
@@ -208,8 +208,8 @@ public class AgentClientController {
             log.info("登录成功，用户类型: {}, 折扣率: {}", isOperator ? "操作员" : "代理商主账号", discountRate);
             
             // 7. 设置HttpOnly Cookie用于安全存储 - 正确的双Token模式
-            // Access Token（短期，15分钟）
-            CookieUtil.setCookieWithMultiplePaths(response, "authToken", token, true, 15 * 60);
+            // 🧪 临时测试：Access Token（10秒）- 快速测试自动刷新机制
+            CookieUtil.setCookieWithMultiplePaths(response, "authToken", token, true, 900); // 15分钟
             
             // Refresh Token（长期，7天）- 生成不同的Token
             Map<String, Object> refreshClaims = new HashMap<>();
@@ -252,7 +252,7 @@ public class AgentClientController {
             }
             
             String userInfoJson = com.alibaba.fastjson.JSON.toJSONString(userInfo);
-            CookieUtil.setUserInfoCookie(response, userInfoJson, 15 * 60);
+            CookieUtil.setUserInfoCookie(response, userInfoJson, 900); // 15分钟，与authToken同步
             
             // 8. 返回结果
             return Result.success(userLoginVO);
@@ -272,82 +272,42 @@ public class AgentClientController {
         log.info("获取代理商折扣率，请求参数 agentId={}", agentId);
         
         try {
-            // 检查当前用户是否为操作员
+            // 必须已登录（代理或操作员）；操作员不可见具体折扣，只能由代理主账号查询自身折扣
             String token = extractToken(request);
-            if (token != null) {
-                try {
-                    Claims claims = JwtUtil.parseJWT(jwtProperties.getAgentSecretKey(), token);
-                    String userType = (String) claims.get("userType");
-                    if ("agent_operator".equals(userType)) {
-                        log.warn("操作员尝试获取折扣率信息，用户类型: {}", userType);
-                        return Result.error("无权限查看折扣信息");
-                    }
-                } catch (Exception e) {
-                    log.error("解析JWT失败", e);
-                }
+            if (token == null || token.trim().isEmpty()) {
+                return Result.error("未登录，无法查询折扣率");
             }
-            
-            // 首先尝试使用请求参数中的agentId
-            if (agentId != null) {
-                Agent agent = agentMapper.getById(agentId);
-                if (agent == null) {
-                    return Result.error("代理商不存在");
-                }
-                
-                BigDecimal discountRate = agent.getDiscountRate();
-                if (discountRate == null) {
-                    discountRate = new BigDecimal("0.9"); // 默认折扣率
-                }
-                
-                log.info("获取代理商折扣率成功，代理商ID={}, 折扣率={}", agentId, discountRate);
-                return Result.success(discountRate);
+
+            Claims claims = JwtUtil.parseJWT(jwtProperties.getAgentSecretKey(), token);
+            String userType = (String) claims.get("userType");
+            Object agentIdClaim = claims.get(JwtClaimsConstant.AGENT_ID);
+            if (agentIdClaim == null) {
+                return Result.error("无效的认证信息");
             }
-            
-            // 从JWT令牌中获取代理商ID
-            if (token == null) {
-                return Result.error("未提供有效的认证信息");
+            Long currentAgentId = Long.valueOf(agentIdClaim.toString());
+
+            if ("agent_operator".equals(userType)) {
+                log.warn("操作员尝试获取折扣率信息，已拒绝");
+                return Result.error("操作员无权限查看折扣信息");
             }
-            
-            try {
-                Claims claims = JwtUtil.parseJWT(jwtProperties.getAgentSecretKey(), token);
-                // 从JWT中获取代理商ID
-                Object agentIdObj = claims.get(JwtClaimsConstant.AGENT_ID);
-                if (agentIdObj != null) {
-                    Long agentIdFromToken = Long.valueOf(agentIdObj.toString());
-                    Agent agent = agentMapper.getById(agentIdFromToken);
-                    if (agent == null) {
-                        return Result.error("代理商不存在");
-                    }
-                    
-                    BigDecimal discountRate = agent.getDiscountRate();
-                    if (discountRate == null) {
-                        discountRate = new BigDecimal("0.9"); // 默认折扣率
-                    }
-                    
-                    log.info("通过JWT获取代理商折扣率成功，代理商ID={}, 折扣率={}", agentIdFromToken, discountRate);
-                    return Result.success(discountRate);
-                }
-            } catch (Exception e) {
-                log.error("解析JWT失败", e);
-                return Result.error("无效的令牌");
+
+            Long targetAgentId = agentId != null ? agentId : currentAgentId;
+            if (!targetAgentId.equals(currentAgentId)) {
+                return Result.error("无权查询其他代理的折扣");
             }
-            
-            // 尝试从BaseContext获取
-            Long currentAgentId = BaseContext.getCurrentAgentId();
-            if (currentAgentId != null) {
-                Agent agent = agentMapper.getById(currentAgentId);
-                if (agent != null) {
-                    BigDecimal discountRate = agent.getDiscountRate();
-                    if (discountRate == null) {
-                        discountRate = new BigDecimal("0.9"); // 默认折扣率
-                    }
-                    
-                    log.info("通过BaseContext获取代理商折扣率成功，代理商ID={}, 折扣率={}", currentAgentId, discountRate);
-                    return Result.success(discountRate);
-                }
+
+            Agent agent = agentMapper.getById(targetAgentId);
+            if (agent == null) {
+                return Result.error("代理商不存在");
             }
-            
-            return Result.error("无法获取代理商信息");
+
+            BigDecimal discountRate = agent.getDiscountRate();
+            if (discountRate == null) {
+                discountRate = new BigDecimal("0.9");
+            }
+
+            log.info("获取代理商折扣率成功，代理商ID={}, 折扣率={}", targetAgentId, discountRate);
+            return Result.success(discountRate);
         } catch (Exception e) {
             log.error("获取代理商折扣率异常", e);
             return Result.error("获取折扣率失败：" + e.getMessage());
@@ -364,6 +324,21 @@ public class AgentClientController {
         log.info("根据ID获取代理商折扣率，代理商ID={}", agentId);
         
         try {
+            // 仅允许查询当前登录代理自身的折扣
+            String token = extractToken(request);
+            if (token == null || token.trim().isEmpty()) {
+                return Result.error("未登录，无法查询折扣率");
+            }
+            Claims claims = JwtUtil.parseJWT(jwtProperties.getAgentSecretKey(), token);
+            Object agentIdClaim = claims.get(JwtClaimsConstant.AGENT_ID);
+            if (agentIdClaim == null) {
+                return Result.error("无效的认证信息");
+            }
+            Long currentAgentId = Long.valueOf(agentIdClaim.toString());
+            if (!agentId.equals(currentAgentId)) {
+                return Result.error("无权查询其他代理的折扣");
+            }
+            
             // 查询代理商信息
             Agent agent = agentMapper.getById(agentId);
             if (agent == null) {
@@ -711,12 +686,11 @@ public class AgentClientController {
         try {
             // 从BaseContext获取用户信息
             String userType = BaseContext.getCurrentUserType();
-            Long currentUserId = BaseContext.getCurrentId();
             Long agentId = BaseContext.getCurrentAgentId();
             Long operatorId = BaseContext.getCurrentOperatorId();
             
-            log.info("当前用户类型: {}, 用户ID: {}, 代理商ID: {}, 操作员ID: {}", 
-                    userType, currentUserId, agentId, operatorId);
+            log.info("当前用户类型: {}, 代理商ID: {}, 操作员ID: {}", 
+                    userType, agentId, operatorId);
             
             if (agentId == null) {
                 return Result.error("未登录或无法识别用户信息");
@@ -770,6 +744,7 @@ public class AgentClientController {
                 agentWithUserType.put("phone", agent.getPhone());
                 agentWithUserType.put("avatar", agent.getAvatar());
                 agentWithUserType.put("discountRate", agent.getDiscountRate());
+                agentWithUserType.put("useAvatarAsLogo", agent.getUseAvatarAsLogo());
                 agentWithUserType.put("status", agent.getStatus());
                 agentWithUserType.put("userType", "agent");
                 
@@ -794,7 +769,6 @@ public class AgentClientController {
         try {
             // 从BaseContext获取用户信息
             String userType = BaseContext.getCurrentUserType();
-            Long currentUserId = BaseContext.getCurrentId();
             Long agentId = BaseContext.getCurrentAgentId();
             Long operatorId = BaseContext.getCurrentOperatorId();
             
@@ -870,6 +844,18 @@ public class AgentClientController {
                     agent.setEmail((String) requestBody.get("email"));
                 } else {
                     agent.setEmail(existingAgent.getEmail());
+                }
+
+                // 新增：Logo偏好（是否使用头像作为邮件Logo）
+                if (requestBody.containsKey("useAvatarAsLogo")) {
+                    Object val = requestBody.get("useAvatarAsLogo");
+                    if (val instanceof Boolean) {
+                        agent.setUseAvatarAsLogo((Boolean) val);
+                    } else if (val != null) {
+                        agent.setUseAvatarAsLogo(Boolean.valueOf(val.toString()));
+                    }
+                } else {
+                    agent.setUseAvatarAsLogo(existingAgent.getUseAvatarAsLogo());
                 }
                 
                 // 更新代理商信息
