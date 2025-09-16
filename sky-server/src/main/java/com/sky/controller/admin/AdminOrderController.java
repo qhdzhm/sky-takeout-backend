@@ -133,7 +133,7 @@ public class AdminOrderController {
             boolean success = tourBookingService.confirmOrderByAdmin(bookingId, adjustedPrice, adjustmentReason);
             
             if (success) {
-                return Result.success("订单确认成功（不发送确认单，待付款后发送）");
+                return Result.success("订单确认成功，确认单已发送给客户");
             } else {
                 return Result.error("订单确认失败");
             }
@@ -490,8 +490,46 @@ public class AdminOrderController {
             @PathVariable Integer bookingId) {
         log.info("发送确认单，订单ID：{}", bookingId);
         
-        // 按新策略：后台不允许在“仅确认”阶段发送确认单，统一在付款后发送
-        return Result.error("已禁用：确认阶段不发送确认单。请在客户付款后自动发送。");
+        try {
+            // 获取订单信息
+            TourBooking tourBooking = tourBookingMapper.getById(bookingId);
+            if (tourBooking == null) {
+                return Result.error("订单不存在");
+            }
+            
+            // 检查订单状态，只有已确认的订单才能发送确认单
+            if (!"confirmed".equals(tourBooking.getStatus())) {
+                return Result.error("只有已确认的订单才能发送确认单");
+            }
+            
+            // 构建确认邮件DTO
+            EmailConfirmationDTO emailDTO = new EmailConfirmationDTO();
+            emailDTO.setOrderId(Long.valueOf(bookingId));
+            
+            // 根据订单类型设置收件人类型
+            if (tourBooking.getAgentId() != null && tourBooking.getOperatorId() != null) {
+                // 操作员下单
+                emailDTO.setRecipientType("operator");
+                emailDTO.setAgentId(Long.valueOf(tourBooking.getAgentId()));
+                emailDTO.setOperatorId(tourBooking.getOperatorId());
+            } else if (tourBooking.getAgentId() != null) {
+                // 代理商主账号下单
+                emailDTO.setRecipientType("agent");
+                emailDTO.setAgentId(Long.valueOf(tourBooking.getAgentId()));
+            } else {
+                // 普通用户订单 - 暂时跳过邮件发送
+                return Result.error("普通用户订单暂不支持发送确认邮件");
+            }
+            
+            // 异步发送确认邮件
+            emailAsyncService.sendConfirmationEmailAsync(emailDTO);
+            
+            log.info("确认单已提交发送，订单ID：{}", bookingId);
+            return Result.success("确认单发送成功");
+        } catch (Exception e) {
+            log.error("发送确认单失败: {}", e.getMessage(), e);
+            return Result.error("发送确认单失败: " + e.getMessage());
+        }
     }
 
     /**

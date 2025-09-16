@@ -66,15 +66,4 @@ public class AgentDiscountController {
         return Result.success(result);
     }
 
-    @GetMapping("/my-logs")
-    @ApiOperation("查询我的折扣使用记录")
-    public Result<List<AgentDiscountLog>> getMyDiscountLogs(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime) {
-        Long agentId = BaseContext.getCurrentId();
-        log.info("代理商查询自己的折扣使用记录，代理商ID: {}, 开始时间: {}, 结束时间: {}", agentId, startTime, endTime);
-        
-        List<AgentDiscountLog> logs = enhancedDiscountService.getAgentDiscountLogs(agentId, startTime, endTime);
-        return Result.success(logs);
-    }
 } 

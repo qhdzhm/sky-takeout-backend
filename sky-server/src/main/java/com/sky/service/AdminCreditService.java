@@ -103,4 +103,11 @@ public interface AdminCreditService {
      */
     void exportCreditTransactions(HttpServletResponse response, Long agentId, String transactionType, 
                                  String transactionNo, LocalDate startDate, LocalDate endDate);
+    
+    /**
+     * 为没有信用额度记录的现有代理商初始化信用额度
+     * @param defaultCredit 默认信用额度
+     * @return 初始化成功的代理商数量
+     */
+    int initializeCreditForExistingAgents(BigDecimal defaultCredit);
 }

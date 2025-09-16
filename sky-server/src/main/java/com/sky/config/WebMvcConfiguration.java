@@ -60,6 +60,8 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
         registry.addInterceptor(jwtTokenAgentInterceptor)
                 .addPathPatterns("/agent/**")  // 代理商相关接口
                 .addPathPatterns("/orders/**")  // 代理商也可以访问订单API
+                .addPathPatterns("/user/bookings/**")  // 代理商也可以访问用户订单API
+                .addPathPatterns("/user/payments/**")   // 代理商也可以访问支付API
                 .excludePathPatterns("/agent/login");  // 仅排除代理商登录，其余均需鉴权
 
         // 普通用户接口拦截器

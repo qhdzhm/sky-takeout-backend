@@ -1,6 +1,7 @@
 package com.sky.service.impl;
 
 import com.sky.constant.CreditConstants;
+import com.sky.context.BaseContext;
 import com.sky.dto.CreditPaymentDTO;
 import com.sky.dto.CreditRepaymentDTO;
 import com.sky.entity.AgentCredit;
@@ -211,6 +212,13 @@ public class AgentCreditServiceImpl implements AgentCreditService {
         agentCredit.setLastUpdated(LocalDateTime.now());
         
         // 记录交易
+        // 获取当前实际操作人ID（可能是agent、operator或user）
+        Long currentOperatorId = BaseContext.getCurrentId();
+        if (currentOperatorId == null) {
+            // 如果无法获取当前操作人ID，则使用agentId作为fallback
+            currentOperatorId = agentId;
+        }
+        
         CreditTransaction transaction = CreditTransaction.builder()
                 .transactionNo(transactionNo)
                 .agentId(agentId)
@@ -220,7 +228,7 @@ public class AgentCreditServiceImpl implements AgentCreditService {
                 .balanceBefore(balanceBefore)
                 .balanceAfter(balanceAfter)
                 .note(paymentDTO.getNote())
-                .createdBy(agentId)
+                .createdBy(currentOperatorId)
                 .createdAt(LocalDateTime.now())
                 .build();
         

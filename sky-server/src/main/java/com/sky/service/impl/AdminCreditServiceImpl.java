@@ -6,12 +6,16 @@ import com.sky.context.BaseContext;
 import com.sky.dto.AgentCreditDTO;
 import com.sky.entity.Agent;
 import com.sky.entity.AgentCredit;
+import com.sky.entity.AgentOperator;
 import com.sky.entity.CreditTransaction;
+import com.sky.entity.TourBooking;
 import com.sky.exception.BusinessException;
 import com.sky.mapper.AgentCreditMapper;
 import com.sky.mapper.AgentMapper;
 import com.sky.mapper.CreditTransactionMapper;
 import com.sky.mapper.EmployeeMapper;
+import com.sky.mapper.TourBookingMapper;
+import com.sky.mapper.AgentOperatorMapper;
 import com.sky.result.PageResult;
 import com.sky.service.AdminCreditService;
 import com.sky.vo.AgentCreditVO;
@@ -54,6 +58,12 @@ public class AdminCreditServiceImpl implements AdminCreditService {
 
     @Autowired
     private EmployeeMapper employeeMapper;
+    
+    @Autowired
+    private TourBookingMapper tourBookingMapper;
+    
+    @Autowired
+    private AgentOperatorMapper agentOperatorMapper;
 
     /**
      * 为代理商充值信用额度
@@ -178,6 +188,87 @@ public class AdminCreditServiceImpl implements AdminCreditService {
     public Integer countAllAgentCredits(Long agentId, String agentName) {
         return agentCreditMapper.countAll(agentId, agentName);
     }
+    
+    /**
+     * 根据交易记录获取操作人姓名（支持多种用户类型）
+     * @param tx 交易记录
+     * @return 操作人姓名
+     */
+    private String getOperatorNameFromTransaction(CreditTransaction tx) {
+        if (tx.getCreatedBy() == null) {
+            return "未知操作人";
+        }
+        
+        Long operatorId = tx.getCreatedBy();
+        
+        // 根据交易类型判断操作人类型
+        if ("payment".equals(tx.getTransactionType())) {
+            // 支付类型的交易通常是代理商或操作员发起的
+            // 如果交易有agentId，说明和代理商相关
+            if (tx.getAgentId() != null) {
+                
+                // 1. 首先检查是否是代理商本人操作
+                if (tx.getAgentId().equals(operatorId)) {
+                    Agent agent = agentMapper.getById(operatorId);
+                    if (agent != null) {
+                        return agent.getContactPerson() + " (" + agent.getCompanyName() + ")";
+                    }
+                }
+                
+                // 2. 检查是否是该代理商的操作员
+                AgentOperator agentOperator = agentOperatorMapper.getById(operatorId);
+                if (agentOperator != null && agentOperator.getAgentId().equals(tx.getAgentId().intValue())) {
+                    Agent agent = agentMapper.getById(Long.valueOf(agentOperator.getAgentId()));
+                    String operatorName = agentOperator.getName() != null && !agentOperator.getName().trim().isEmpty() 
+                        ? agentOperator.getName() 
+                        : agentOperator.getUsername();
+                    String companyName = agent != null ? agent.getCompanyName() : "未知公司";
+                    return operatorName + " (操作员-" + companyName + ")";
+                }
+                
+                // 3. 如果都不匹配，可能是其他代理商
+                Agent agent = agentMapper.getById(operatorId);
+                if (agent != null && agent.getContactPerson() != null && !agent.getContactPerson().trim().isEmpty()) {
+                    return agent.getContactPerson() + " (" + agent.getCompanyName() + ")";
+                }
+            }
+        }
+        
+        // 对于充值等管理员操作，优先查找员工表
+        if ("topup".equals(tx.getTransactionType()) || "adjustment".equals(tx.getTransactionType())) {
+            String empName = employeeMapper.getNameById(operatorId);
+            if (empName != null && !empName.trim().isEmpty()) {
+                return empName + " (管理员)";
+            }
+        }
+        
+        // 通用查找：按优先级查询不同表
+        // 1. 先查操作员表
+        AgentOperator agentOperator = agentOperatorMapper.getById(operatorId);
+        if (agentOperator != null) {
+            Agent agent = agentMapper.getById(Long.valueOf(agentOperator.getAgentId()));
+            String operatorName = agentOperator.getName() != null && !agentOperator.getName().trim().isEmpty() 
+                ? agentOperator.getName() 
+                : agentOperator.getUsername();
+            String companyName = agent != null ? agent.getCompanyName() : "未知公司";
+            return operatorName + " (操作员-" + companyName + ")";
+        }
+        
+        // 2. 查员工表
+        String empName = employeeMapper.getNameById(operatorId);
+        if (empName != null && !empName.trim().isEmpty()) {
+            return empName + " (员工)";
+        }
+        
+        // 3. 查代理商表
+        Agent agent = agentMapper.getById(operatorId);
+        if (agent != null && agent.getContactPerson() != null && !agent.getContactPerson().trim().isEmpty()) {
+            return agent.getContactPerson() + " (" + agent.getCompanyName() + ")";
+        }
+        
+        // 最后fallback
+        return "操作人ID:" + operatorId;
+    }
 
     /**
      * 获取代理商信用额度详情
@@ -235,10 +326,16 @@ public class AdminCreditServiceImpl implements AdminCreditService {
                 }
             }
             
-            // 设置操作人姓名
-            if (tx.getCreatedBy() != null) {
-                String empName = employeeMapper.getNameById(tx.getCreatedBy());
-                vo.setCreatedByName(empName);
+            // 设置操作人姓名 - 根据交易类型和上下文智能判断
+            String operatorName = getOperatorNameFromTransaction(tx);
+            vo.setCreatedByName(operatorName);
+            
+            // 设置订单号（而不是订单ID）
+            if (tx.getBookingId() != null) {
+                TourBooking booking = tourBookingMapper.getById(tx.getBookingId().intValue());
+                if (booking != null && booking.getOrderNumber() != null) {
+                    vo.setOrderNumber(booking.getOrderNumber());
+                }
             }
             
             return vo;
@@ -601,5 +698,57 @@ public class AdminCreditServiceImpl implements AdminCreditService {
         }
         
         return true;
+    }
+    
+    /**
+     * 为没有信用额度记录的现有代理商初始化信用额度
+     * @param defaultCredit 默认信用额度
+     * @return 初始化成功的代理商数量
+     */
+    @Override
+    @Transactional
+    public int initializeCreditForExistingAgents(BigDecimal defaultCredit) {
+        log.info("开始为现有代理商初始化信用额度，默认额度: {}", defaultCredit);
+        
+        // 1. 查询所有代理商
+        List<Agent> allAgents = agentMapper.list();
+        if (allAgents == null || allAgents.isEmpty()) {
+            log.info("没有找到代理商，无需初始化信用额度");
+            return 0;
+        }
+        
+        int successCount = 0;
+        int skipCount = 0;
+        
+        // 2. 为每个没有信用额度记录的代理商创建记录
+        for (Agent agent : allAgents) {
+            try {
+                // 检查代理商是否已有信用额度记录
+                AgentCredit existingCredit = agentCreditMapper.getByAgentId(agent.getId());
+                if (existingCredit != null) {
+                    log.debug("代理商{}(ID:{})已有信用额度记录，跳过", agent.getCompanyName(), agent.getId());
+                    skipCount++;
+                    continue;
+                }
+                
+                // 创建信用额度记录
+                int result = agentCreditMapper.createCreditRecord(agent.getId().intValue(), defaultCredit);
+                if (result > 0) {
+                    log.info("为代理商{}(ID:{})创建信用额度记录成功，默认额度: {}", 
+                            agent.getCompanyName(), agent.getId(), defaultCredit);
+                    successCount++;
+                } else {
+                    log.warn("为代理商{}(ID:{})创建信用额度记录失败", agent.getCompanyName(), agent.getId());
+                }
+            } catch (Exception e) {
+                log.error("为代理商{}(ID:{})创建信用额度记录时发生异常: {}", 
+                        agent.getCompanyName(), agent.getId(), e.getMessage());
+            }
+        }
+        
+        log.info("信用额度初始化完成，总代理商数: {}, 成功创建: {}, 跳过(已有记录): {}", 
+                allAgents.size(), successCount, skipCount);
+        
+        return successCount;
     }
 } 

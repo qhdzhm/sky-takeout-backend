@@ -6,8 +6,6 @@ import com.sky.context.BaseContext;
 import com.sky.dto.CreditPaymentDTO;
 import com.sky.dto.PaymentDTO;
 import com.sky.dto.PaymentPageQueryDTO;
-import com.sky.entity.CreditTransaction;
-import com.sky.entity.AgentCredit;
 import com.sky.entity.TourBooking;
 import com.sky.exception.CustomException;
 import com.sky.mapper.AgentCreditMapper;
@@ -23,7 +21,6 @@ import com.sky.service.NotificationService;
 import com.sky.mapper.PaymentAuditLogMapper;
 import com.sky.entity.PaymentAuditLog;
 import com.sky.vo.CreditPaymentResultVO;
-import com.sky.vo.PriceDetailVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -32,7 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -67,6 +63,46 @@ public class PaymentServiceImpl implements PaymentService {
     private NotificationService notificationService;
     @Autowired
     private PaymentAuditLogMapper paymentAuditLogMapper;
+    
+    /**
+     * 判断是否是有效的订单号格式
+     * 支持格式：
+     * 1. 传统HT格式：HT + 8位日期 + 4位序列号 + 2位随机数
+     * 2. 代理商前缀格式：代理商前缀 + 8位日期 + 4位序列号 + 2位随机数
+     * @param str - 待检验的字符串
+     * @return 是否是订单号格式
+     */
+    private boolean isValidOrderNumber(String str) {
+        if (str == null || str.length() < 14) return false;
+        
+        // 支持传统HT格式：HT + 8位日期 + 4位序列号 + 2位随机数 = 16位
+        if (str.startsWith("HT") && str.length() == 16) {
+            return str.matches("^HT\\d{8}\\d{4}\\d{2}$");
+        }
+        
+        // 检查是否包含8位日期格式（20YYMMDD）
+        java.util.regex.Pattern datePattern = java.util.regex.Pattern.compile("20\\d{6}");
+        java.util.regex.Matcher dateMatch = datePattern.matcher(str);
+        
+        if (dateMatch.find()) {
+            // 找到日期位置
+            int dateIndex = dateMatch.start();
+            String beforeDate = str.substring(0, dateIndex);
+            String afterDate = str.substring(dateIndex + 8);
+            
+            // 检查日期后面是否跟着6位数字（4位序列号+2位随机数）
+            if (afterDate.matches("^\\d{6}$")) {
+                // 前缀可以是字母、数字、中文等字符的组合，长度1-6位
+                if (beforeDate.length() >= 1 && beforeDate.length() <= 6) {
+                    log.debug("检测到订单号格式: 前缀=\"{}\", 日期=\"{}\", 后缀=\"{}\"", 
+                            beforeDate, dateMatch.group(), afterDate);
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
 
     /**
      * 创建支付
@@ -225,18 +261,41 @@ public class PaymentServiceImpl implements PaymentService {
     public boolean processCreditPayment(CreditPaymentDTO creditPaymentDTO) {
         log.info("代理商信用额度支付：{}", creditPaymentDTO);
         
-        // 获取订单信息
-        Integer bookingId = creditPaymentDTO.getBookingId().intValue();
+        // 获取订单信息 - 支持订单ID和订单号
+        TourBooking existingBooking = null;
+        Integer bookingId = null;
+        String bookingIdStr = String.valueOf(creditPaymentDTO.getBookingId());
+        
+        // 判断是否为订单号格式
+        boolean isOrderNumber = isValidOrderNumber(bookingIdStr);
+        
+        if (isOrderNumber) {
+            log.info("识别为订单号格式，使用订单号查询：{}", bookingIdStr);
+            existingBooking = tourBookingMapper.getByOrderNumber(bookingIdStr);
+            if (existingBooking != null) {
+                bookingId = existingBooking.getBookingId();
+            }
+        } else {
+            // 尝试作为数字ID处理
+            try {
+                bookingId = Integer.valueOf(bookingIdStr);
+                existingBooking = tourBookingMapper.getById(bookingId);
+                log.info("识别为订单ID格式，使用订单ID查询：{}", bookingId);
+            } catch (NumberFormatException e) {
+                log.error("无法解析bookingId：{}，既不是有效订单号也不是有效数字ID", bookingIdStr);
+                throw new CustomException("无效的订单ID或订单号");
+            }
+        }
+        
+        // 检查订单是否存在
+        if (existingBooking == null) {
+            log.error("订单不存在，订单标识: {}", bookingIdStr);
+            throw new CustomException("订单不存在");
+        }
         
         // 🔒 JVM 级锁（建议后续替换为分布式锁/行级锁）
         String lockKey = "payment_lock_" + bookingId;
         synchronized (lockKey.intern()) {
-            // 首先检查订单是否已经支付
-            TourBooking existingBooking = tourBookingMapper.getById(bookingId);
-            if (existingBooking == null) {
-                log.error("订单不存在，订单ID: {}", bookingId);
-                throw new CustomException("订单不存在");
-            }
             
             if ("paid".equals(existingBooking.getPaymentStatus())) {
                 log.warn("⚠️ 订单已支付，拒绝重复支付请求，订单ID: {}", bookingId);

@@ -150,31 +150,4 @@ public interface EnhancedDiscountService {
 
     // ===================== 折扣日志管理 =====================
     
-    /**
-     * 查询代理商的折扣使用记录
-     * @param agentId 代理商ID
-     * @param startTime 开始时间
-     * @param endTime 结束时间
-     * @return 折扣使用记录
-     */
-    List<AgentDiscountLog> getAgentDiscountLogs(Long agentId, LocalDateTime startTime, LocalDateTime endTime);
-
-    /**
-     * 查询产品的折扣使用统计
-     * @param productType 产品类型
-     * @param productId 产品ID
-     * @param startTime 开始时间
-     * @param endTime 结束时间
-     * @return 折扣使用记录
-     */
-    List<AgentDiscountLog> getProductDiscountStats(String productType, Long productId, 
-                                                  LocalDateTime startTime, LocalDateTime endTime);
-
-    /**
-     * 查询折扣使用总体统计
-     * @param startTime 开始时间
-     * @param endTime 结束时间
-     * @return 折扣使用记录
-     */
-    List<AgentDiscountLog> getDiscountStats(LocalDateTime startTime, LocalDateTime endTime);
 } 

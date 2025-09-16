@@ -27,4 +27,16 @@ public interface VehicleAvailabilityService {
      * 删除车辆可用性设置
      */
     void deleteVehicleAvailability(Long vehicleId, LocalDate date);
+
+    /**
+     * 同步车辆过期状态到可用性表
+     * 当车辆rego或检查过期时，自动将未来的可用性设置为out_of_service
+     */
+    void syncExpiredVehicleStatus();
+
+    /**
+     * 为单个车辆同步过期状态到可用性表
+     * @param vehicleId 车辆ID
+     */
+    void syncSingleVehicleExpiredStatus(Long vehicleId);
 } 

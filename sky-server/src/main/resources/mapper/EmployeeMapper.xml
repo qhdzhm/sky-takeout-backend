@@ -7,7 +7,36 @@
     <!-- 分页查询 -->
     <select id="pageQuery" resultType="com.sky.entity.Employee">
         SELECT
-        e.*
+        e.id,
+        e.username,
+        e.name,
+        e.password,
+        e.phone,
+        e.email,
+        e.avatar,
+        e.sex,
+        e.id_number as idNumber,
+        e.role,
+        e.work_status as workStatus,
+        e.create_time as createTime,
+        e.update_time as updateTime,
+        e.create_user as createUser,
+        e.update_user as updateUser,
+        e.service_no as serviceNo,
+        e.online_status as onlineStatus,
+        e.max_concurrent_customers as maxConcurrentCustomers,
+        e.current_customer_count as currentCustomerCount,
+        e.skill_tags as skillTags,
+        e.service_level as serviceLevel,
+        e.last_login_time as lastLoginTime,
+        e.last_active_time as lastActiveTime,
+        e.is_guide as isGuide,
+        e.guide_level as guideLevel,
+        e.department,
+        e.status,
+        e.operator_type as operatorType,
+        e.is_tour_master as isTourMaster,
+        e.can_assign_orders as canAssignOrders
         FROM
         employees e
 
@@ -49,6 +78,10 @@
             <if test="role != null">role = #{role},</if>
             <if test="workStatus != null">work_status = #{workStatus},</if>
             <if test="lastLoginTime != null">last_login_time = #{lastLoginTime},</if>
+            <!-- ====== 操作员分工管理字段 ====== -->
+            <if test="operatorType != null">operator_type = #{operatorType},</if>
+            <if test="isTourMaster != null">is_tour_master = #{isTourMaster},</if>
+            <if test="canAssignOrders != null">can_assign_orders = #{canAssignOrders},</if>
             update_time = #{updateTime},
             update_user = #{updateUser}
         </set>

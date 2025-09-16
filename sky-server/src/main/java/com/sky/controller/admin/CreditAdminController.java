@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.servlet.http.HttpServletResponse;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -75,7 +76,7 @@ public class CreditAdminController {
      */
     @GetMapping("/agents/{agentId}")
     @ApiOperation("获取代理商信用额度详情")
-    public Result getAgentCreditDetail(@PathVariable Long agentId) {
+    public Result<Object> getAgentCreditDetail(@PathVariable Long agentId) {
         log.info("获取代理商信用额度详情：agentId={}", agentId);
         return Result.success(adminCreditService.getAgentCreditDetail(agentId));
     }
@@ -165,5 +166,26 @@ public class CreditAdminController {
         log.info("导出信用交易记录：agentId={}, transactionType={}, transactionNo={}, startDate={}, endDate={}",
                 agentId, transactionType, transactionNo, startDate, endDate);
         adminCreditService.exportCreditTransactions(response, agentId, transactionType, transactionNo, startDate, endDate);
+    }
+    
+    /**
+     * 为没有信用额度记录的现有代理商批量初始化信用额度
+     * @param defaultCredit 默认信用额度
+     * @return 初始化结果
+     */
+    @PostMapping("/initialize")
+    @ApiOperation("为现有代理商初始化信用额度")
+    public Result<Map<String, Object>> initializeCreditForExistingAgents(
+            @RequestParam(defaultValue = "10000.00") BigDecimal defaultCredit) {
+        log.info("管理员批量初始化代理商信用额度，默认额度: {}", defaultCredit);
+        
+        int successCount = adminCreditService.initializeCreditForExistingAgents(defaultCredit);
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("successCount", successCount);
+        result.put("defaultCredit", defaultCredit);
+        result.put("message", String.format("成功为 %d 个代理商初始化信用额度", successCount));
+        
+        return Result.success(result);
     }
 } 

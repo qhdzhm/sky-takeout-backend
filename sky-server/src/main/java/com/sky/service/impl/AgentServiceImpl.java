@@ -27,7 +27,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.DigestUtils;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -42,6 +41,9 @@ public class AgentServiceImpl implements AgentService {
 
     @Autowired
     private AgentMapper agentMapper;
+    
+    @Autowired
+    private com.sky.mapper.AgentCreditMapper agentCreditMapper;
 
     /**
      * 代理商登录
@@ -119,6 +121,8 @@ public class AgentServiceImpl implements AgentService {
      */
     @Override
     public void save(AgentDTO agentDTO) {
+        log.info("新增代理商，传入数据: {}", agentDTO);
+        
         // 1. 判断用户名是否已存在
         Agent existAgent = agentMapper.getByUsername(agentDTO.getUsername());
         if(existAgent != null) {
@@ -136,9 +140,25 @@ public class AgentServiceImpl implements AgentService {
         // 4. 设置默认值
         agent.setStatus(agentDTO.getStatus() != null ? agentDTO.getStatus() : 1);
         agent.setDiscountRate(agentDTO.getDiscountRate() != null ? agentDTO.getDiscountRate() : BigDecimal.ONE);
+        agent.setUseAvatarAsLogo(false);  // 设置默认值为false，避免null值导致的约束错误
         
         // 5. 保存代理商
         agentMapper.insert(agent);
+        log.info("代理商新增成功，ID: {}", agent.getId());
+        
+        // 6. 自动为新代理商创建默认信用额度记录
+        try {
+            BigDecimal defaultCredit = BigDecimal.valueOf(10000.00); // 默认信用额度10,000元
+            int result = agentCreditMapper.createCreditRecord(agent.getId().intValue(), defaultCredit);
+            if (result > 0) {
+                log.info("为新代理商创建信用额度记录成功，代理商ID: {}, 默认额度: {}", agent.getId(), defaultCredit);
+            } else {
+                log.warn("为新代理商创建信用额度记录失败，代理商ID: {}", agent.getId());
+            }
+        } catch (Exception e) {
+            log.error("为新代理商创建信用额度记录时发生异常，代理商ID: {}, 异常信息: {}", agent.getId(), e.getMessage());
+            // 不抛出异常，允许代理商创建成功，稍后可手动创建信用额度记录
+        }
     }
 
     /**

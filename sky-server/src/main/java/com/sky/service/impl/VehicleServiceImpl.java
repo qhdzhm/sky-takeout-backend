@@ -8,6 +8,7 @@ import com.sky.entity.Vehicle;
 import com.sky.mapper.VehicleMapper;
 import com.sky.result.PageResult;
 import com.sky.service.VehicleService;
+import com.sky.service.VehicleAvailabilityService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,9 @@ public class VehicleServiceImpl implements VehicleService {
 
     @Autowired
     private VehicleMapper vehicleMapper;
+
+    @Autowired
+    private VehicleAvailabilityService vehicleAvailabilityService;
 
     /**
      * 分页查询车辆
@@ -84,6 +88,16 @@ public class VehicleServiceImpl implements VehicleService {
     @Override
     public void addVehicle(Vehicle vehicle) {
         vehicleMapper.insert(vehicle);
+        
+        // 新增车辆后，立即同步状态到可用性表
+        log.info("新增车辆后同步状态，车辆ID: {}", vehicle.getVehicleId());
+        try {
+            if (vehicle.getVehicleId() != null) {
+                vehicleAvailabilityService.syncSingleVehicleExpiredStatus(vehicle.getVehicleId());
+            }
+        } catch (Exception e) {
+            log.warn("新增车辆后同步状态失败，车辆ID: {}", vehicle.getVehicleId(), e);
+        }
     }
 
     /**
@@ -91,7 +105,70 @@ public class VehicleServiceImpl implements VehicleService {
      */
     @Override
     public void updateVehicle(Vehicle vehicle) {
+        log.info("更新车辆信息，车辆ID: {}", vehicle.getVehicleId());
+        
+        // 获取更新前的车辆信息，用于比较
+        Vehicle oldVehicle = vehicleMapper.getById(vehicle.getVehicleId());
+        
+        // 更新车辆信息
         vehicleMapper.update(vehicle);
+        
+        // 检查是否需要同步可用性状态
+        boolean needSync = false;
+        
+        if (oldVehicle != null) {
+            // 检查关键状态字段是否发生变化
+            boolean regoDateChanged = !isDateEqual(oldVehicle.getRegoExpiryDate(), vehicle.getRegoExpiryDate());
+            boolean inspectionDateChanged = !isDateEqual(oldVehicle.getInspectionDueDate(), vehicle.getInspectionDueDate());
+            boolean statusChanged = !isIntegerEqual(oldVehicle.getStatus(), vehicle.getStatus());
+            
+            needSync = regoDateChanged || inspectionDateChanged || statusChanged;
+            
+            if (needSync) {
+                log.info("检测到车辆关键状态变化，需要同步可用性：rego变化={}, 检查变化={}, 状态变化={}", 
+                    regoDateChanged, inspectionDateChanged, statusChanged);
+            }
+        } else {
+            // 如果没有找到原车辆信息，也执行同步
+            needSync = true;
+            log.info("未找到原车辆信息，执行状态同步");
+        }
+        
+        // 如果需要同步，则更新可用性表
+        if (needSync) {
+            try {
+                vehicleAvailabilityService.syncSingleVehicleExpiredStatus(vehicle.getVehicleId());
+                log.info("✅ 车辆 {} 状态同步完成", vehicle.getVehicleId());
+            } catch (Exception e) {
+                log.error("车辆 {} 状态同步失败", vehicle.getVehicleId(), e);
+            }
+        }
+    }
+
+    /**
+     * 比较两个日期是否相等（处理null值）
+     */
+    private boolean isDateEqual(LocalDate date1, LocalDate date2) {
+        if (date1 == null && date2 == null) {
+            return true;
+        }
+        if (date1 == null || date2 == null) {
+            return false;
+        }
+        return date1.equals(date2);
+    }
+
+    /**
+     * 比较两个整数是否相等（处理null值）
+     */
+    private boolean isIntegerEqual(Integer int1, Integer int2) {
+        if (int1 == null && int2 == null) {
+            return true;
+        }
+        if (int1 == null || int2 == null) {
+            return false;
+        }
+        return int1.equals(int2);
     }
 
     /**

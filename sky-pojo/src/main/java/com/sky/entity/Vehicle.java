@@ -35,6 +35,7 @@ public class Vehicle implements Serializable {
     private String notes; // 备注
     private String location; // 车辆地址
     private Integer seatCount; // 座位数量
+    private Integer maxDrivers; // 最大驾驶员数量
     private LocalDateTime createTime; // 创建时间
     private LocalDateTime updateTime; // 更新时间
 }

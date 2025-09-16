@@ -3,6 +3,8 @@ package com.sky.mapper;
 import com.sky.entity.OperatorAssignment;
 import org.apache.ibatis.annotations.*;
 
+import java.time.LocalDateTime;
+
 import java.util.List;
 
 /**
@@ -121,4 +123,34 @@ public interface OperatorAssignmentMapper {
      */
     @Select("SELECT COUNT(*) FROM operator_assignments WHERE status = #{status}")
     Integer countByStatus(String status);
+
+    /**
+     * 统计操作员分配的订单数
+     */
+    @Select("SELECT COUNT(*) FROM operator_assignments WHERE operator_id = #{operatorId} AND status != 'cancelled'")
+    Integer countAssignedOrders(Long operatorId);
+
+    /**
+     * 统计操作员完成的订单数
+     */
+    @Select("SELECT COUNT(*) FROM operator_assignments WHERE operator_id = #{operatorId} AND status = 'completed'")
+    Integer countCompletedOrders(Long operatorId);
+
+    /**
+     * 统计操作员待处理的订单数
+     */
+    @Select("SELECT COUNT(*) FROM operator_assignments WHERE operator_id = #{operatorId} AND status = 'active'")
+    Integer countPendingOrders(Long operatorId);
+
+    /**
+     * 获取操作员最后分配时间
+     */
+    @Select("SELECT MAX(assigned_at) FROM operator_assignments WHERE operator_id = #{operatorId}")
+    LocalDateTime getLastAssignedTime(Long operatorId);
+
+    /**
+     * 获取操作员最后完成时间
+     */
+    @Select("SELECT MAX(completed_at) FROM operator_assignments WHERE operator_id = #{operatorId} AND status = 'completed'")
+    LocalDateTime getLastCompletedTime(Long operatorId);
 }

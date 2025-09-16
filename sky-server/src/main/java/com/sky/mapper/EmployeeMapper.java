@@ -128,4 +128,28 @@ public interface EmployeeMapper {
      */
     @Select("SELECT * FROM employees WHERE operator_type = #{operatorType} AND status = 1 ORDER BY name")
     List<Employee> findByOperatorType(String operatorType);
+
+    /**
+     * 清除所有员工的排团主管标记
+     */
+    @Update("UPDATE employees SET is_tour_master = 0, operator_type = CASE WHEN operator_type = 'tour_master' THEN 'general' ELSE operator_type END WHERE is_tour_master = 1")
+    void clearAllTourMasterFlags();
+
+    /**
+     * 获取当前排团主管
+     */
+    @Select("SELECT * FROM employees WHERE is_tour_master = 1 AND status = 1 LIMIT 1")
+    Employee getCurrentTourMaster();
+
+    /**
+     * 获取所有操作员（角色为操作员或管理员）
+     */
+    @Select("SELECT * FROM employees WHERE role IN (1, 2) AND status = 1 ORDER BY name")
+    List<Employee> getAllOperators();
+
+    /**
+     * 获取排团主管候选人（操作员和管理员角色）
+     */
+    @Select("SELECT * FROM employees WHERE role IN (1, 2) AND status = 1 AND is_tour_master = 0 ORDER BY name")
+    List<Employee> getTourMasterCandidates();
 }

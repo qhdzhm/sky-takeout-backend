@@ -96,4 +96,52 @@ public class VehicleAvailabilityServiceImpl implements VehicleAvailabilityServic
     public void deleteVehicleAvailability(Long vehicleId, LocalDate date) {
         vehicleAvailabilityMapper.deleteVehicleAvailability(vehicleId, date);
     }
+
+    /**
+     * 同步车辆过期状态到可用性表
+     * 当车辆rego或检查过期时，自动将未来的可用性设置为out_of_service
+     */
+    @Override
+    public void syncExpiredVehicleStatus() {
+        log.info("开始同步过期车辆状态到可用性表");
+        
+        try {
+            // 获取所有过期的车辆ID
+            List<Long> expiredVehicleIds = vehicleAvailabilityMapper.getExpiredVehicleIds();
+            log.info("发现 {} 辆过期车辆需要同步状态", expiredVehicleIds.size());
+            
+            if (!expiredVehicleIds.isEmpty()) {
+                // 批量更新过期车辆的未来可用性
+                vehicleAvailabilityMapper.updateExpiredVehiclesFutureAvailability();
+                log.info("✅ 批量更新过期车辆可用性状态完成");
+                
+                // 记录每辆车的同步情况
+                for (Long vehicleId : expiredVehicleIds) {
+                    log.info("车辆 {} 的未来可用性已设置为 out_of_service", vehicleId);
+                }
+            } else {
+                log.info("没有发现过期车辆需要同步");
+            }
+        } catch (Exception e) {
+            log.error("同步过期车辆状态时出现异常", e);
+            throw new RuntimeException("同步过期车辆状态失败", e);
+        }
+    }
+
+    /**
+     * 为单个车辆同步过期状态到可用性表
+     * @param vehicleId 车辆ID
+     */
+    @Override
+    public void syncSingleVehicleExpiredStatus(Long vehicleId) {
+        log.info("开始同步车辆 {} 的过期状态到可用性表", vehicleId);
+        
+        try {
+            vehicleAvailabilityMapper.updateSingleVehicleFutureAvailability(vehicleId);
+            log.info("✅ 车辆 {} 的可用性状态同步完成", vehicleId);
+        } catch (Exception e) {
+            log.error("同步车辆 {} 过期状态时出现异常", vehicleId, e);
+            throw new RuntimeException("同步车辆过期状态失败", e);
+        }
+    }
 } 

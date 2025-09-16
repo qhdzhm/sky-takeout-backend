@@ -45,6 +45,11 @@ public class CreditTransactionVO implements Serializable {
     private Long bookingId;
     
     /**
+     * 订单号（如适用）
+     */
+    private String orderNumber;
+    
+    /**
      * 交易类型：CREDIT_GRANTED(授信), CREDIT_USED(使用), CREDIT_REPAID(还款), CREDIT_TOPUP(充值)
      */
     private String transactionType;

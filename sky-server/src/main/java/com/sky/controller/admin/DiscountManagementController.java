@@ -149,39 +149,4 @@ public class DiscountManagementController {
         return Result.success("成功创建 " + count + " 个配置");
     }
 
-    // ===================== 折扣统计和日志 =====================
-
-    @GetMapping("/stats/agent/{agentId}")
-    @ApiOperation("查询代理商的折扣使用记录")
-    public Result<List<AgentDiscountLog>> getAgentDiscountLogs(
-            @PathVariable Long agentId,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime) {
-        log.info("管理员查询代理商折扣记录，代理商ID: {}, 开始时间: {}, 结束时间: {}", agentId, startTime, endTime);
-        List<AgentDiscountLog> logs = enhancedDiscountService.getAgentDiscountLogs(agentId, startTime, endTime);
-        return Result.success(logs);
-    }
-
-    @GetMapping("/stats/product")
-    @ApiOperation("查询产品的折扣使用统计")
-    public Result<List<AgentDiscountLog>> getProductDiscountStats(
-            @RequestParam String productType,
-            @RequestParam Long productId,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime) {
-        log.info("管理员查询产品折扣统计，产品类型: {}, 产品ID: {}, 开始时间: {}, 结束时间: {}", 
-                productType, productId, startTime, endTime);
-        List<AgentDiscountLog> logs = enhancedDiscountService.getProductDiscountStats(productType, productId, startTime, endTime);
-        return Result.success(logs);
-    }
-
-    @GetMapping("/stats")
-    @ApiOperation("查询折扣使用总体统计")
-    public Result<List<AgentDiscountLog>> getDiscountStats(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime) {
-        log.info("管理员查询折扣总体统计，开始时间: {}, 结束时间: {}", startTime, endTime);
-        List<AgentDiscountLog> logs = enhancedDiscountService.getDiscountStats(startTime, endTime);
-        return Result.success(logs);
-    }
 } 

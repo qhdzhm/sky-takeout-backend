@@ -193,8 +193,34 @@ public class TourBookingServiceImpl implements TourBookingService {
     @Override
     @Transactional
     public Integer save(TourBookingDTO tourBookingDTO) {
-        // 生成订单号
-        String orderNumber = OrderNumberGenerator.generate();
+        // 生成订单号 - 尝试使用代理商前缀
+        String orderNumber;
+        try {
+            // 获取当前代理商ID
+            Long agentId = BaseContext.getCurrentAgentId();
+            if (agentId != null) {
+                // 查询代理商信息
+                Agent agent = agentMapper.getById(agentId);
+                if (agent != null && agent.getCompanyName() != null) {
+                    // 使用代理商公司名生成订单号
+                    orderNumber = OrderNumberGenerator.generateWithAgent(agent.getCompanyName());
+                    log.info("使用代理商前缀生成订单号: {} (代理商: {})", orderNumber, agent.getCompanyName());
+                } else {
+                    // 代理商信息不完整，使用默认生成方法
+                    orderNumber = OrderNumberGenerator.generate();
+                    log.info("代理商信息不完整，使用默认前缀生成订单号: {}", orderNumber);
+                }
+            } else {
+                // 没有代理商ID，使用默认生成方法
+                orderNumber = OrderNumberGenerator.generate();
+                log.info("未获取到代理商ID，使用默认前缀生成订单号: {}", orderNumber);
+            }
+        } catch (Exception e) {
+            // 发生异常，使用默认生成方法
+            orderNumber = OrderNumberGenerator.generate();
+            log.warn("生成代理商订单号时发生异常，使用默认前缀: {}", e.getMessage());
+        }
+        
         tourBookingDTO.setOrderNumber(orderNumber);
         System.out.println(tourBookingDTO);
         // 将DTO转换为实体

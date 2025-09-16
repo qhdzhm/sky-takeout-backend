@@ -11,8 +11,6 @@ import com.sky.mapper.ProductAgentDiscountMapper;
 import com.sky.service.EnhancedDiscountService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -254,9 +252,20 @@ public class EnhancedDiscountServiceImpl implements EnhancedDiscountService {
     @Transactional
     // @CacheEvict(value = "productDiscountRates", allEntries = true) // 临时注释，避免Redis连接问题
     public ProductAgentDiscount createProductDiscount(ProductAgentDiscount discount) {
-        discount.setCreatedAt(LocalDateTime.now());
-        discount.setUpdatedAt(LocalDateTime.now());
+        log.info("创建产品折扣配置: {}", discount);
+        
+        // 设置时间字段
+        LocalDateTime now = LocalDateTime.now();
+        discount.setCreatedAt(now);
+        discount.setUpdatedAt(now);
+        
+        // 设置默认生效时间，避免null值导致的约束错误
+        if (discount.getValidFrom() == null) {
+            discount.setValidFrom(now);
+        }
+        
         productAgentDiscountMapper.insert(discount);
+        log.info("产品折扣配置创建成功，ID: {}", discount.getId());
         return discount;
     }
 
@@ -315,20 +324,4 @@ public class EnhancedDiscountServiceImpl implements EnhancedDiscountService {
     }
 
     // ===================== 折扣日志管理 =====================
-
-    @Override
-    public List<AgentDiscountLog> getAgentDiscountLogs(Long agentId, LocalDateTime startTime, LocalDateTime endTime) {
-        return agentDiscountLogMapper.findByAgentId(agentId, startTime, endTime);
-    }
-
-    @Override
-    public List<AgentDiscountLog> getProductDiscountStats(String productType, Long productId, 
-                                                         LocalDateTime startTime, LocalDateTime endTime) {
-        return agentDiscountLogMapper.findByProduct(productType, productId, startTime, endTime);
-    }
-
-    @Override
-    public List<AgentDiscountLog> getDiscountStats(LocalDateTime startTime, LocalDateTime endTime) {
-        return agentDiscountLogMapper.findDiscountStats(startTime, endTime);
-    }
 } 

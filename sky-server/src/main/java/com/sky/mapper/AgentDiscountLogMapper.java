@@ -21,42 +21,9 @@ public interface AgentDiscountLogMapper {
     int insert(AgentDiscountLog log);
 
     /**
-     * 根据中介ID查询折扣日志
-     * @param agentId 中介ID
-     * @param startTime 开始时间
-     * @param endTime 结束时间
-     * @return 折扣日志列表
-     */
-    List<AgentDiscountLog> findByAgentId(@Param("agentId") Long agentId,
-                                        @Param("startTime") LocalDateTime startTime,
-                                        @Param("endTime") LocalDateTime endTime);
-
-    /**
      * 根据订单ID查询折扣日志
      * @param orderId 订单ID
      * @return 折扣日志
      */
     AgentDiscountLog findByOrderId(@Param("orderId") Long orderId);
-
-    /**
-     * 根据产品查询折扣使用统计
-     * @param productType 产品类型
-     * @param productId 产品ID
-     * @param startTime 开始时间
-     * @param endTime 结束时间
-     * @return 折扣日志列表
-     */
-    List<AgentDiscountLog> findByProduct(@Param("productType") String productType,
-                                        @Param("productId") Long productId,
-                                        @Param("startTime") LocalDateTime startTime,
-                                        @Param("endTime") LocalDateTime endTime);
-
-    /**
-     * 查询折扣使用统计
-     * @param startTime 开始时间
-     * @param endTime 结束时间
-     * @return 折扣日志列表
-     */
-    List<AgentDiscountLog> findDiscountStats(@Param("startTime") LocalDateTime startTime,
-                                           @Param("endTime") LocalDateTime endTime);
 } 

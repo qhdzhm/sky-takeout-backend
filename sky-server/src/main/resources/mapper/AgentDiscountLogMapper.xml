@@ -32,21 +32,6 @@
          #{discountRate}, #{discountAmount}, #{finalPrice}, #{levelCode}, #{createdAt})
     </insert>
 
-    <!-- 根据中介ID查询折扣日志 -->
-    <select id="findByAgentId" resultMap="BaseResultMap">
-        SELECT
-        <include refid="Base_Column_List"/>
-        FROM agent_discount_log
-        WHERE agent_id = #{agentId}
-        <if test="startTime != null">
-            AND created_at &gt;= #{startTime}
-        </if>
-        <if test="endTime != null">
-            AND created_at &lt;= #{endTime}
-        </if>
-        ORDER BY created_at DESC
-    </select>
-
     <!-- 根据订单ID查询折扣日志 -->
     <select id="findByOrderId" resultMap="BaseResultMap">
         SELECT
@@ -54,37 +39,6 @@
         FROM agent_discount_log
         WHERE order_id = #{orderId}
         LIMIT 1
-    </select>
-
-    <!-- 根据产品查询折扣使用统计 -->
-    <select id="findByProduct" resultMap="BaseResultMap">
-        SELECT
-        <include refid="Base_Column_List"/>
-        FROM agent_discount_log
-        WHERE product_type = #{productType}
-          AND product_id = #{productId}
-        <if test="startTime != null">
-            AND created_at &gt;= #{startTime}
-        </if>
-        <if test="endTime != null">
-            AND created_at &lt;= #{endTime}
-        </if>
-        ORDER BY created_at DESC
-    </select>
-
-    <!-- 查询折扣使用统计 -->
-    <select id="findDiscountStats" resultMap="BaseResultMap">
-        SELECT
-        <include refid="Base_Column_List"/>
-        FROM agent_discount_log
-        WHERE 1=1
-        <if test="startTime != null">
-            AND created_at &gt;= #{startTime}
-        </if>
-        <if test="endTime != null">
-            AND created_at &lt;= #{endTime}
-        </if>
-        ORDER BY created_at DESC
     </select>
 
 </mapper> 

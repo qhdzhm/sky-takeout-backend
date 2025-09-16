@@ -85,4 +85,19 @@ public interface VehicleAvailabilityMapper {
                                                             @Param("startTime") LocalTime startTime,
                                                             @Param("endTime") LocalTime endTime,
                                                             @Param("peopleCount") Integer peopleCount);
+
+    /**
+     * 批量更新过期车辆的未来可用性状态为out_of_service
+     */
+    void updateExpiredVehiclesFutureAvailability();
+
+    /**
+     * 为单个车辆更新未来可用性状态（当rego或检查过期时）
+     */
+    void updateSingleVehicleFutureAvailability(@Param("vehicleId") Long vehicleId);
+
+    /**
+     * 查询所有过期的车辆ID
+     */
+    List<Long> getExpiredVehicleIds();
 } 

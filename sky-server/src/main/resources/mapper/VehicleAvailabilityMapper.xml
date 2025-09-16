@@ -193,7 +193,7 @@
         AND va.status = 'available'
     </select>
 
-    <!-- 根据日期、时间和人数获取可用车辆 -->
+    <!-- 根据日期、时间和人数获取可用车辆 - 双层检查：基础状态 + 可用性状态 -->
     <select id="getAvailableVehiclesByDateTime" resultMap="VehicleAvailabilityVOMap">
         SELECT 
             va.id,
@@ -210,11 +210,31 @@
             COALESCE(va.mileage, 0) AS mileage,
             va.notes,
             'N/A' AS driver_info,
+            -- 动态计算车辆基础状态
+            CASE 
+                WHEN v.status = 0 THEN 0  -- 送修中
+                WHEN v.status = 2 THEN 2  -- 维修中  
+                WHEN v.status = 3 THEN 3  -- 停用
+                WHEN v.rego_expiry_date IS NOT NULL AND v.rego_expiry_date &lt; CURDATE() THEN 4  -- 注册过期
+                WHEN v.inspection_due_date IS NOT NULL AND v.inspection_due_date &lt; CURDATE() THEN 5  -- 车检过期
+                ELSE 1  -- 可用
+            END AS vehicle_base_status,
             CASE 
                 WHEN va.status = 'available' 
                      AND (#{startTime} IS NULL OR va.start_time &lt;= #{startTime})
                      AND (#{endTime} IS NULL OR va.end_time &gt;= #{endTime})
                      AND (#{peopleCount} IS NULL OR v.seat_count &gt;= #{peopleCount})
+                     -- 双层检查：车辆基础状态必须可用
+                     AND (
+                         CASE 
+                             WHEN v.status = 0 THEN 0
+                             WHEN v.status = 2 THEN 0
+                             WHEN v.status = 3 THEN 0
+                             WHEN v.rego_expiry_date IS NOT NULL AND v.rego_expiry_date &lt; CURDATE() THEN 0
+                             WHEN v.inspection_due_date IS NOT NULL AND v.inspection_due_date &lt; CURDATE() THEN 0
+                             ELSE 1
+                         END
+                     ) = 1
                      AND NOT EXISTS (
                          SELECT 1 FROM tour_guide_vehicle_assignment t 
                          WHERE t.vehicle_id = va.vehicle_id 
@@ -224,18 +244,22 @@
                 THEN 1 ELSE 0 
             END AS recommended,
             CASE 
-                WHEN va.status = 'available' 
-                     AND (#{startTime} IS NULL OR va.start_time &lt;= #{startTime})
-                     AND (#{endTime} IS NULL OR va.end_time &gt;= #{endTime})
-                     AND (#{peopleCount} IS NULL OR v.seat_count &gt;= #{peopleCount})
-                     AND NOT EXISTS (
-                         SELECT 1 FROM tour_guide_vehicle_assignment t 
-                         WHERE t.vehicle_id = va.vehicle_id 
-                         AND t.assignment_date = va.available_date 
-                         AND t.status != 'cancelled'
-                     )
-                THEN '状态可用，座位足够' 
-                ELSE '不可用或座位不足' 
+                WHEN v.status = 0 THEN '车辆送修中'
+                WHEN v.status = 2 THEN '车辆维修中'
+                WHEN v.status = 3 THEN '车辆已停用'
+                WHEN v.rego_expiry_date IS NOT NULL AND v.rego_expiry_date &lt; CURDATE() THEN '车辆注册已过期'
+                WHEN v.inspection_due_date IS NOT NULL AND v.inspection_due_date &lt; CURDATE() THEN '车辆检查已过期'
+                WHEN va.status != 'available' THEN '时间段不可用'
+                WHEN (#{startTime} IS NOT NULL AND va.start_time &gt; #{startTime}) OR 
+                     (#{endTime} IS NOT NULL AND va.end_time &lt; #{endTime}) THEN '时间不匹配'
+                WHEN (#{peopleCount} IS NOT NULL AND v.seat_count &lt; #{peopleCount}) THEN '座位不足'
+                WHEN EXISTS (
+                    SELECT 1 FROM tour_guide_vehicle_assignment t 
+                    WHERE t.vehicle_id = va.vehicle_id 
+                    AND t.assignment_date = va.available_date 
+                    AND t.status != 'cancelled'
+                ) THEN '已被分配'
+                ELSE '状态可用，座位足够' 
             END AS recommend_reason,
             va.created_time as create_time,
             va.updated_time as update_time
@@ -246,6 +270,17 @@
             AND (#{startTime} IS NULL OR va.start_time &lt;= #{startTime})
             AND (#{endTime} IS NULL OR va.end_time &gt;= #{endTime})
             AND (#{peopleCount} IS NULL OR v.seat_count &gt;= #{peopleCount})
+            -- 双层检查：车辆基础状态约束
+            AND (
+                CASE 
+                    WHEN v.status = 0 THEN 0  -- 送修中不可选
+                    WHEN v.status = 2 THEN 0  -- 维修中不可选
+                    WHEN v.status = 3 THEN 0  -- 停用不可选
+                    WHEN v.rego_expiry_date IS NOT NULL AND v.rego_expiry_date &lt; CURDATE() THEN 0  -- 注册过期不可选
+                    WHEN v.inspection_due_date IS NOT NULL AND v.inspection_due_date &lt; CURDATE() THEN 0  -- 车检过期不可选
+                    ELSE 1  -- 其他状态可选
+                END
+            ) = 1
             AND NOT EXISTS (
                 SELECT 1 FROM tour_guide_vehicle_assignment t 
                 WHERE t.vehicle_id = va.vehicle_id 
@@ -253,6 +288,84 @@
                 AND t.status != 'cancelled'
             )
         ORDER BY v.seat_count DESC, va.vehicle_id
+    </select>
+
+    <!-- 批量更新过期车辆的未来可用性状态为out_of_service -->
+    <update id="updateExpiredVehiclesFutureAvailability">
+        UPDATE vehicle_availability va
+        LEFT JOIN vehicles v ON va.vehicle_id = v.vehicle_id
+        SET va.status = 'out_of_service',
+            va.updated_time = NOW(),
+            va.notes = CONCAT(COALESCE(va.notes, ''), 
+                CASE 
+                    WHEN v.rego_expiry_date IS NOT NULL AND v.rego_expiry_date &lt; CURDATE() 
+                        THEN CONCAT(' [系统自动更新: 注册过期 ', v.rego_expiry_date, ']')
+                    WHEN v.inspection_due_date IS NOT NULL AND v.inspection_due_date &lt; CURDATE() 
+                        THEN CONCAT(' [系统自动更新: 检查过期 ', v.inspection_due_date, ']')
+                    ELSE ' [系统自动更新: 车辆过期]'
+                END
+            )
+        WHERE va.available_date &gt;= CURDATE()
+        AND va.status IN ('available', 'maintenance')
+        AND (
+            (v.rego_expiry_date IS NOT NULL AND v.rego_expiry_date &lt; CURDATE()) 
+            OR 
+            (v.inspection_due_date IS NOT NULL AND v.inspection_due_date &lt; CURDATE())
+            OR 
+            v.status IN (0, 2, 3)  -- 送修中、维修中、停用状态
+        )
+    </update>
+
+    <!-- 为单个车辆更新未来可用性状态（当rego或检查过期时） -->
+    <update id="updateSingleVehicleFutureAvailability">
+        UPDATE vehicle_availability va
+        LEFT JOIN vehicles v ON va.vehicle_id = v.vehicle_id
+        SET va.status = CASE 
+                WHEN v.rego_expiry_date IS NOT NULL AND v.rego_expiry_date &lt; CURDATE() THEN 'out_of_service'
+                WHEN v.inspection_due_date IS NOT NULL AND v.inspection_due_date &lt; CURDATE() THEN 'out_of_service'
+                WHEN v.status IN (0, 2, 3) THEN 'out_of_service'  -- 送修中、维修中、停用
+                ELSE va.status  -- 保持原状态
+            END,
+            va.updated_time = NOW(),
+            va.notes = CASE 
+                WHEN (v.rego_expiry_date IS NOT NULL AND v.rego_expiry_date &lt; CURDATE()) 
+                     OR (v.inspection_due_date IS NOT NULL AND v.inspection_due_date &lt; CURDATE())
+                     OR v.status IN (0, 2, 3)
+                THEN CONCAT(COALESCE(va.notes, ''), 
+                    CASE 
+                        WHEN v.rego_expiry_date IS NOT NULL AND v.rego_expiry_date &lt; CURDATE() 
+                            THEN CONCAT(' [系统同步: 注册过期 ', v.rego_expiry_date, ']')
+                        WHEN v.inspection_due_date IS NOT NULL AND v.inspection_due_date &lt; CURDATE() 
+                            THEN CONCAT(' [系统同步: 检查过期 ', v.inspection_due_date, ']')
+                        WHEN v.status = 0 THEN ' [系统同步: 送修中]'
+                        WHEN v.status = 2 THEN ' [系统同步: 维修中]'
+                        WHEN v.status = 3 THEN ' [系统同步: 停用]'
+                        ELSE ' [系统同步: 更新]'
+                    END
+                )
+                ELSE va.notes  -- 保持原备注
+            END
+        WHERE va.vehicle_id = #{vehicleId}
+        AND va.available_date &gt;= CURDATE()
+    </update>
+
+    <!-- 查询所有过期的车辆ID -->
+    <select id="getExpiredVehicleIds" resultType="java.lang.Long">
+        SELECT DISTINCT v.vehicle_id
+        FROM vehicles v
+        WHERE (
+            (v.rego_expiry_date IS NOT NULL AND v.rego_expiry_date &lt; CURDATE()) 
+            OR 
+            (v.inspection_due_date IS NOT NULL AND v.inspection_due_date &lt; CURDATE())
+            OR 
+            v.status IN (0, 2, 3)  -- 送修中、维修中、停用状态
+        )
+        AND EXISTS (
+            SELECT 1 FROM vehicle_availability va 
+            WHERE va.vehicle_id = v.vehicle_id 
+            AND va.available_date &gt;= CURDATE()
+            AND va.status NOT IN ('out_of_service')
+        )
     </select>
 
 </mapper> 
