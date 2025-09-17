@@ -110,10 +110,12 @@ public class AdminOrderController {
     }
 
     /**
-     * 客服确认订单（支持价格调整）
+     * 客服确认订单（支持价格调整和团型设置）
      * @param bookingId 订单ID
      * @param adjustedPrice 调整后的价格（可选）
      * @param adjustmentReason 价格调整原因（可选）
+     * @param groupType 团型类型（可选）：standard, small_12, small_14, luxury
+     * @param groupSizeLimit 团型人数限制（可选）
      * @return 是否成功
      */
     @PutMapping("/confirm/{bookingId}")
@@ -124,13 +126,18 @@ public class AdminOrderController {
             @ApiParam(name = "adjustedPrice", value = "调整后的价格")
             @RequestParam(required = false) Double adjustedPrice,
             @ApiParam(name = "adjustmentReason", value = "价格调整原因")
-            @RequestParam(required = false) String adjustmentReason) {
+            @RequestParam(required = false) String adjustmentReason,
+            @ApiParam(name = "groupType", value = "团型类型")
+            @RequestParam(required = false) String groupType,
+            @ApiParam(name = "groupSizeLimit", value = "团型人数限制")
+            @RequestParam(required = false) Integer groupSizeLimit) {
         
-        log.info("客服确认订单，订单ID: {}, 调整价格: {}, 调整原因: {}", bookingId, adjustedPrice, adjustmentReason);
+        log.info("客服确认订单，订单ID: {}, 调整价格: {}, 调整原因: {}, 团型: {}, 人数限制: {}", 
+                bookingId, adjustedPrice, adjustmentReason, groupType, groupSizeLimit);
         
         try {
             // 调用订单服务的确认方法
-            boolean success = tourBookingService.confirmOrderByAdmin(bookingId, adjustedPrice, adjustmentReason);
+            boolean success = tourBookingService.confirmOrderByAdmin(bookingId, adjustedPrice, adjustmentReason, groupType, groupSizeLimit);
             
             if (success) {
                 return Result.success("订单确认成功，确认单已发送给客户");

@@ -50,14 +50,14 @@ public interface TourScheduleOrderMapper {
             "flight_number, arrival_departure_time, arrival_landing_time, return_flight_number, departure_departure_time, " +
             "departure_landing_time, tour_start_date, tour_end_date, pickup_date, dropoff_date, passenger_contact, " +
             "itinerary_details, is_first_order, from_referral, referral_code, service_type, payment_status, total_price, user_id, agent_id, operator_id, booking_date, " +
-            "group_size, status, tour_name, tour_location, is_extra_schedule, schedule_type, pickup_time, dropoff_time, created_at, updated_at) " +
+            "group_size, status, tour_name, tour_location, is_extra_schedule, schedule_type, pickup_time, dropoff_time, group_type, group_size_limit, created_at, updated_at) " +
             "VALUES (#{bookingId}, #{dayNumber}, #{tourId}, #{tourType}, #{tourDate}, #{title}, #{description}, #{displayOrder}, " +
             "#{orderNumber}, #{adultCount}, #{childCount}, #{contactPerson}, #{contactPhone}, #{pickupLocation}, #{dropoffLocation}, #{specialRequests}, #{luggageCount}, " +
             "#{hotelLevel}, #{roomType}, #{hotelRoomCount}, #{hotelCheckInDate}, #{hotelCheckOutDate}, #{roomDetails}, " +
             "#{flightNumber}, #{arrivalDepartureTime}, #{arrivalLandingTime}, #{returnFlightNumber}, #{departureDepartureTime}, " +
             "#{departureLandingTime}, #{tourStartDate}, #{tourEndDate}, #{pickupDate}, #{dropoffDate}, #{passengerContact}, " +
             "#{itineraryDetails}, #{isFirstOrder}, #{fromReferral}, #{referralCode}, #{serviceType}, #{paymentStatus}, #{totalPrice}, #{userId}, #{agentId}, #{operatorId}, #{bookingDate}, " +
-            "#{groupSize}, #{status}, #{tourName}, #{tourLocation}, #{isExtraSchedule}, #{scheduleType}, #{pickupTime}, #{dropoffTime}, #{createdAt}, #{updatedAt})")
+            "#{groupSize}, #{status}, #{tourName}, #{tourLocation}, #{isExtraSchedule}, #{scheduleType}, #{pickupTime}, #{dropoffTime}, #{groupType}, #{groupSizeLimit}, #{createdAt}, #{updatedAt})")
     void insert(TourScheduleOrder tourScheduleOrder);
 
     /**
@@ -230,6 +230,17 @@ public interface TourScheduleOrderMapper {
     int updateContactPhoneByBookingId(Integer bookingId, String contactPhone);
 
     /**
+     * 根据订单ID更新乘客人数信息
+     * @param bookingId 订单ID
+     * @param adultCount 成人数量
+     * @param childCount 儿童数量
+     * @param groupSize 团队总人数
+     * @return 更新的记录数
+     */
+    @Update("UPDATE tour_schedule_order SET adult_count=#{adultCount}, child_count=#{childCount}, group_size=#{groupSize}, updated_at=NOW() WHERE booking_id=#{bookingId}")
+    int updatePassengerCountByBookingId(Integer bookingId, Integer adultCount, Integer childCount, Integer groupSize);
+
+    /**
      * 根据ID更新导游备注
      * @param id 记录ID
      * @param guideRemarks 导游备注
@@ -266,6 +277,24 @@ public interface TourScheduleOrderMapper {
      */
     int updateLastDayDropoffLocation(@Param("bookingId") Integer bookingId, 
                                     @Param("flightNumber") String flightNumber);
+
+    /**
+     * 只更新第一天的接车地点
+     * @param bookingId 订单ID
+     * @param pickupLocation 接车地点
+     * @return 更新的记录数
+     */
+    int updateFirstDayPickupLocationOnly(@Param("bookingId") Integer bookingId, 
+                                        @Param("pickupLocation") String pickupLocation);
+
+    /**
+     * 只更新最后一天的送车地点
+     * @param bookingId 订单ID
+     * @param dropoffLocation 送车地点
+     * @return 更新的记录数
+     */
+    int updateLastDayDropoffLocationOnly(@Param("bookingId") Integer bookingId, 
+                                        @Param("dropoffLocation") String dropoffLocation);
 
     /**
      * 根据酒店名称和日期统计住在该酒店的所有客人

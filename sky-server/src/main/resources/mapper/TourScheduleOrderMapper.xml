@@ -61,6 +61,9 @@
         <result column="schedule_type" property="scheduleType"/>
         <result column="pickup_time" property="pickupTime"/>
         <result column="dropoff_time" property="dropoffTime"/>
+        <!-- 团型管理字段映射 -->
+        <result column="group_type" property="groupType"/>
+        <result column="group_size_limit" property="groupSizeLimit"/>
         <!-- 统计查询专用字段映射 -->
         <result column="guide_name" property="guideName"/>
         <result column="vehicle_info" property="vehicleInfo"/>
@@ -79,7 +82,7 @@
             itinerary_details, is_first_order, from_referral, referral_code, service_type, 
             payment_status, total_price, user_id, agent_id, operator_id, booking_date, 
             group_size, status, tour_name, tour_location, is_extra_schedule, schedule_type, 
-            pickup_time, dropoff_time
+            pickup_time, dropoff_time, group_type, group_size_limit
         ) VALUES 
         <foreach collection="list" item="item" separator=",">
             (
@@ -97,7 +100,8 @@
                 #{item.fromReferral}, #{item.referralCode}, #{item.serviceType}, #{item.paymentStatus}, 
                 #{item.totalPrice}, #{item.userId}, #{item.agentId}, #{item.operatorId}, 
                 #{item.bookingDate}, #{item.groupSize}, #{item.status}, #{item.tourName}, #{item.tourLocation},
-                #{item.isExtraSchedule}, #{item.scheduleType}, #{item.pickupTime}, #{item.dropoffTime}
+                #{item.isExtraSchedule}, #{item.scheduleType}, #{item.pickupTime}, #{item.dropoffTime},
+                #{item.groupType}, #{item.groupSizeLimit}
             )
         </foreach>
     </insert>
@@ -115,7 +119,7 @@
             itinerary_details, is_first_order, from_referral, referral_code, service_type,
             payment_status, total_price, user_id, agent_id, operator_id, booking_date,
             group_size, status, tour_name, tour_location, is_extra_schedule, schedule_type,
-            pickup_time, dropoff_time
+            pickup_time, dropoff_time, group_type, group_size_limit
         FROM tour_schedule_order
         WHERE tour_date BETWEEN #{startDate} AND #{endDate}
         ORDER BY tour_date ASC, display_order ASC
@@ -134,7 +138,7 @@
             itinerary_details, is_first_order, from_referral, referral_code, service_type,
             payment_status, total_price, user_id, agent_id, operator_id, booking_date,
             group_size, status, tour_name, tour_location, is_extra_schedule, schedule_type,
-            pickup_time, dropoff_time
+            pickup_time, dropoff_time, group_type, group_size_limit
         FROM tour_schedule_order
         WHERE booking_id = #{bookingId}
         ORDER BY day_number ASC, display_order ASC
@@ -149,6 +153,28 @@
     <update id="updateLastDayDropoffLocation">
         UPDATE tour_schedule_order t1
         SET t1.dropoff_location = #{flightNumber}, t1.updated_at = NOW()
+        WHERE t1.booking_id = #{bookingId} 
+        AND t1.day_number = (
+            SELECT max_day FROM (
+                SELECT MAX(day_number) as max_day 
+                FROM tour_schedule_order t2 
+                WHERE t2.booking_id = #{bookingId}
+            ) as temp
+        )
+    </update>
+
+    <!-- 只更新第一天的接车地点 -->
+    <update id="updateFirstDayPickupLocationOnly">
+        UPDATE tour_schedule_order 
+        SET pickup_location = #{pickupLocation}, updated_at = NOW()
+        WHERE booking_id = #{bookingId} 
+        AND day_number = 1
+    </update>
+
+    <!-- 只更新最后一天的送车地点 -->
+    <update id="updateLastDayDropoffLocationOnly">
+        UPDATE tour_schedule_order t1
+        SET t1.dropoff_location = #{dropoffLocation}, t1.updated_at = NOW()
         WHERE t1.booking_id = #{bookingId} 
         AND t1.day_number = (
             SELECT max_day FROM (

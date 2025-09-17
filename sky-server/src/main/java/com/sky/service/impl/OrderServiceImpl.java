@@ -35,7 +35,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
-import java.sql.Date;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -888,15 +887,15 @@ public class OrderServiceImpl implements OrderService {
         orderVO.setUserId(tourBooking.getUserId() != null ? tourBooking.getUserId().intValue() : null);
         orderVO.setAgentId(tourBooking.getAgentId() != null ? tourBooking.getAgentId().intValue() : null);
         
-        // 日期转换
+        // 日期设置（直接使用LocalDate，无需转换）
         if (tourBooking.getBookingDate() != null) {
-            orderVO.setBookingDate(Date.valueOf(tourBooking.getBookingDate().toLocalDate()));
+            orderVO.setBookingDate(tourBooking.getBookingDate().toLocalDate());
         }
         if (tourBooking.getTourStartDate() != null) {
-            orderVO.setTourStartDate(Date.valueOf(tourBooking.getTourStartDate()));
+            orderVO.setTourStartDate(tourBooking.getTourStartDate());
         }
         if (tourBooking.getTourEndDate() != null) {
-            orderVO.setTourEndDate(Date.valueOf(tourBooking.getTourEndDate()));
+            orderVO.setTourEndDate(tourBooking.getTourEndDate());
         }
         
         orderVO.setStatus(tourBooking.getStatus());
@@ -912,12 +911,12 @@ public class OrderServiceImpl implements OrderService {
         orderVO.setPickupLocation(tourBooking.getPickupLocation());
         orderVO.setDropoffLocation(tourBooking.getDropoffLocation());
         
-        // 日期转换
+        // 日期设置（直接使用LocalDate，无需转换）
         if (tourBooking.getPickupDate() != null) {
-            orderVO.setPickupDate(Date.valueOf(tourBooking.getPickupDate()));
+            orderVO.setPickupDate(tourBooking.getPickupDate());
         }
         if (tourBooking.getDropoffDate() != null) {
-            orderVO.setDropoffDate(Date.valueOf(tourBooking.getDropoffDate()));
+            orderVO.setDropoffDate(tourBooking.getDropoffDate());
         }
         
         orderVO.setSpecialRequests(tourBooking.getSpecialRequests());

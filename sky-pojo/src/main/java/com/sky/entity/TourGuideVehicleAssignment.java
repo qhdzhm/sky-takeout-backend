@@ -136,7 +136,7 @@ public class TourGuideVehicleAssignment implements Serializable {
     private String bookingIds;
 
     /**
-     * 关联的旅游计划订单ID列表（JSON格式）
+     * 关联的预订订单ID列表（JSON格式）- 对应tour_schedule_order表中的booking_id
      */
     private String tourScheduleOrderIds;
 
@@ -174,6 +174,17 @@ public class TourGuideVehicleAssignment implements Serializable {
      * 优先级：1-高, 2-中, 3-低
      */
     private Integer priority;
+
+    // ====== 团型管理字段 ======
+    /**
+     * 团型类型（standard：普通团，small_12：12人团，small_14：14人团，luxury：精品团）
+     */
+    private String groupType;
+    
+    /**
+     * 团型人数限制
+     */
+    private Integer groupSizeLimit;
 
     /**
      * 创建时间

@@ -185,6 +185,7 @@ public class TourGuideVehicleAssignmentVO implements Serializable {
         private Integer age;
         private String requirements;
         private String phoneNumber;
+        private String wechat; // 🆕 微信号
         private String specialNeeds;
     }
 } 

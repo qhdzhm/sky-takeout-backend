@@ -21,7 +21,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
-import java.sql.Date;
 
 /**
  * 订单相关接口
@@ -564,15 +563,15 @@ public class OrderController {
         orderVO.setUserId(tourBooking.getUserId() != null ? tourBooking.getUserId().intValue() : null);
         orderVO.setAgentId(tourBooking.getAgentId() != null ? tourBooking.getAgentId().intValue() : null);
         
-        // 日期转换
+        // 日期设置（直接使用LocalDate，无需转换）
         if (tourBooking.getBookingDate() != null) {
-            orderVO.setBookingDate(Date.valueOf(tourBooking.getBookingDate().toLocalDate()));
+            orderVO.setBookingDate(tourBooking.getBookingDate().toLocalDate());
         }
         if (tourBooking.getTourStartDate() != null) {
-            orderVO.setTourStartDate(Date.valueOf(tourBooking.getTourStartDate()));
+            orderVO.setTourStartDate(tourBooking.getTourStartDate());
         }
         if (tourBooking.getTourEndDate() != null) {
-            orderVO.setTourEndDate(Date.valueOf(tourBooking.getTourEndDate()));
+            orderVO.setTourEndDate(tourBooking.getTourEndDate());
         }
         
         orderVO.setStatus(tourBooking.getStatus());
@@ -588,12 +587,12 @@ public class OrderController {
         orderVO.setPickupLocation(tourBooking.getPickupLocation());
         orderVO.setDropoffLocation(tourBooking.getDropoffLocation());
         
-        // 日期转换
+        // 日期设置（直接使用LocalDate，无需转换）
         if (tourBooking.getPickupDate() != null) {
-            orderVO.setPickupDate(Date.valueOf(tourBooking.getPickupDate()));
+            orderVO.setPickupDate(tourBooking.getPickupDate());
         }
         if (tourBooking.getDropoffDate() != null) {
-            orderVO.setDropoffDate(Date.valueOf(tourBooking.getDropoffDate()));
+            orderVO.setDropoffDate(tourBooking.getDropoffDate());
         }
         
         orderVO.setSpecialRequests(tourBooking.getSpecialRequests());

@@ -394,6 +394,23 @@ public class GuideAssignmentController {
     }
 
     /**
+     * 根据分配ID获取包含订单详情的完整分配信息
+     */
+    @GetMapping("/{id}/with-orders")
+    @ApiOperation("获取包含订单详情的分配信息")
+    public Result<TourGuideVehicleAssignmentVO> getAssignmentWithOrderDetails(@PathVariable Long id) {
+        log.info("获取包含订单详情的分配信息，ID: {}", id);
+        
+        try {
+            TourGuideVehicleAssignmentVO assignment = assignmentService.getAssignmentWithOrderDetails(id);
+            return Result.success(assignment);
+        } catch (Exception e) {
+            log.error("获取分配订单详情失败：{}", e.getMessage(), e);
+            return Result.error("获取分配订单详情失败");
+        }
+    }
+
+    /**
      * 分配状态响应VO
      */
     public static class AssignmentStatusVO {

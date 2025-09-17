@@ -414,9 +414,11 @@ public class PassengerServiceImpl implements PassengerService {
                 
         int result = passengerMapper.saveBookingPassengerRelation(relation);
         
-        // 🆕 自动更新订单人数统计
+        // 🆕 自动更新订单人数统计 - 仅在非订单编辑场景下更新
         if (result > 0) {
-            updateBookingPassengerCount(bookingId);
+            // 不自动更新人数统计，让订单编辑时的人数以用户手动设置为准
+            // updateBookingPassengerCount(bookingId);
+            log.info("✅ 添加乘客完成，跳过自动人数统计更新（保持用户手动设置的人数）");
         }
         
         return result > 0;
@@ -434,9 +436,11 @@ public class PassengerServiceImpl implements PassengerService {
     public Boolean removePassengerFromBooking(Integer bookingId, Integer passengerId) {
         int result = passengerMapper.deleteRelation(bookingId, passengerId);
         
-        // 🆕 自动更新订单人数统计
+        // 🆕 自动更新订单人数统计 - 仅在非订单编辑场景下更新
         if (result > 0) {
-            updateBookingPassengerCount(bookingId);
+            // 不自动更新人数统计，让订单编辑时的人数以用户手动设置为准
+            // updateBookingPassengerCount(bookingId);
+            log.info("✅ 删除乘客完成，跳过自动人数统计更新（保持用户手动设置的人数）");
         }
         
         return result > 0;
@@ -508,8 +512,9 @@ public class PassengerServiceImpl implements PassengerService {
         int relationResult = passengerMapper.updateBookingPassengerRelation(relation);
         log.info("更新乘客关联信息结果: {}", relationResult > 0 ? "成功" : "失败");
         
-        // 🆕 自动更新订单人数统计（因为乘客的isChild属性可能改变）
-        updateBookingPassengerCount(bookingId);
+        // 🆕 自动更新订单人数统计（因为乘客的isChild属性可能改变）- 仅在非订单编辑场景下更新
+        // updateBookingPassengerCount(bookingId);
+        log.info("✅ 更新乘客信息完成，跳过自动人数统计更新（保持用户手动设置的人数）");
         
         return true; // 只要乘客基本信息更新成功，就认为更新成功
     }

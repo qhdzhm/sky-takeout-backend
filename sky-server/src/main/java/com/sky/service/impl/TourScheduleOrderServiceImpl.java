@@ -509,6 +509,18 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
                 entity.setBookingDate(originalBooking.getBookingDate());
             }
             
+            // ============ 团型信息同步 ============
+            // 🎯 同步团型字段到排团表
+            if (entity.getGroupType() == null || entity.getGroupType().isEmpty()) {
+                entity.setGroupType(originalBooking.getGroupType());
+            }
+            if (entity.getGroupSizeLimit() == null) {
+                entity.setGroupSizeLimit(originalBooking.getGroupSizeLimit());
+            }
+            
+            log.info("🎯 团型信息同步 - 订单{}: 团型={}, 人数限制={}", 
+                    originalBooking.getOrderNumber(), entity.getGroupType(), entity.getGroupSizeLimit());
+            
             // ============ 产品名称设置 ============
             // 从原始订单中获取产品名称
             if (entity.getTourName() == null || entity.getTourName().isEmpty()) {

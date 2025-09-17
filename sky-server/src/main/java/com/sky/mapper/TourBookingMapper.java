@@ -269,4 +269,23 @@ public interface TourBookingMapper {
      */
     @Select("SELECT * FROM tour_bookings WHERE (user_id = #{userId} OR agent_id = #{userId}) AND (user_hidden IS NULL OR user_hidden = false) ORDER BY created_at DESC")
     List<TourBooking> getVisibleOrdersByUser(@Param("userId") Integer userId);
+
+    /**
+     * 管理员确认订单（支持价格调整和团型设置）
+     * @param bookingId 订单ID
+     * @param status 订单状态
+     * @param adjustedPrice 调整后的价格
+     * @param specialRequests 特殊要求
+     * @param operatorInfo 操作员信息
+     * @param groupType 团型类型
+     * @param groupSizeLimit 团型人数限制
+     * @return 影响行数
+     */
+    int confirmOrderByAdmin(@Param("bookingId") Integer bookingId, 
+                           @Param("status") String status,
+                           @Param("adjustedPrice") Double adjustedPrice,
+                           @Param("specialRequests") String specialRequests,
+                           @Param("operatorInfo") String operatorInfo,
+                           @Param("groupType") String groupType,
+                           @Param("groupSizeLimit") Integer groupSizeLimit);
 } 

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.pagehelper.Page;
 import com.github.pagehelper.PageHelper;
-import com.sky.constant.MessageConstant;
 import com.sky.context.BaseContext;
 import com.sky.dto.TourGuideVehicleAssignmentDTO;
 import com.sky.entity.Guide;
@@ -16,6 +15,10 @@ import com.sky.mapper.GuideAvailabilityMapper;
 import com.sky.mapper.TourGuideVehicleAssignmentMapper;
 import com.sky.mapper.VehicleMapper;
 import com.sky.mapper.VehicleAvailabilityMapper;
+import com.sky.mapper.TourScheduleOrderMapper;
+import com.sky.mapper.PassengerMapper;
+import com.sky.entity.Passenger;
+import com.sky.entity.TourScheduleOrder;
 import com.sky.result.PageResult;
 import com.sky.service.TourGuideVehicleAssignmentService;
 import com.sky.vo.GuideAvailabilityVO;
@@ -34,6 +37,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -60,6 +64,12 @@ public class TourGuideVehicleAssignmentServiceImpl implements TourGuideVehicleAs
 
     @Autowired
     private ObjectMapper objectMapper;
+    
+    @Autowired
+    private TourScheduleOrderMapper tourScheduleOrderMapper;
+    
+    @Autowired
+    private PassengerMapper passengerMapper;
 
     /**
      * 获取可用导游列表 - 基于 guide_availability 表
@@ -252,6 +262,184 @@ public class TourGuideVehicleAssignmentServiceImpl implements TourGuideVehicleAs
     @Override
     public List<TourGuideVehicleAssignmentVO> getByVehicleId(Long vehicleId, LocalDate assignmentDate) {
         return assignmentMapper.getByVehicleId(vehicleId, assignmentDate);
+    }
+
+    /**
+     * 根据分配记录ID获取包含订单详情的完整分配信息
+     */
+    @Override
+    public TourGuideVehicleAssignmentVO getAssignmentWithOrderDetails(Long assignmentId) {
+        log.info("获取包含订单详情的分配信息，assignmentId: {}", assignmentId);
+        
+        // 1. 获取分配基本信息
+        TourGuideVehicleAssignmentVO assignment = assignmentMapper.getById(assignmentId);
+        if (assignment == null) {
+            throw new BaseException("分配记录不存在");
+        }
+        
+        // 2. 解析并获取关联的订单详细信息
+        if (assignment.getTourScheduleOrderIds() != null && !assignment.getTourScheduleOrderIds().isEmpty()) {
+            try {
+                // 获取booking_ids列表
+                List<Long> bookingIds = assignment.getTourScheduleOrderIds();
+                
+                log.info("解析的booking IDs: {}", bookingIds);
+                
+                // 3. 根据booking_id查询订单详细信息
+                List<TourScheduleOrder> orderDetails = new ArrayList<>();
+                for (Long bookingId : bookingIds) {
+                    List<TourScheduleOrder> orders = tourScheduleOrderMapper.getByBookingId(bookingId.intValue());
+                    if (orders != null && !orders.isEmpty()) {
+                        orderDetails.addAll(orders);
+                        log.info("查询到booking_id {} 对应的 {} 条订单记录", bookingId, orders.size());
+                    }
+                }
+                
+                // 4. 将订单信息转换为JSON并设置到assignment中
+                if (!orderDetails.isEmpty()) {
+                    // 将订单详情转换为乘客信息格式
+                    List<TourGuideVehicleAssignmentVO.PassengerInfo> passengerDetails = new ArrayList<>();
+                    
+                    // 按booking_id分组处理订单
+                    Map<Integer, List<TourScheduleOrder>> groupedOrders = orderDetails.stream()
+                        .collect(Collectors.groupingBy(TourScheduleOrder::getBookingId));
+                    
+                    for (Map.Entry<Integer, List<TourScheduleOrder>> entry : groupedOrders.entrySet()) {
+                        Integer bookingId = entry.getKey();
+                        List<TourScheduleOrder> orders = entry.getValue();
+                        TourScheduleOrder firstOrder = orders.get(0); // 取第一个订单作为代表
+                        
+                        // 🆕 查询该订单关联的所有乘客信息
+                        try {
+                            List<Passenger> passengers = passengerMapper.getByBookingId(bookingId);
+                            
+                            if (passengers != null && !passengers.isEmpty()) {
+                                log.info("为booking_id {} 查询到 {} 个乘客信息", bookingId, passengers.size());
+                                
+                                // 为每个乘客创建一个PassengerInfo记录
+                                for (Passenger passenger : passengers) {
+                                    TourGuideVehicleAssignmentVO.PassengerInfo passengerDetail = new TourGuideVehicleAssignmentVO.PassengerInfo();
+                                    
+                                    // 优先使用乘客表中的信息，如果为空则使用订单中的联系人信息
+                                    passengerDetail.setName(passenger.getFullName() != null && !passenger.getFullName().trim().isEmpty() 
+                                        ? passenger.getFullName() : firstOrder.getContactPerson());
+                                    passengerDetail.setPhoneNumber(passenger.getPhone() != null && !passenger.getPhone().trim().isEmpty() 
+                                        ? passenger.getPhone() : firstOrder.getContactPhone());
+                                    passengerDetail.setWechat(passenger.getWechatId()); // 🆕 添加微信信息
+                                    passengerDetail.setRequirements(passenger.getSpecialRequests() != null 
+                                        ? passenger.getSpecialRequests() : firstOrder.getSpecialRequests());
+                                    
+                                    // 组装详细信息，包含航班和酒店信息
+                                    StringBuilder infoBuilder = new StringBuilder();
+                                    infoBuilder.append(String.format("订单号: %s, 成人: %d, 儿童: %d, 接送: %s -> %s",
+                                        firstOrder.getOrderNumber(),
+                                        firstOrder.getAdultCount() != null ? firstOrder.getAdultCount() : 0,
+                                        firstOrder.getChildCount() != null ? firstOrder.getChildCount() : 0,
+                                        firstOrder.getPickupLocation() != null ? firstOrder.getPickupLocation() : "待确认",
+                                        firstOrder.getDropoffLocation() != null ? firstOrder.getDropoffLocation() : "待确认"
+                                    ));
+                                    
+                                    // 添加航班信息
+                                    if (firstOrder.getFlightNumber() != null && !firstOrder.getFlightNumber().trim().isEmpty()) {
+                                        infoBuilder.append(", 航班: ").append(firstOrder.getFlightNumber());
+                                    }
+                                    if (firstOrder.getReturnFlightNumber() != null && !firstOrder.getReturnFlightNumber().trim().isEmpty()) {
+                                        infoBuilder.append(", 返程航班: ").append(firstOrder.getReturnFlightNumber());
+                                    }
+                                    
+                                    // 🆕 添加航班时间信息
+                                    if (firstOrder.getArrivalLandingTime() != null) {
+                                        infoBuilder.append(", 到达降落时间: ").append(firstOrder.getArrivalLandingTime());
+                                    }
+                                    if (firstOrder.getDepartureDepartureTime() != null) {
+                                        infoBuilder.append(", 返程起飞时间: ").append(firstOrder.getDepartureDepartureTime());
+                                    }
+                                    
+                                    // 添加酒店信息
+                                    if (firstOrder.getRoomDetails() != null && !firstOrder.getRoomDetails().trim().isEmpty()) {
+                                        infoBuilder.append(", 酒店: ").append(firstOrder.getRoomDetails());
+                                    }
+                                    
+                                    passengerDetail.setSpecialNeeds(infoBuilder.toString());
+                                    passengerDetails.add(passengerDetail);
+                                }
+                            } else {
+                                // 没有关联乘客信息时，使用订单中的联系人作为默认乘客
+                                log.warn("booking_id {} 没有找到关联的乘客信息，使用订单联系人作为默认乘客", bookingId);
+                                
+                                TourGuideVehicleAssignmentVO.PassengerInfo passengerDetail = new TourGuideVehicleAssignmentVO.PassengerInfo();
+                                passengerDetail.setName(firstOrder.getContactPerson());
+                                passengerDetail.setPhoneNumber(firstOrder.getContactPhone());
+                                passengerDetail.setRequirements(firstOrder.getSpecialRequests());
+                                
+                                // 组装详细信息
+                                StringBuilder infoBuilder = new StringBuilder();
+                                infoBuilder.append(String.format("订单号: %s, 成人: %d, 儿童: %d, 接送: %s -> %s",
+                                    firstOrder.getOrderNumber(),
+                                    firstOrder.getAdultCount() != null ? firstOrder.getAdultCount() : 0,
+                                    firstOrder.getChildCount() != null ? firstOrder.getChildCount() : 0,
+                                    firstOrder.getPickupLocation() != null ? firstOrder.getPickupLocation() : "待确认",
+                                    firstOrder.getDropoffLocation() != null ? firstOrder.getDropoffLocation() : "待确认"
+                                ));
+                                
+                                // 添加航班信息
+                                if (firstOrder.getFlightNumber() != null && !firstOrder.getFlightNumber().trim().isEmpty()) {
+                                    infoBuilder.append(", 航班: ").append(firstOrder.getFlightNumber());
+                                }
+                                if (firstOrder.getReturnFlightNumber() != null && !firstOrder.getReturnFlightNumber().trim().isEmpty()) {
+                                    infoBuilder.append(", 返程航班: ").append(firstOrder.getReturnFlightNumber());
+                                }
+                                
+                                // 🆕 添加航班时间信息
+                                if (firstOrder.getArrivalLandingTime() != null) {
+                                    infoBuilder.append(", 到达降落时间: ").append(firstOrder.getArrivalLandingTime());
+                                }
+                                if (firstOrder.getDepartureDepartureTime() != null) {
+                                    infoBuilder.append(", 返程起飞时间: ").append(firstOrder.getDepartureDepartureTime());
+                                }
+                                
+                                // 添加酒店信息
+                                if (firstOrder.getRoomDetails() != null && !firstOrder.getRoomDetails().trim().isEmpty()) {
+                                    infoBuilder.append(", 酒店: ").append(firstOrder.getRoomDetails());
+                                }
+                                
+                                passengerDetail.setSpecialNeeds(infoBuilder.toString());
+                                passengerDetails.add(passengerDetail);
+                            }
+                        } catch (Exception e) {
+                            log.error("查询booking_id {} 的乘客信息时出现异常: {}", bookingId, e.getMessage(), e);
+                            
+                            // 异常时使用订单联系人信息作为fallback
+                            TourGuideVehicleAssignmentVO.PassengerInfo passengerDetail = new TourGuideVehicleAssignmentVO.PassengerInfo();
+                            passengerDetail.setName(firstOrder.getContactPerson());
+                            passengerDetail.setPhoneNumber(firstOrder.getContactPhone());
+                            passengerDetail.setRequirements(firstOrder.getSpecialRequests());
+                            
+                            String orderInfo = String.format("订单号: %s, 成人: %d, 儿童: %d, 接送: %s -> %s",
+                                firstOrder.getOrderNumber(),
+                                firstOrder.getAdultCount() != null ? firstOrder.getAdultCount() : 0,
+                                firstOrder.getChildCount() != null ? firstOrder.getChildCount() : 0,
+                                firstOrder.getPickupLocation() != null ? firstOrder.getPickupLocation() : "待确认",
+                                firstOrder.getDropoffLocation() != null ? firstOrder.getDropoffLocation() : "待确认"
+                            );
+                            passengerDetail.setSpecialNeeds(orderInfo);
+                            passengerDetails.add(passengerDetail);
+                        }
+                    }
+                    
+                    // 将乘客详情设置回assignment
+                    assignment.setPassengerDetails(passengerDetails);
+                    
+                    log.info("成功获取到 {} 个订单的详细信息", passengerDetails.size());
+                }
+                
+            } catch (Exception e) {
+                log.error("解析订单ID或查询订单详情失败: {}", e.getMessage(), e);
+                throw new BaseException("获取订单详情失败");
+            }
+        }
+        
+        return assignment;
     }
 
     /**

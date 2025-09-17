@@ -309,6 +309,17 @@ public class TourScheduleOrder implements Serializable {
      */
     private String dropoffTime;
     
+    // ====== 团型管理字段 ======
+    /**
+     * 团型类型（standard：普通团，small_12：12人团，small_14：14人团，luxury：精品团）
+     */
+    private String groupType;
+    
+    /**
+     * 团型人数限制
+     */
+    private Integer groupSizeLimit;
+    
     // ====== 统计查询专用字段（非持久化字段） ======
     /**
      * 导游姓名 (来自tour_guide_vehicle_assignment表)

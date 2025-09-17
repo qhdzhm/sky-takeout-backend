@@ -4,9 +4,9 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import java.math.BigDecimal;
-import java.util.Date;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 订单视图对象
@@ -21,15 +21,15 @@ public class OrderVO {
     private Integer userId; // 用户ID
     private Integer agentId; // 代理商ID
     private Long operatorId; // 操作员ID
-    private Date bookingDate; // 预订日期
+    private LocalDate bookingDate; // 预订日期
     private String flightNumber; // 航班号
-    private Date arrivalLandingTime; // 到达时间
+    private LocalDateTime arrivalLandingTime; // 到达时间
     private String returnFlightNumber; // 返程航班号
-    private Date departureDepartureTime; // 起飞时间
-    private Date tourStartDate; // 旅行开始日期
-    private Date tourEndDate; // 旅行结束日期
-    private Date pickupDate; // 接机日期
-    private Date dropoffDate; // 送机日期
+    private LocalDateTime departureDepartureTime; // 起飞时间
+    private LocalDate tourStartDate; // 旅行开始日期
+    private LocalDate tourEndDate; // 旅行结束日期
+    private LocalDate pickupDate; // 接机日期
+    private LocalDate dropoffDate; // 送机日期
     private String pickupLocation; // 接机地点
     private String dropoffLocation; // 送机地点
     private String serviceType; // 服务类型
@@ -49,8 +49,8 @@ public class OrderVO {
     private String status; // 订单状态
     private String paymentStatus; // 支付状态
     private BigDecimal totalPrice; // 总价格
-    private Date createdAt; // 创建时间
-    private Date updatedAt; // 更新时间
+    private LocalDateTime createdAt; // 创建时间
+    private LocalDateTime updatedAt; // 更新时间
     private String selectedOptionalTours; // 选中的可选行程（JSON格式）
     
     // 附加信息

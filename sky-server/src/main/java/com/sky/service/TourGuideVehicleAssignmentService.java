@@ -109,6 +109,11 @@ public interface TourGuideVehicleAssignmentService {
     boolean checkVehicleAssigned(Long vehicleId, LocalDate assignmentDate);
 
     /**
+     * 根据分配记录ID获取包含订单详情的完整分配信息
+     */
+    TourGuideVehicleAssignmentVO getAssignmentWithOrderDetails(Long assignmentId);
+
+    /**
      * 获取指定日期的分配统计信息
      */
     AssignmentStatistics getAssignmentStatistics(LocalDate assignmentDate);

@@ -626,6 +626,27 @@ public class TourBookingServiceImpl implements TourBookingService {
         TourBooking tourBooking = new TourBooking();
         BeanUtils.copyProperties(tourBookingDTO, tourBooking);
         
+        // 🆕 确保人数相关字段被正确设置（管理后台可修改人数）
+        if (tourBookingDTO.getAdultCount() != null) {
+            tourBooking.setAdultCount(tourBookingDTO.getAdultCount());
+            log.info("✅ 设置成人数量: {}", tourBookingDTO.getAdultCount());
+        }
+        if (tourBookingDTO.getChildCount() != null) {
+            tourBooking.setChildCount(tourBookingDTO.getChildCount());
+            log.info("✅ 设置儿童数量: {}", tourBookingDTO.getChildCount());
+        }
+        if (tourBookingDTO.getGroupSize() != null) {
+            tourBooking.setGroupSize(tourBookingDTO.getGroupSize());
+            log.info("✅ 设置团队规模: {}", tourBookingDTO.getGroupSize());
+        } else if (tourBookingDTO.getAdultCount() != null || tourBookingDTO.getChildCount() != null) {
+            // 如果没有直接设置groupSize，但设置了人数，自动计算groupSize
+            int calculatedGroupSize = (tourBookingDTO.getAdultCount() != null ? tourBookingDTO.getAdultCount() : 0) + 
+                                    (tourBookingDTO.getChildCount() != null ? tourBookingDTO.getChildCount() : 0);
+            tourBooking.setGroupSize(calculatedGroupSize);
+            log.info("✅ 自动计算团队规模: {} (成人:{} + 儿童:{})", 
+                    calculatedGroupSize, tourBookingDTO.getAdultCount(), tourBookingDTO.getChildCount());
+        }
+        
         // 更新订单基本信息
         tourBookingMapper.update(tourBooking);
 
@@ -744,6 +765,18 @@ public class TourBookingServiceImpl implements TourBookingService {
                     updateScheduleTableContactInfo(tourBookingDTO.getBookingId(), 
                         tourBookingDTO.getContactPerson(), tourBookingDTO.getContactPhone());
                     log.info("✅ 排团表联系人信息同步完成");
+                }
+                
+                // 🆕 同步人数信息
+                if (tourBookingDTO.getAdultCount() != null || tourBookingDTO.getChildCount() != null || tourBookingDTO.getGroupSize() != null) {
+                    Integer syncAdultCount = tourBookingDTO.getAdultCount() != null ? tourBookingDTO.getAdultCount() : currentBooking.getAdultCount();
+                    Integer syncChildCount = tourBookingDTO.getChildCount() != null ? tourBookingDTO.getChildCount() : currentBooking.getChildCount();
+                    Integer syncGroupSize = tourBookingDTO.getGroupSize() != null ? tourBookingDTO.getGroupSize() : (syncAdultCount + syncChildCount);
+                    
+                    int updatedCount = tourScheduleOrderMapper.updatePassengerCountByBookingId(
+                        tourBookingDTO.getBookingId(), syncAdultCount, syncChildCount, syncGroupSize);
+                    log.info("✅ 排团表人数信息同步完成，更新记录数: {}, 成人:{}, 儿童:{}, 总人数:{}", 
+                            updatedCount, syncAdultCount, syncChildCount, syncGroupSize);
                 }
                 
                 // 同步特殊要求信息
@@ -1402,14 +1435,36 @@ public class TourBookingServiceImpl implements TourBookingService {
                     log.info("✅ 排团表特殊要求同步完成，更新记录数: {}", updatedCount);
                 }
                 
-                // 🆕 同步接送地点信息
+                // 🆕 智能同步接送地点信息 - 只更新第一天和最后一天
                 boolean pickupInfoChanged = updateDTO.getPickupLocation() != null || updateDTO.getDropoffLocation() != null;
                 if (pickupInfoChanged) {
-                    int updatedCount = tourScheduleOrderMapper.updatePickupDropoffByBookingId(
-                        updateDTO.getBookingId(), 
-                        updateDTO.getPickupLocation() != null ? updateDTO.getPickupLocation() : currentBooking.getPickupLocation(),
-                        updateDTO.getDropoffLocation() != null ? updateDTO.getDropoffLocation() : currentBooking.getDropoffLocation());
-                    log.info("✅ 排团表接送地点同步完成，更新记录数: {}", updatedCount);
+                    log.info("🚗 开始智能同步接送地点信息，订单ID: {}", updateDTO.getBookingId());
+                    
+                    // 获取最终的接送地点信息
+                    String finalPickupLocation = updateDTO.getPickupLocation() != null ? updateDTO.getPickupLocation() : currentBooking.getPickupLocation();
+                    String finalDropoffLocation = updateDTO.getDropoffLocation() != null ? updateDTO.getDropoffLocation() : currentBooking.getDropoffLocation();
+                    
+                    int totalUpdatedCount = 0;
+                    
+                    // 如果有接车地点信息，只更新第一天的接车地点
+                    if (finalPickupLocation != null && !finalPickupLocation.trim().isEmpty()) {
+                        int firstDayUpdatedCount = tourScheduleOrderMapper.updateFirstDayPickupLocationOnly(
+                            updateDTO.getBookingId(), finalPickupLocation);
+                        totalUpdatedCount += firstDayUpdatedCount;
+                        log.info("✅ 第一天接车地点更新完成，更新记录数: {}, 接车地点: {}", 
+                                firstDayUpdatedCount, finalPickupLocation);
+                    }
+                    
+                    // 如果有送车地点信息，只更新最后一天的送车地点
+                    if (finalDropoffLocation != null && !finalDropoffLocation.trim().isEmpty()) {
+                        int lastDayUpdatedCount = tourScheduleOrderMapper.updateLastDayDropoffLocationOnly(
+                            updateDTO.getBookingId(), finalDropoffLocation);
+                        totalUpdatedCount += lastDayUpdatedCount;
+                        log.info("✅ 最后一天送车地点更新完成，更新记录数: {}, 送车地点: {}", 
+                                lastDayUpdatedCount, finalDropoffLocation);
+                    }
+                    
+                    log.info("✅ 智能接送地点同步完成，总更新记录数: {}", totalUpdatedCount);
                 }
                 
                 // 🆕 同步航班信息
@@ -1424,28 +1479,35 @@ public class TourBookingServiceImpl implements TourBookingService {
                         updateDTO.getDepartureDepartureTime() != null ? updateDTO.getDepartureDepartureTime() : currentBooking.getDepartureDepartureTime());
                     log.info("✅ 排团表航班信息同步完成，更新记录数: {}", updatedCount);
                     
-                    // 🆕 根据航班信息更新第一天和最后一天的接送地点
+                    // 🆕 根据航班信息智能更新第一天和最后一天的接送地点（格式化显示）
                     String finalFlightNumber = updateDTO.getFlightNumber() != null ? updateDTO.getFlightNumber() : currentBooking.getFlightNumber();
                     String finalReturnFlightNumber = updateDTO.getReturnFlightNumber() != null ? updateDTO.getReturnFlightNumber() : currentBooking.getReturnFlightNumber();
+                    String finalPickupLocation = updateDTO.getPickupLocation() != null ? updateDTO.getPickupLocation() : currentBooking.getPickupLocation();
+                    String finalDropoffLocation = updateDTO.getDropoffLocation() != null ? updateDTO.getDropoffLocation() : currentBooking.getDropoffLocation();
                     
                     boolean hasArrivalFlight = finalFlightNumber != null && !finalFlightNumber.trim().isEmpty();
                     boolean hasDepartureFlight = finalReturnFlightNumber != null && !finalReturnFlightNumber.trim().isEmpty();
                     
                     int totalUpdatedCount = 0;
+                    
+                    // 第一天接机地点：如果是机场接机，格式化为"机场名(航班号)"
                     if (hasArrivalFlight) {
-                        int pickupUpdatedCount = tourScheduleOrderMapper.updateFirstDayPickupLocation(
-                            updateDTO.getBookingId(), finalFlightNumber);
+                        String formattedPickupLocation = formatAirportLocation(finalPickupLocation, finalFlightNumber, true);
+                        int pickupUpdatedCount = tourScheduleOrderMapper.updateFirstDayPickupLocationOnly(
+                            updateDTO.getBookingId(), formattedPickupLocation);
                         totalUpdatedCount += pickupUpdatedCount;
-                        log.info("✅ 第一天接机地点更新完成，更新记录数: {}, 到达航班: {}", 
-                                pickupUpdatedCount, finalFlightNumber);
+                        log.info("✅ 第一天接机地点更新完成，更新记录数: {}, 格式化地点: {}", 
+                                pickupUpdatedCount, formattedPickupLocation);
                     }
                     
+                    // 最后一天送机地点：如果是机场送机，格式化为"机场名(航班号)"
                     if (hasDepartureFlight) {
-                        int dropoffUpdatedCount = tourScheduleOrderMapper.updateLastDayDropoffLocation(
-                            updateDTO.getBookingId(), finalReturnFlightNumber);
+                        String formattedDropoffLocation = formatAirportLocation(finalDropoffLocation, finalReturnFlightNumber, false);
+                        int dropoffUpdatedCount = tourScheduleOrderMapper.updateLastDayDropoffLocationOnly(
+                            updateDTO.getBookingId(), formattedDropoffLocation);
                         totalUpdatedCount += dropoffUpdatedCount;
-                        log.info("✅ 最后一天送机地点更新完成，更新记录数: {}, 离开航班: {}", 
-                                dropoffUpdatedCount, finalReturnFlightNumber);
+                        log.info("✅ 最后一天送机地点更新完成，更新记录数: {}, 格式化地点: {}", 
+                                dropoffUpdatedCount, formattedDropoffLocation);
                     }
                     
                     if (totalUpdatedCount > 0) {
@@ -1604,6 +1666,52 @@ public class TourBookingServiceImpl implements TourBookingService {
         } catch (Exception e) {
             log.error("❌ 同步乘客表联系人信息时发生异常: 订单ID={}, 错误: {}", bookingId, e.getMessage(), e);
             throw e;
+        }
+    }
+
+    /**
+     * 格式化机场接送地点显示
+     * @param location 地点名称
+     * @param flightNumber 航班号
+     * @param isPickup 是否为接机（true=接机，false=送机）
+     * @return 格式化后的地点显示
+     */
+    private String formatAirportLocation(String location, String flightNumber, boolean isPickup) {
+        // 如果没有航班号，直接返回地点
+        if (flightNumber == null || flightNumber.trim().isEmpty()) {
+            return location != null ? location : "";
+        }
+        
+        // 如果没有地点信息，根据接送类型设置默认机场
+        if (location == null || location.trim().isEmpty()) {
+            location = isPickup ? "Hobart Airport" : "Hobart Airport";
+        }
+        
+        // 检查地点是否已经包含航班号信息，避免重复格式化
+        String cleanFlightNumber = flightNumber.trim().toUpperCase();
+        if (location.contains("(" + cleanFlightNumber + ")") || location.contains(cleanFlightNumber)) {
+            return location; // 已经格式化过，直接返回
+        }
+        
+        // 智能识别机场地点并格式化
+        String normalizedLocation = location.trim().toLowerCase();
+        if (normalizedLocation.contains("airport") || normalizedLocation.contains("机场") || 
+            normalizedLocation.contains("airpor") || normalizedLocation.contains("hobart")) {
+            
+            // 标准化机场名称
+            String airportName = "Hobart Airport";
+            if (normalizedLocation.contains("melbourne") || normalizedLocation.contains("墨尔本")) {
+                airportName = "Melbourne Airport";
+            } else if (normalizedLocation.contains("sydney") || normalizedLocation.contains("悉尼")) {
+                airportName = "Sydney Airport";
+            } else if (normalizedLocation.contains("brisbane") || normalizedLocation.contains("布里斯班")) {
+                airportName = "Brisbane Airport";
+            }
+            
+            return String.format("%s (%s)", airportName, cleanFlightNumber);
+        } else {
+            // 非机场地点，但有航班号，可能是酒店接机等
+            return String.format("%s (%s)", location.trim(), cleanFlightNumber);
         }
     }
 
@@ -2029,6 +2137,13 @@ public class TourBookingServiceImpl implements TourBookingService {
         scheduleOrder.setFromReferral(booking.getFromReferral() != null && booking.getFromReferral() == 1);
         scheduleOrder.setReferralCode(booking.getReferralCode());
         
+        // ============ 团型信息同步 ============
+        // 🎯 从订单同步团型字段到排团表
+        scheduleOrder.setGroupType(booking.getGroupType());
+        scheduleOrder.setGroupSizeLimit(booking.getGroupSizeLimit());
+        log.info("🎯 团型信息同步到排团表 - 订单{} 第{}天: 团型={}, 人数限制={}", 
+                booking.getBookingId(), dayNumber, booking.getGroupType(), booking.getGroupSizeLimit());
+        
         // 设置时间戳
         LocalDateTime now = LocalDateTime.now();
         scheduleOrder.setCreatedAt(now);
@@ -2039,6 +2154,8 @@ public class TourBookingServiceImpl implements TourBookingService {
         log.info("  └ 客人信息: 姓名=\"{}\", 电话=\"{}\", 成人{}人, 儿童{}人", 
                 scheduleOrder.getContactPerson(), scheduleOrder.getContactPhone(), 
                 scheduleOrder.getAdultCount(), scheduleOrder.getChildCount());
+        log.info("  └ 团型信息: 团型=\"{}\", 人数限制={}", 
+                scheduleOrder.getGroupType(), scheduleOrder.getGroupSizeLimit());
         log.info("  └ 特殊要求: \"{}\"", scheduleOrder.getSpecialRequests());
         log.info("  └ 行程标题: \"{}\"", scheduleOrder.getTitle());
         log.info("  └ 接送地点: 接=\"{}\", 送=\"{}\"", 
@@ -3085,8 +3202,9 @@ public class TourBookingServiceImpl implements TourBookingService {
 
     @Override
     @Transactional
-    public Boolean confirmOrderByAdmin(Integer bookingId, Double adjustedPrice, String adjustmentReason) {
-        log.info("🔒 管理员确认订单开始，订单ID: {}, 调整价格: {}, 调整原因: {}", bookingId, adjustedPrice, adjustmentReason);
+    public Boolean confirmOrderByAdmin(Integer bookingId, Double adjustedPrice, String adjustmentReason, String groupType, Integer groupSizeLimit) {
+        log.info("🔒 管理员确认订单开始，订单ID: {}, 调整价格: {}, 调整原因: {}, 团型: {}, 人数限制: {}", 
+                bookingId, adjustedPrice, adjustmentReason, groupType, groupSizeLimit);
         
         try {
             // 🔒 权限检查：只有管理员和操作员才能确认订单
@@ -3148,10 +3266,47 @@ public class TourBookingServiceImpl implements TourBookingService {
                 }
             }
             
-            // 5. 更新订单更新时间
+            // 5. 设置团型信息
+            if (groupType != null && !groupType.trim().isEmpty() && !"standard".equals(groupType)) {
+                log.info("设置团型：{}, 人数限制: {}", groupType, groupSizeLimit);
+                
+                // 验证团型的有效性
+                if (!"small_12".equals(groupType) && !"small_14".equals(groupType) && !"luxury".equals(groupType)) {
+                    log.error("无效的团型类型: {}", groupType);
+                    throw new BusinessException("无效的团型类型");
+                }
+                
+                // 验证人数限制的合理性
+                if (groupSizeLimit != null && groupSizeLimit > 0) {
+                    int totalPeople = (tourBooking.getAdultCount() != null ? tourBooking.getAdultCount() : 0) + 
+                                    (tourBooking.getChildCount() != null ? tourBooking.getChildCount() : 0);
+                    if (totalPeople > groupSizeLimit) {
+                        log.error("订单人数({})超过团型限制({})", totalPeople, groupSizeLimit);
+                        throw new BusinessException(String.format("订单人数(%d人)超过了所选团型的限制(%d人)", totalPeople, groupSizeLimit));
+                    }
+                }
+                
+                tourBooking.setGroupType(groupType);
+                tourBooking.setGroupSizeLimit(groupSizeLimit);
+                
+                // 在特殊要求中添加团型信息
+                String groupTypeNote = String.format("[团型设置] %s", getGroupTypeName(groupType));
+                if (groupSizeLimit != null) {
+                    groupTypeNote += String.format(" (限制%d人)", groupSizeLimit);
+                }
+                
+                String existingRequests = tourBooking.getSpecialRequests();
+                if (existingRequests != null && !existingRequests.trim().isEmpty()) {
+                    tourBooking.setSpecialRequests(existingRequests + "\n" + groupTypeNote);
+                } else {
+                    tourBooking.setSpecialRequests(groupTypeNote);
+                }
+            }
+            
+            // 6. 更新订单更新时间
             tourBooking.setUpdatedAt(LocalDateTime.now());
             
-            // 6. 🔒 使用安全的更新方法（包含业务逻辑验证）
+            // 7. 🔒 使用安全的更新方法（包含业务逻辑验证）
             String operatorInfo = String.format("管理员确认订单 - 操作员ID: %s, 操作时间: %s", 
                 BaseContext.getCurrentId(), LocalDateTime.now());
             
@@ -3160,8 +3315,12 @@ public class TourBookingServiceImpl implements TourBookingService {
                 "confirmed",
                 adjustedPrice,
                 tourBooking.getSpecialRequests(),
-                operatorInfo
+                operatorInfo,
+                groupType,
+                groupSizeLimit
             );
+            
+            log.info("🎯 团型信息更新 - 订单ID: {}, 团型: {}, 人数限制: {}", bookingId, groupType, groupSizeLimit);
             
             // 检查更新是否成功（如果返回0表示不满足安全条件）
             if (updatedRows == 0) {
@@ -3280,6 +3439,25 @@ public class TourBookingServiceImpl implements TourBookingService {
         } catch (Exception e) {
             log.error("隐藏订单出错: bookingId={}, userId={}, 错误: {}", bookingId, userId, e.getMessage(), e);
             return false;
+        }
+    }
+
+    /**
+     * 获取团型名称
+     * @param groupType 团型代码
+     * @return 团型名称
+     */
+    private String getGroupTypeName(String groupType) {
+        switch (groupType) {
+            case "small_12":
+                return "12人精品团";
+            case "small_14":
+                return "14人小团";
+            case "luxury":
+                return "精品豪华团";
+            case "standard":
+            default:
+                return "普通团";
         }
     }
 

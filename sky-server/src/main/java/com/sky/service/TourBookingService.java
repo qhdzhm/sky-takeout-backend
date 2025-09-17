@@ -150,14 +150,16 @@ public interface TourBookingService {
     void autoSyncOrderToScheduleTable(Integer bookingId);
 
     /**
-     * 管理员确认订单（支持价格调整）
+     * 管理员确认订单（支持价格调整和团型设置）
      * 
      * @param bookingId 订单ID
      * @param adjustedPrice 调整后的价格（可选）
      * @param adjustmentReason 价格调整原因（可选）
+     * @param groupType 团型类型（可选）：standard, small_12, small_14, luxury
+     * @param groupSizeLimit 团型人数限制（可选）
      * @return 是否成功
      */
-    Boolean confirmOrderByAdmin(Integer bookingId, Double adjustedPrice, String adjustmentReason);
+    Boolean confirmOrderByAdmin(Integer bookingId, Double adjustedPrice, String adjustmentReason, String groupType, Integer groupSizeLimit);
 
     /**
      * 用户隐藏订单（软删除）

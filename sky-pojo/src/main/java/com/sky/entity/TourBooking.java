@@ -176,6 +176,17 @@ public class TourBooking implements Serializable {
     // 分配状态（unassigned：未分配，assigned：已分配，transferred：已转移）
     private String assignmentStatus;
     
+    // ====== 团型管理字段 ======
+    
+    // 团型类型（standard：普通团，small_12：12人团，small_14：14人团，luxury：精品团）
+    private String groupType;
+    
+    // 团型人数限制
+    private Integer groupSizeLimit;
+    
+    // 团型价格（如有调整）
+    private BigDecimal groupTypePrice;
+    
     // ====== 关联查询字段（非数据库字段） ======
     
     // 分配的操作员姓名

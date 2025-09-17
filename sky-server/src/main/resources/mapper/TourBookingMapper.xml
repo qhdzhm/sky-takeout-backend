@@ -46,6 +46,9 @@
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
         <result column="selected_optional_tours" property="selectedOptionalTours"/>
+        <result column="group_type" property="groupType"/>
+        <result column="group_size_limit" property="groupSizeLimit"/>
+        <result column="group_type_price" property="groupTypePrice"/>
     </resultMap>
 
     <!-- 根据用户ID查询订单 -->
@@ -241,29 +244,6 @@
         created_at, updated_at
     </sql>
     
-    <!-- 🔒 管理员安全确认订单方法 - 包含业务逻辑验证和权限检查 -->
-    <update id="confirmOrderByAdmin">
-        UPDATE tour_bookings 
-        SET 
-            status = #{newStatus},
-            <if test="newPrice != null">
-                total_price = #{newPrice},
-            </if>
-            <if test="specialRequests != null">
-                special_requests = #{specialRequests},
-            </if>
-            updated_at = NOW()
-        WHERE booking_id = #{bookingId}
-            /* 🔒 安全检查1: 只允许从pending状态转换 */
-            AND status = 'pending'
-            /* 🔒 安全检查2: 只允许转换到confirmed状态 */
-            AND #{newStatus} = 'confirmed'
-            /* 🔒 安全检查3: 价格合理性验证（如果提供了新价格） */
-            <if test="newPrice != null">
-                AND #{newPrice} >= 0 
-                AND #{newPrice} &lt;= (total_price * 10)  /* 不超过原价的10倍 */
-            </if>
-    </update>
 
     <!-- ===== Dashboard统计相关查询 ===== -->
     
@@ -388,5 +368,30 @@
         ORDER BY bookingCount DESC
         LIMIT 10
     </select>
+
+    <!-- 管理员确认订单（支持价格调整和团型设置） -->
+    <update id="confirmOrderByAdmin">
+        UPDATE tour_bookings 
+        SET status = #{status},
+            updated_at = NOW()
+            <if test="adjustedPrice != null and adjustedPrice > 0">
+                , total_price = #{adjustedPrice}
+            </if>
+            <if test="specialRequests != null and specialRequests != ''">
+                , special_requests = #{specialRequests}
+            </if>
+            <if test="groupType != null and groupType != '' and groupType != 'standard'">
+                , group_type = #{groupType}
+            </if>
+            <if test="groupSizeLimit != null and groupSizeLimit > 0">
+                , group_size_limit = #{groupSizeLimit}
+            </if>
+        WHERE booking_id = #{bookingId}
+        AND status = 'pending'
+        <if test="adjustedPrice != null and adjustedPrice > 0">
+            AND #{adjustedPrice} > 0 
+            AND #{adjustedPrice} &lt;= 50000
+        </if>
+    </update>
 
 </mapper> 
