@@ -11,60 +11,54 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * 酒店预订实体类（基于排团记录的业务模式）
+ * 票务预订实体类 - 基于酒店预订实体类架构设计
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HotelBooking implements Serializable {
+public class TicketBooking implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
     // 预订ID
-    private Integer id;
+    private Long id;
     
-    // 预订参考号（自动生成：HB+日期+序号）
+    // 预订参考号（自动生成：TB+日期+序号）
     private String bookingReference;
     
-    // 酒店预订号（酒店回复的确认号）
-    private String hotelBookingNumber;
+    // 确认号（景点回复的确认号）
+    private String confirmationNumber;
     
-    // 关联的旅游订单ID
-    private Integer tourBookingId;
+    // 关联的排团记录ID（可选）
+    private Long scheduleOrderId;
     
-    // 关联的排团记录ID（核心关联）
-    private Integer scheduleOrderId;
+    // 关联的旅游订单ID（可选）
+    private Long tourBookingId;
     
     // 关联的导游车辆分配ID（可选）
-    private Integer assignmentId;
+    private Long assignmentId;
     
-    // 酒店ID
-    private Integer hotelId;
+    // 景点ID
+    private Long attractionId;
     
-    // 房型ID
-    private Integer roomTypeId;
+    // 票务类型ID
+    private Long ticketTypeId;
     
-    // 客人姓名
+    // 游客姓名
     private String guestName;
     
-    // 客人电话
+    // 游客电话
     private String guestPhone;
     
-    // 客人邮箱
+    // 游客邮箱
     private String guestEmail;
     
-    // 入住日期
-    private LocalDate checkInDate;
+    // 游览日期
+    private LocalDate visitDate;
     
-    // 退房日期
-    private LocalDate checkOutDate;
-    
-    // 住宿天数（自动计算）
-    private Integer nights;
-    
-    // 房间数量
-    private Integer roomCount;
+    // 预订日期
+    private LocalDate bookingDate;
     
     // 成人数量
     private Integer adultCount;
@@ -72,11 +66,11 @@ public class HotelBooking implements Serializable {
     // 儿童数量
     private Integer childCount;
     
-    // 总客人数（自动计算）
+    // 游客总数（自动计算）
     private Integer totalGuests;
     
-    // 房间单价
-    private BigDecimal roomRate;
+    // 门票单价
+    private BigDecimal ticketPrice;
     
     // 总金额
     private BigDecimal totalAmount;
@@ -84,14 +78,17 @@ public class HotelBooking implements Serializable {
     // 货币类型（AUD：澳元，USD：美元，CNY：人民币）
     private String currency;
     
-    // 预订状态（pending：待确认，confirmed：已确认，checked_in：已入住，checked_out：已退房，cancelled：已取消）
+    // 预订方式（email：邮件预订，website：官网预订）
+    private String bookingMethod;
+    
+    // 预订状态（pending：待预订，email_sent：已发邮件，confirmed：已确认，visited：已游览，cancelled：已取消）
     private String bookingStatus;
     
     // 支付状态（unpaid：未支付，paid：已支付，refunded：已退款）
     private String paymentStatus;
     
     // 特殊要求
-    private String specialRequests;
+    private String specialRequirements;
     
     // 预订来源（agent：代理商，direct：直接预订，system：系统预订）
     private String bookingSource;
@@ -99,15 +96,28 @@ public class HotelBooking implements Serializable {
     // 预订人ID
     private Long bookedBy;
     
-    // 酒店专员（负责此预订的员工用户名）
-    private String hotelSpecialist;
+    // 票务专员（负责此预订的员工用户名）
+    private String ticketSpecialist;
     
     // 内部备注
     private String notes;
+    
+    // 邮件发送时间
+    private LocalDateTime emailSentTime;
+    
+    // 确认时间
+    private LocalDateTime confirmedTime;
+    
+    // 游览时间
+    private LocalDateTime visitedTime;
+    
+    // 取消时间
+    private LocalDateTime cancelledTime;
     
     // 创建时间
     private LocalDateTime createdAt;
     
     // 更新时间
     private LocalDateTime updatedAt;
-} 
+}
+

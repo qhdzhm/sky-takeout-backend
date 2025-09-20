@@ -32,12 +32,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler
     public Result exceptionHandler(SQLIntegrityConstraintViolationException e){
         String message = e.getMessage();
+        log.error("SQL约束违反异常：{}", message, e);
         if (message.contains("Duplicate entry")){
             String[] split = message.split(" ");
             String username = split[2];
             return Result.error(username+" "+ MessageConstant.ALREADY_EXISTS);
+        }else if (message.contains("cannot be null")) {
+            return Result.error("数据完整性约束违反：必填字段不能为空");
+        }else if (message.contains("foreign key constraint")) {
+            return Result.error("外键约束违反：关联数据不存在");
         }else {
-            return Result.error(MessageConstant.UNKNOWN_ERROR) ;
+            return Result.error("数据库约束违反：" + message);
         }
     }
 
@@ -50,5 +55,14 @@ public class GlobalExceptionHandler {
             return Result.warningConfirm(ex.getMessage());
         }
         return Result.error(ex.getMessage());
+    }
+
+    /**
+     * 捕获所有其他未处理的异常
+     */
+    @ExceptionHandler
+    public Result exceptionHandler(Exception e) {
+        log.error("系统异常：{}", e.getMessage(), e);
+        return Result.error("系统异常：" + e.getMessage());
     }
 }

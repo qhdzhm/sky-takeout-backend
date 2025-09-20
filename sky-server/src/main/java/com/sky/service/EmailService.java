@@ -41,4 +41,17 @@ public interface EmailService {
      * 生成发票PDF字节
      */
     byte[] renderInvoicePdf(Long orderId);
+
+    /**
+     * 使用员工邮箱发送邮件（带附件）
+     * @param employeeId 员工ID
+     * @param to 收件人
+     * @param subject 主题
+     * @param body 邮件正文
+     * @param attachment 附件内容
+     * @param attachmentName 附件名称
+     * @return 是否发送成功
+     */
+    boolean sendEmailWithEmployeeAccount(Long employeeId, String to, String subject, 
+                                       String body, byte[] attachment, String attachmentName);
 } 

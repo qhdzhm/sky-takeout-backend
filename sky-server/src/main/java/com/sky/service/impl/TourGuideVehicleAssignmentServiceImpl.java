@@ -292,6 +292,11 @@ public class TourGuideVehicleAssignmentServiceImpl implements TourGuideVehicleAs
                     if (orders != null && !orders.isEmpty()) {
                         orderDetails.addAll(orders);
                         log.info("查询到booking_id {} 对应的 {} 条订单记录", bookingId, orders.size());
+                        // 🏨 调试：检查每个订单的酒店预订号
+                        for (TourScheduleOrder order : orders) {
+                            log.info("🏨 [调试] 订单详情 - booking_id: {}, order_number: {}, hotel_booking_number: '{}'", 
+                                order.getBookingId(), order.getOrderNumber(), order.getHotelBookingNumber());
+                        }
                     }
                 }
                 
@@ -355,9 +360,13 @@ public class TourGuideVehicleAssignmentServiceImpl implements TourGuideVehicleAs
                                         infoBuilder.append(", 返程起飞时间: ").append(firstOrder.getDepartureDepartureTime());
                                     }
                                     
-                                    // 添加酒店信息
-                                    if (firstOrder.getRoomDetails() != null && !firstOrder.getRoomDetails().trim().isEmpty()) {
-                                        infoBuilder.append(", 酒店: ").append(firstOrder.getRoomDetails());
+                                    // 添加酒店预订号信息
+                                    log.info("🏨 [调试] booking_id: {}, hotelBookingNumber: '{}'", bookingId, firstOrder.getHotelBookingNumber());
+                                    if (firstOrder.getHotelBookingNumber() != null && !firstOrder.getHotelBookingNumber().trim().isEmpty()) {
+                                        infoBuilder.append(", 酒店预订号: ").append(firstOrder.getHotelBookingNumber());
+                                        log.info("🏨 [调试] 已添加酒店预订号到specialNeeds: {}", firstOrder.getHotelBookingNumber());
+                                    } else {
+                                        log.warn("🏨 [调试] booking_id {} 的酒店预订号为空或null", bookingId);
                                     }
                                     
                                     passengerDetail.setSpecialNeeds(infoBuilder.toString());
@@ -398,9 +407,13 @@ public class TourGuideVehicleAssignmentServiceImpl implements TourGuideVehicleAs
                                     infoBuilder.append(", 返程起飞时间: ").append(firstOrder.getDepartureDepartureTime());
                                 }
                                 
-                                // 添加酒店信息
-                                if (firstOrder.getRoomDetails() != null && !firstOrder.getRoomDetails().trim().isEmpty()) {
-                                    infoBuilder.append(", 酒店: ").append(firstOrder.getRoomDetails());
+                                // 添加酒店预订号信息
+                                log.info("🏨 [调试-fallback] booking_id: {}, hotelBookingNumber: '{}'", bookingId, firstOrder.getHotelBookingNumber());
+                                if (firstOrder.getHotelBookingNumber() != null && !firstOrder.getHotelBookingNumber().trim().isEmpty()) {
+                                    infoBuilder.append(", 酒店预订号: ").append(firstOrder.getHotelBookingNumber());
+                                    log.info("🏨 [调试-fallback] 已添加酒店预订号到specialNeeds: {}", firstOrder.getHotelBookingNumber());
+                                } else {
+                                    log.warn("🏨 [调试-fallback] booking_id {} 的酒店预订号为空或null", bookingId);
                                 }
                                 
                                 passengerDetail.setSpecialNeeds(infoBuilder.toString());
@@ -429,6 +442,16 @@ public class TourGuideVehicleAssignmentServiceImpl implements TourGuideVehicleAs
                     
                     // 将乘客详情设置回assignment
                     assignment.setPassengerDetails(passengerDetails);
+                    
+                    // 保存更新的passenger_details到数据库
+                    try {
+                        ObjectMapper objectMapper = new ObjectMapper();
+                        String passengerDetailsJson = objectMapper.writeValueAsString(passengerDetails);
+                        assignmentMapper.updatePassengerDetails(assignment.getId(), passengerDetailsJson);
+                        log.info("已将重新生成的乘客详情保存到数据库，分配ID：{}", assignment.getId());
+                    } catch (JsonProcessingException e) {
+                        log.error("保存乘客详情到数据库失败：{}", e.getMessage(), e);
+                    }
                     
                     log.info("成功获取到 {} 个订单的详细信息", passengerDetails.size());
                 }

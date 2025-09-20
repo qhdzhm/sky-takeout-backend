@@ -12,6 +12,7 @@ import com.sky.mapper.GroupTourMapper;
 import com.sky.mapper.TourBookingMapper;
 import com.sky.mapper.TourItineraryMapper;
 import com.sky.service.EmailService;
+import com.sky.service.EmployeeEmailConfigService;
 import com.sky.service.PdfService;
 import com.sky.service.TourScheduleOrderService;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +21,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
@@ -34,6 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * 邮件服务实现类
@@ -72,6 +75,9 @@ public class EmailServiceImpl implements EmailService {
 
     @Autowired
     private TourScheduleOrderService tourScheduleOrderService;
+
+    @Autowired
+    private EmployeeEmailConfigService employeeEmailConfigService;
 
     @Value("${sky.mail.from}")
     private String fromEmail;
@@ -704,7 +710,10 @@ public class EmailServiceImpl implements EmailService {
         helper.setFrom(fromEmail);
         helper.setTo(to);
         helper.setSubject(subject);
-        helper.setText(body, false); // 使用纯文本邮件正文
+        
+        // 🆕 将纯文本转换为HTML格式，保持换行和格式
+        String htmlBody = convertTextToHtml(body);
+        helper.setText(htmlBody, true); // 使用HTML邮件正文
 
         // 添加PDF附件
         helper.addAttachment(attachmentName, new ByteArrayResource(attachment));
@@ -769,5 +778,146 @@ public class EmailServiceImpl implements EmailService {
         } catch (Exception ignore) {
         }
         return result;
+    }
+
+    /**
+     * 创建基于员工配置的邮件发送器
+     * @param employeeId 员工ID
+     * @return JavaMailSender实例，如果员工未配置则返回null
+     */
+    private JavaMailSender createEmployeeMailSender(Long employeeId) {
+        if (employeeId == null) {
+            return null;
+        }
+
+        try {
+            // 获取员工邮箱配置
+            com.sky.entity.Employee employee = employeeEmailConfigService.getEmployeeEmailConfig(employeeId);
+            
+            if (employee == null || !Boolean.TRUE.equals(employee.getEmailEnabled()) || 
+                employee.getEmail() == null || employee.getEmailPassword() == null) {
+                log.debug("员工未配置邮箱或未启用个人邮箱发送: employeeId={}", employeeId);
+                return null;
+            }
+
+            // 创建JavaMailSenderImpl实例
+            JavaMailSenderImpl mailSender = new JavaMailSenderImpl();
+            mailSender.setHost(employee.getEmailHost());
+            mailSender.setPort(employee.getEmailPort());
+            mailSender.setUsername(employee.getEmail());
+            mailSender.setPassword(employeeEmailConfigService.decryptPassword(employee.getEmailPassword()));
+
+            // 配置邮件属性
+            Properties props = mailSender.getJavaMailProperties();
+            props.put("mail.transport.protocol", "smtp");
+            props.put("mail.smtp.auth", Boolean.TRUE.equals(employee.getEmailAuthEnabled()));
+            props.put("mail.smtp.starttls.enable", Boolean.TRUE.equals(employee.getEmailSslEnabled()));
+            props.put("mail.debug", "false");
+
+            log.info("创建员工邮件发送器成功: employeeId={}, email={}", employeeId, employee.getEmail());
+            return mailSender;
+
+        } catch (Exception e) {
+            log.error("创建员工邮件发送器失败: employeeId={}", employeeId, e);
+            return null;
+        }
+    }
+
+    /**
+     * 使用员工邮箱发送邮件（带附件）
+     * @param employeeId 员工ID
+     * @param to 收件人
+     * @param subject 主题
+     * @param body 邮件正文
+     * @param attachment 附件内容
+     * @param attachmentName 附件名称
+     * @return 是否发送成功
+     */
+    public boolean sendEmailWithEmployeeAccount(Long employeeId, String to, String subject, 
+                                              String body, byte[] attachment, String attachmentName) {
+        log.info("尝试使用员工邮箱发送邮件: employeeId={}, 收件人={}, 主题={}", employeeId, to, subject);
+
+        // 创建员工邮件发送器
+        JavaMailSender employeeMailSender = createEmployeeMailSender(employeeId);
+        
+        if (employeeMailSender == null) {
+            log.warn("无法创建员工邮件发送器，将使用系统默认邮箱: employeeId={}", employeeId);
+            try {
+                sendEmailWithAttachment(to, subject, body, attachment, attachmentName);
+                return true;
+            } catch (Exception e) {
+                log.error("使用系统默认邮箱发送失败", e);
+                return false;
+            }
+        }
+
+        try {
+            // 使用员工邮箱发送
+            MimeMessage message = employeeMailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            // 获取员工信息作为发件人
+            com.sky.entity.Employee employee = employeeEmailConfigService.getEmployeeEmailConfig(employeeId);
+            String fromName = employee.getName() != null ? employee.getName() : "Happy Tassie Travel";
+            
+            helper.setFrom(employee.getEmail(), fromName);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            
+            // 🆕 将纯文本转换为HTML格式，保持换行和格式
+            String htmlBody = convertTextToHtml(body);
+            helper.setText(htmlBody, true);
+
+            if (attachment != null && attachmentName != null) {
+                helper.addAttachment(attachmentName, new ByteArrayResource(attachment));
+            }
+
+            employeeMailSender.send(message);
+            log.info("✅ 使用员工邮箱发送邮件成功: employeeId={}, 发件人={}, 收件人={}", 
+                    employeeId, employee.getEmail(), to);
+            return true;
+
+        } catch (Exception e) {
+            log.error("使用员工邮箱发送邮件失败: employeeId={}", employeeId, e);
+            
+            // 回退到系统默认邮箱
+            log.info("回退到系统默认邮箱发送: employeeId={}", employeeId);
+            try {
+                sendEmailWithAttachment(to, subject, body, attachment, attachmentName);
+                return true;
+            } catch (Exception fallbackError) {
+                log.error("系统默认邮箱发送也失败", fallbackError);
+                return false;
+            }
+        }
+    }
+
+    /**
+     * 将纯文本转换为HTML格式，保持换行和格式
+     * @param text 纯文本内容
+     * @return HTML格式的内容
+     */
+    private String convertTextToHtml(String text) {
+        if (text == null || text.trim().isEmpty()) {
+            return text;
+        }
+        
+        // 转义HTML特殊字符
+        String htmlText = text
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;");
+        
+        // 将换行符转换为HTML换行
+        htmlText = htmlText
+            .replace("\r\n", "<br>")  // Windows换行
+            .replace("\n", "<br>")    // Unix换行
+            .replace("\r", "<br>");   // Mac换行
+        
+        // 包装在HTML结构中
+        return "<html><body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>" +
+               "<div style='white-space: pre-wrap;'>" + htmlText + "</div>" +
+               "</body></html>";
     }
 } 

@@ -77,6 +77,12 @@ public class HotelBookingDTO implements Serializable {
     @ApiModelProperty("预订来源")
     private String bookingSource;
 
+    @ApiModelProperty("酒店专员")
+    private String hotelSpecialist;
+
+    @ApiModelProperty("酒店预订号")
+    private String hotelBookingNumber;
+
     @ApiModelProperty("内部备注")
     private String notes;
 } 

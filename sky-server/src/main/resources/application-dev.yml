@@ -25,6 +25,8 @@ sky:
     username: Tom.zhang@htas.com.au  # 需要配置真实邮箱
     password: igdf bnrq nrga qxnn  # 需要配置真实密码
     from: Tom.zhang@htas.com.au
+  email:
+    encryption-key: "HappyTassieTravel2024EmailKey32"  # 员工邮箱密码加密密钥（32字节）
 
 # Spring Mail配置
 spring:

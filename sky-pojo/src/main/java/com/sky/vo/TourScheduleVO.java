@@ -321,4 +321,9 @@ public class TourScheduleVO implements Serializable {
      * 团型人数限制
      */
     private Integer groupSizeLimit;
+    
+    /**
+     * 酒店预订号
+     */
+    private String hotelBookingNumber;
 } 

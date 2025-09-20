@@ -73,6 +73,7 @@ public interface HotelBookingMapper {
      * @param guestName 客人姓名
      * @param guestPhone 客人电话
      * @param hotelId 酒店ID
+     * @param hotelSpecialist 酒店专员
      * @param checkInDate 入住日期开始
      * @param checkOutDate 入住日期结束
      * @return 酒店预订详细信息列表
@@ -81,6 +82,7 @@ public interface HotelBookingMapper {
                                    @Param("guestName") String guestName,
                                    @Param("guestPhone") String guestPhone,
                                    @Param("hotelId") Integer hotelId,
+                                   @Param("hotelSpecialist") String hotelSpecialist,
                                    @Param("checkInDate") LocalDate checkInDate,
                                    @Param("checkOutDate") LocalDate checkOutDate);
 
@@ -145,4 +147,27 @@ public interface HotelBookingMapper {
                             @Param("emailTo") String emailTo,
                             @Param("emailContent") String emailContent,
                             @Param("sentBy") Long sentBy);
+
+    /**
+     * 根据旅游订单ID更新酒店专员
+     * @param tourBookingId 旅游订单ID
+     * @param hotelSpecialist 酒店专员用户名
+     */
+    void updateHotelSpecialistByTourBookingId(@Param("tourBookingId") Integer tourBookingId,
+                                              @Param("hotelSpecialist") String hotelSpecialist);
+
+    /**
+     * 更新酒店预订号
+     * @param id 酒店预订ID
+     * @param hotelBookingNumber 酒店预订号
+     */
+    void updateHotelBookingNumber(@Param("id") Integer id, @Param("hotelBookingNumber") String hotelBookingNumber);
+
+    /**
+     * 根据日期范围批量查询酒店预订
+     * @param startDate 开始日期
+     * @param endDate 结束日期
+     * @return 酒店预订列表
+     */
+    List<HotelBooking> getByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
 } 

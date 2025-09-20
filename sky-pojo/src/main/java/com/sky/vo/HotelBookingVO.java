@@ -115,6 +115,12 @@ public class HotelBookingVO implements Serializable {
     @ApiModelProperty("特殊要求")
     private String specialRequests;
 
+    @ApiModelProperty("酒店专员")
+    private String hotelSpecialist;
+
+    @ApiModelProperty("酒店预订号")
+    private String hotelBookingNumber;
+
     @ApiModelProperty("代理商邮箱")
     private String agentEmail;
 

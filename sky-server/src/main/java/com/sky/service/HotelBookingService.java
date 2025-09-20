@@ -93,6 +93,14 @@ public interface HotelBookingService {
     Boolean confirmBooking(Integer id);
 
     /**
+     * 确认酒店预订并设置预订号
+     * @param id 预订ID
+     * @param hotelBookingNumber 酒店预订号
+     * @return 是否成功
+     */
+    Boolean confirmBookingWithNumber(Integer id, String hotelBookingNumber);
+
+    /**
      * 办理入住
      * @param id 预订ID
      * @return 是否成功
@@ -122,12 +130,13 @@ public interface HotelBookingService {
      * @param guestName 客人姓名
      * @param guestPhone 客人电话
      * @param hotelId 酒店ID
+     * @param hotelSpecialist 酒店专员
      * @param checkInDate 入住日期开始
      * @param checkOutDate 入住日期结束
      * @return 分页结果
      */
     PageResult pageQuery(Integer page, Integer pageSize, String status, String guestName, String guestPhone,
-                         Integer hotelId, LocalDate checkInDate, LocalDate checkOutDate);
+                         Integer hotelId, String hotelSpecialist, LocalDate checkInDate, LocalDate checkOutDate);
 
     /**
      * 根据代理商ID查询酒店预订列表
@@ -186,4 +195,12 @@ public interface HotelBookingService {
      * @return 是否成功
      */
     Boolean sendBookingEmail(com.sky.dto.HotelBookingEmailDTO emailDTO);
+
+    /**
+     * 根据日期范围批量查询酒店预订
+     * @param startDate 开始日期
+     * @param endDate 结束日期
+     * @return 酒店预订列表
+     */
+    List<HotelBooking> getByDateRange(LocalDate startDate, LocalDate endDate);
 } 

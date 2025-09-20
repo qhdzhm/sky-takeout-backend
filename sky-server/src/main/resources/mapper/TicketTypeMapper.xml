@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sky.mapper.TicketTypeMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.sky.entity.TicketType">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="attraction_id" property="attractionId" jdbcType="BIGINT"/>
+        <result column="ticket_type" property="ticketType" jdbcType="VARCHAR"/>
+        <result column="ticket_type_en" property="ticketTypeEn" jdbcType="VARCHAR"/>
+        <result column="ticket_code" property="ticketCode" jdbcType="VARCHAR"/>
+        <result column="base_price" property="basePrice" jdbcType="DECIMAL"/>
+        <result column="age_restriction" property="ageRestriction" jdbcType="VARCHAR"/>
+        <result column="duration" property="duration" jdbcType="VARCHAR"/>
+        <result column="max_capacity" property="maxCapacity" jdbcType="INTEGER"/>
+        <result column="includes" property="includes" jdbcType="VARCHAR"/>
+        <result column="excludes" property="excludes" jdbcType="VARCHAR"/>
+        <result column="description" property="description" jdbcType="VARCHAR"/>
+        <result column="images" property="images" jdbcType="VARCHAR"/>
+        <result column="status" property="status" jdbcType="VARCHAR"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <!-- 基础列 -->
+    <sql id="Base_Column_List">
+        id, attraction_id, ticket_type, ticket_type_en, ticket_code, base_price, 
+        age_restriction, duration, max_capacity, includes, excludes, 
+        description, images, status, created_at, updated_at
+    </sql>
+
+    <!-- 插入票务类型 -->
+    <insert id="insert" parameterType="com.sky.entity.TicketType" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ticket_types (
+            attraction_id, ticket_type, ticket_type_en, ticket_code, base_price, 
+            age_restriction, duration, max_capacity, includes, excludes, 
+            description, images, status, created_at, updated_at
+        ) VALUES (
+            #{attractionId}, #{ticketType}, #{ticketTypeEn}, #{ticketCode}, #{basePrice}, 
+            #{ageRestriction}, #{duration}, #{maxCapacity}, #{includes}, #{excludes}, 
+            #{description}, #{images}, #{status}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <!-- 根据ID查询票务类型 -->
+    <select id="getById" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ticket_types 
+        WHERE id = #{id}
+    </select>
+
+    <!-- 更新票务类型 -->
+    <update id="update" parameterType="com.sky.entity.TicketType">
+        UPDATE ticket_types 
+        SET attraction_id = #{attractionId},
+            ticket_type = #{ticketType},
+            ticket_type_en = #{ticketTypeEn},
+            ticket_code = #{ticketCode},
+            base_price = #{basePrice},
+            age_restriction = #{ageRestriction},
+            duration = #{duration},
+            max_capacity = #{maxCapacity},
+            includes = #{includes},
+            excludes = #{excludes},
+            description = #{description},
+            images = #{images},
+            status = #{status},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <!-- 删除票务类型 -->
+    <delete id="deleteById" parameterType="java.lang.Long">
+        DELETE FROM ticket_types WHERE id = #{id}
+    </delete>
+
+    <!-- 根据景点ID查询票务类型 -->
+    <select id="getByAttractionId" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ticket_types 
+        WHERE attraction_id = #{attractionId}
+        ORDER BY base_price ASC
+    </select>
+
+    <!-- 根据景点ID查询活跃票务类型 -->
+    <select id="getActiveByAttractionId" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ticket_types 
+        WHERE attraction_id = #{attractionId} AND status = 'active'
+        ORDER BY base_price ASC
+    </select>
+
+    <!-- 获取所有活跃票务类型 -->
+    <select id="getAllActive" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ticket_types 
+        WHERE status = 'active'
+        ORDER BY attraction_id, base_price ASC
+    </select>
+
+    <!-- 根据票务代码查询票务类型 -->
+    <select id="getByTicketCode" parameterType="java.lang.String" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ticket_types 
+        WHERE ticket_code = #{ticketCode}
+    </select>
+
+    <!-- 更新票务类型状态 -->
+    <update id="updateStatus">
+        UPDATE ticket_types 
+        SET status = #{status}, updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 根据景点ID删除所有票务类型 -->
+    <delete id="deleteByAttractionId" parameterType="java.lang.Long">
+        DELETE FROM ticket_types WHERE attraction_id = #{attractionId}
+    </delete>
+
+    <!-- 批量插入票务类型 -->
+    <insert id="batchInsert" parameterType="java.util.List">
+        INSERT INTO ticket_types (
+            attraction_id, ticket_type, ticket_type_en, ticket_code, base_price, 
+            age_restriction, duration, max_capacity, includes, excludes, 
+            description, images, status, created_at, updated_at
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+                #{item.attractionId}, #{item.ticketType}, #{item.ticketTypeEn}, #{item.ticketCode}, #{item.basePrice}, 
+                #{item.ageRestriction}, #{item.duration}, #{item.maxCapacity}, #{item.includes}, #{item.excludes}, 
+                #{item.description}, #{item.images}, #{item.status}, #{item.createdAt}, #{item.updatedAt}
+            )
+        </foreach>
+    </insert>
+
+    <!-- 根据条件搜索票务类型 -->
+    <select id="searchTicketTypes" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ticket_types 
+        <where>
+            <if test="attractionId != null">
+                AND attraction_id = #{attractionId}
+            </if>
+            <if test="ticketType != null and ticketType != ''">
+                AND (ticket_type LIKE CONCAT('%', #{ticketType}, '%') 
+                     OR ticket_type_en LIKE CONCAT('%', #{ticketType}, '%'))
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY attraction_id, base_price ASC
+    </select>
+
+</mapper>
+

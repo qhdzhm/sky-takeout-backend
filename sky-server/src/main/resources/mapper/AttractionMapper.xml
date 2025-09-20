@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sky.mapper.AttractionMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.sky.entity.Attraction">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="attraction_name" property="attractionName" jdbcType="VARCHAR"/>
+        <result column="attraction_name_en" property="attractionNameEn" jdbcType="VARCHAR"/>
+        <result column="location" property="location" jdbcType="VARCHAR"/>
+        <result column="contact_phone" property="contactPhone" jdbcType="VARCHAR"/>
+        <result column="contact_person" property="contactPerson" jdbcType="VARCHAR"/>
+        <result column="contact_email" property="contactEmail" jdbcType="VARCHAR"/>
+        <result column="booking_type" property="bookingType" jdbcType="VARCHAR"/>
+        <result column="website_url" property="websiteUrl" jdbcType="VARCHAR"/>
+        <result column="email_address" property="emailAddress" jdbcType="VARCHAR"/>
+        <result column="advance_days" property="advanceDays" jdbcType="INTEGER"/>
+        <result column="description" property="description" jdbcType="VARCHAR"/>
+        <result column="images" property="images" jdbcType="VARCHAR"/>
+        <result column="rating" property="rating" jdbcType="DECIMAL"/>
+        <result column="status" property="status" jdbcType="VARCHAR"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <!-- 基础列 -->
+    <sql id="Base_Column_List">
+        id, attraction_name, attraction_name_en, location, contact_phone, contact_person, 
+        contact_email, booking_type, website_url, email_address, advance_days, 
+        description, images, rating, status, created_at, updated_at
+    </sql>
+
+    <!-- 插入景点 -->
+    <insert id="insert" parameterType="com.sky.entity.Attraction" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO attractions (
+            attraction_name, attraction_name_en, location, contact_phone, contact_person, 
+            contact_email, booking_type, website_url, email_address, advance_days, 
+            description, images, rating, status, created_at, updated_at
+        ) VALUES (
+            #{attractionName}, #{attractionNameEn}, #{location}, #{contactPhone}, #{contactPerson}, 
+            #{contactEmail}, #{bookingType}, #{websiteUrl}, #{emailAddress}, #{advanceDays}, 
+            #{description}, #{images}, #{rating}, #{status}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <!-- 根据ID查询景点 -->
+    <select id="getById" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM attractions 
+        WHERE id = #{id}
+    </select>
+
+    <!-- 更新景点 -->
+    <update id="update" parameterType="com.sky.entity.Attraction">
+        UPDATE attractions 
+        SET attraction_name = #{attractionName},
+            attraction_name_en = #{attractionNameEn},
+            location = #{location},
+            contact_phone = #{contactPhone},
+            contact_person = #{contactPerson},
+            contact_email = #{contactEmail},
+            booking_type = #{bookingType},
+            website_url = #{websiteUrl},
+            email_address = #{emailAddress},
+            advance_days = #{advanceDays},
+            description = #{description},
+            images = #{images},
+            rating = #{rating},
+            status = #{status},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <!-- 删除景点 -->
+    <delete id="deleteById" parameterType="java.lang.Long">
+        DELETE FROM attractions WHERE id = #{id}
+    </delete>
+
+    <!-- 获取所有景点 -->
+    <select id="getAll" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM attractions 
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 获取所有活跃景点 -->
+    <select id="getAllActive" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM attractions 
+        WHERE status = 'active'
+        ORDER BY attraction_name
+    </select>
+
+    <!-- 根据预订方式查询景点 -->
+    <select id="getByBookingType" parameterType="java.lang.String" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM attractions 
+        WHERE booking_type = #{bookingType} AND status = 'active'
+        ORDER BY attraction_name
+    </select>
+
+    <!-- 根据位置查询景点 -->
+    <select id="getByLocation" parameterType="java.lang.String" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM attractions 
+        WHERE location = #{location} AND status = 'active'
+        ORDER BY attraction_name
+    </select>
+
+    <!-- 根据景点名称模糊查询 -->
+    <select id="getByNameLike" parameterType="java.lang.String" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM attractions 
+        WHERE (attraction_name LIKE CONCAT('%', #{name}, '%') 
+               OR attraction_name_en LIKE CONCAT('%', #{name}, '%'))
+              AND status = 'active'
+        ORDER BY attraction_name
+    </select>
+
+    <!-- 更新景点状态 -->
+    <update id="updateStatus">
+        UPDATE attractions 
+        SET status = #{status}, updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 根据条件搜索景点 -->
+    <select id="searchAttractions" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM attractions 
+        <where>
+            <if test="attractionName != null and attractionName != ''">
+                AND (attraction_name LIKE CONCAT('%', #{attractionName}, '%') 
+                     OR attraction_name_en LIKE CONCAT('%', #{attractionName}, '%'))
+            </if>
+            <if test="location != null and location != ''">
+                AND location LIKE CONCAT('%', #{location}, '%')
+            </if>
+            <if test="bookingType != null and bookingType != ''">
+                AND booking_type = #{bookingType}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY created_at DESC
+    </select>
+
+</mapper>
+

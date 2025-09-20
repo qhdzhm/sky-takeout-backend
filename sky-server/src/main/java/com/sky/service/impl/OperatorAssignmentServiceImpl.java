@@ -9,6 +9,7 @@ import com.sky.entity.OperatorAssignment;
 import com.sky.entity.TourBooking;
 import com.sky.exception.BaseException;
 import com.sky.mapper.EmployeeMapper;
+import com.sky.mapper.HotelBookingMapper;
 import com.sky.mapper.OperatorAssignmentMapper;
 import com.sky.mapper.TourBookingMapper;
 import com.sky.result.PageResult;
@@ -39,6 +40,9 @@ public class OperatorAssignmentServiceImpl implements OperatorAssignmentService 
 
     @Autowired
     private TourBookingMapper tourBookingMapper;
+
+    @Autowired
+    private HotelBookingMapper hotelBookingMapper;
 
     /**
      * 分配订单给操作员
@@ -95,6 +99,18 @@ public class OperatorAssignmentServiceImpl implements OperatorAssignmentService 
         updateBooking.setAssignmentStatus("assigned");
         tourBookingMapper.update(updateBooking);
 
+        // 7. 同步更新相关酒店预订的酒店专员
+        try {
+            hotelBookingMapper.updateHotelSpecialistByTourBookingId(
+                assignOrderDTO.getBookingId(), 
+                operator.getUsername()
+            );
+            log.info("已同步更新酒店专员：订单 {} -> 专员 {}", assignOrderDTO.getBookingId(), operator.getUsername());
+        } catch (Exception e) {
+            log.warn("同步更新酒店专员失败，订单：{}，错误：{}", assignOrderDTO.getBookingId(), e.getMessage());
+            // 不影响主流程，继续执行
+        }
+
         log.info("订单分配成功：{} -> 操作员：{}", assignOrderDTO.getBookingId(), assignOrderDTO.getOperatorId());
     }
 
@@ -150,6 +166,18 @@ public class OperatorAssignmentServiceImpl implements OperatorAssignmentService 
         updateBooking.setAssignmentStatus("assigned");
         tourBookingMapper.update(updateBooking);
 
+        // 7. 同步更新相关酒店预订的酒店专员
+        try {
+            hotelBookingMapper.updateHotelSpecialistByTourBookingId(
+                bookingId, 
+                newOperator.getUsername()
+            );
+            log.info("已同步更新酒店专员：订单 {} -> 专员 {}", bookingId, newOperator.getUsername());
+        } catch (Exception e) {
+            log.warn("同步更新酒店专员失败，订单：{}，错误：{}", bookingId, e.getMessage());
+            // 不影响主流程，继续执行
+        }
+
         log.info("订单重新分配成功：{} -> 操作员：{}", bookingId, newOperatorId);
     }
 
@@ -183,6 +211,15 @@ public class OperatorAssignmentServiceImpl implements OperatorAssignmentService 
         updateBooking.setAssignedAt(null);
         updateBooking.setAssignmentStatus("unassigned");
         tourBookingMapper.update(updateBooking);
+
+        // 5. 同步清除相关酒店预订的酒店专员
+        try {
+            hotelBookingMapper.updateHotelSpecialistByTourBookingId(bookingId, null);
+            log.info("已同步清除酒店专员：订单 {}", bookingId);
+        } catch (Exception e) {
+            log.warn("同步清除酒店专员失败，订单：{}，错误：{}", bookingId, e.getMessage());
+            // 不影响主流程，继续执行
+        }
 
         log.info("订单分配取消成功：{}", bookingId);
     }

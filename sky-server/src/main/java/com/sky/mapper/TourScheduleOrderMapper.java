@@ -354,4 +354,14 @@ public interface TourScheduleOrderMapper {
      */
     @Select("SELECT * FROM tour_schedule_order WHERE booking_id = #{bookingId} ORDER BY day_number, display_order")
     List<TourScheduleOrder> findByBookingId(@Param("bookingId") Long bookingId);
+
+    /**
+     * 更新酒店预订号到入住日期（第一次入住和换酒店的日期）
+     * @param bookingId 订单ID
+     * @param hotelBookingNumber 酒店预订号
+     * @param checkInDates 入住日期列表
+     */
+    void updateHotelBookingNumberForCheckInDates(@Param("bookingId") Integer bookingId,
+                                               @Param("hotelBookingNumber") String hotelBookingNumber,
+                                               @Param("checkInDates") List<LocalDate> checkInDates);
 } 

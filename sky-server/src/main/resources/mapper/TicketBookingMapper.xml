@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sky.mapper.TicketBookingMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.sky.entity.TicketBooking">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="booking_reference" property="bookingReference" jdbcType="VARCHAR"/>
+        <result column="confirmation_number" property="confirmationNumber" jdbcType="VARCHAR"/>
+        <result column="schedule_order_id" property="scheduleOrderId" jdbcType="BIGINT"/>
+        <result column="tour_booking_id" property="tourBookingId" jdbcType="BIGINT"/>
+        <result column="assignment_id" property="assignmentId" jdbcType="BIGINT"/>
+        <result column="attraction_id" property="attractionId" jdbcType="BIGINT"/>
+        <result column="ticket_type_id" property="ticketTypeId" jdbcType="BIGINT"/>
+        <result column="guest_name" property="guestName" jdbcType="VARCHAR"/>
+        <result column="guest_phone" property="guestPhone" jdbcType="VARCHAR"/>
+        <result column="guest_email" property="guestEmail" jdbcType="VARCHAR"/>
+        <result column="visit_date" property="visitDate" jdbcType="DATE"/>
+        <result column="booking_date" property="bookingDate" jdbcType="DATE"/>
+        <result column="adult_count" property="adultCount" jdbcType="INTEGER"/>
+        <result column="child_count" property="childCount" jdbcType="INTEGER"/>
+        <result column="total_guests" property="totalGuests" jdbcType="INTEGER"/>
+        <result column="ticket_price" property="ticketPrice" jdbcType="DECIMAL"/>
+        <result column="total_amount" property="totalAmount" jdbcType="DECIMAL"/>
+        <result column="currency" property="currency" jdbcType="VARCHAR"/>
+        <result column="booking_method" property="bookingMethod" jdbcType="VARCHAR"/>
+        <result column="booking_status" property="bookingStatus" jdbcType="VARCHAR"/>
+        <result column="payment_status" property="paymentStatus" jdbcType="VARCHAR"/>
+        <result column="special_requirements" property="specialRequirements" jdbcType="VARCHAR"/>
+        <result column="booking_source" property="bookingSource" jdbcType="VARCHAR"/>
+        <result column="booked_by" property="bookedBy" jdbcType="BIGINT"/>
+        <result column="ticket_specialist" property="ticketSpecialist" jdbcType="VARCHAR"/>
+        <result column="notes" property="notes" jdbcType="VARCHAR"/>
+        <result column="email_sent_time" property="emailSentTime" jdbcType="TIMESTAMP"/>
+        <result column="confirmed_time" property="confirmedTime" jdbcType="TIMESTAMP"/>
+        <result column="visited_time" property="visitedTime" jdbcType="TIMESTAMP"/>
+        <result column="cancelled_time" property="cancelledTime" jdbcType="TIMESTAMP"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <!-- 基础列 -->
+    <sql id="Base_Column_List">
+        id, booking_reference, confirmation_number, schedule_order_id, tour_booking_id, assignment_id,
+        attraction_id, ticket_type_id, guest_name, guest_phone, guest_email, visit_date, booking_date,
+        adult_count, child_count, total_guests, ticket_price, total_amount, currency,
+        booking_method, booking_status, payment_status, special_requirements, booking_source,
+        booked_by, ticket_specialist, notes, email_sent_time, confirmed_time, visited_time,
+        cancelled_time, created_at, updated_at
+    </sql>
+
+    <!-- 插入票务预订 -->
+    <insert id="insert" parameterType="com.sky.entity.TicketBooking" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ticket_bookings (
+            booking_reference, confirmation_number, schedule_order_id, tour_booking_id, assignment_id,
+            attraction_id, ticket_type_id, guest_name, guest_phone, guest_email, visit_date, booking_date,
+            adult_count, child_count, total_guests, ticket_price, total_amount, currency,
+            booking_method, booking_status, payment_status, special_requirements, booking_source,
+            booked_by, ticket_specialist, notes, email_sent_time, confirmed_time, visited_time,
+            cancelled_time, created_at, updated_at
+        ) VALUES (
+            #{bookingReference}, #{confirmationNumber}, #{scheduleOrderId}, #{tourBookingId}, #{assignmentId},
+            #{attractionId}, #{ticketTypeId}, #{guestName}, #{guestPhone}, #{guestEmail}, #{visitDate}, #{bookingDate},
+            #{adultCount}, #{childCount}, #{totalGuests}, #{ticketPrice}, #{totalAmount}, #{currency},
+            #{bookingMethod}, #{bookingStatus}, #{paymentStatus}, #{specialRequirements}, #{bookingSource},
+            #{bookedBy}, #{ticketSpecialist}, #{notes}, #{emailSentTime}, #{confirmedTime}, #{visitedTime},
+            #{cancelledTime}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <!-- 根据ID查询票务预订 -->
+    <select id="getById" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ticket_bookings 
+        WHERE id = #{id}
+    </select>
+
+    <!-- 根据预订参考号查询 -->
+    <select id="getByBookingReference" parameterType="java.lang.String" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ticket_bookings 
+        WHERE booking_reference = #{bookingReference}
+    </select>
+
+    <!-- 根据确认号查询 -->
+    <select id="getByConfirmationNumber" parameterType="java.lang.String" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ticket_bookings 
+        WHERE confirmation_number = #{confirmationNumber}
+    </select>
+
+    <!-- 根据排团记录ID查询 -->
+    <select id="getByScheduleOrderId" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ticket_bookings 
+        WHERE schedule_order_id = #{scheduleOrderId}
+    </select>
+
+    <!-- 根据旅游订单ID查询 -->
+    <select id="getByTourBookingId" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ticket_bookings 
+        WHERE tour_booking_id = #{tourBookingId}
+        ORDER BY visit_date ASC
+    </select>
+
+    <!-- 更新票务预订 -->
+    <update id="update" parameterType="com.sky.entity.TicketBooking">
+        UPDATE ticket_bookings 
+        SET booking_reference = #{bookingReference},
+            confirmation_number = #{confirmationNumber},
+            schedule_order_id = #{scheduleOrderId},
+            tour_booking_id = #{tourBookingId},
+            assignment_id = #{assignmentId},
+            attraction_id = #{attractionId},
+            ticket_type_id = #{ticketTypeId},
+            guest_name = #{guestName},
+            guest_phone = #{guestPhone},
+            guest_email = #{guestEmail},
+            visit_date = #{visitDate},
+            booking_date = #{bookingDate},
+            adult_count = #{adultCount},
+            child_count = #{childCount},
+            total_guests = #{totalGuests},
+            ticket_price = #{ticketPrice},
+            total_amount = #{totalAmount},
+            currency = #{currency},
+            booking_method = #{bookingMethod},
+            booking_status = #{bookingStatus},
+            payment_status = #{paymentStatus},
+            special_requirements = #{specialRequirements},
+            booking_source = #{bookingSource},
+            booked_by = #{bookedBy},
+            ticket_specialist = #{ticketSpecialist},
+            notes = #{notes},
+            email_sent_time = #{emailSentTime},
+            confirmed_time = #{confirmedTime},
+            visited_time = #{visitedTime},
+            cancelled_time = #{cancelledTime},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <!-- 删除票务预订 -->
+    <delete id="deleteById" parameterType="java.lang.Long">
+        DELETE FROM ticket_bookings WHERE id = #{id}
+    </delete>
+
+    <!-- 批量删除票务预订 -->
+    <delete id="batchDelete" parameterType="java.util.List">
+        DELETE FROM ticket_bookings 
+        WHERE id IN
+        <foreach collection="list" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <!-- 更新预订状态 -->
+    <update id="updateStatus">
+        UPDATE ticket_bookings 
+        SET booking_status = #{status}, updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 批量更新预订状态 -->
+    <update id="batchUpdateStatus">
+        UPDATE ticket_bookings 
+        SET booking_status = #{status}, updated_at = NOW()
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <!-- 更新确认号 -->
+    <update id="updateConfirmationNumber">
+        UPDATE ticket_bookings 
+        SET confirmation_number = #{confirmationNumber}, 
+            confirmed_time = #{confirmedTime},
+            booking_status = 'confirmed',
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 更新邮件发送时间 -->
+    <update id="updateEmailSentTime">
+        UPDATE ticket_bookings 
+        SET email_sent_time = #{emailSentTime},
+            booking_status = 'email_sent',
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 分页查询票务预订 -->
+    <select id="pageQuery" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ticket_bookings 
+        <where>
+            <if test="guestName != null and guestName != ''">
+                AND guest_name LIKE CONCAT('%', #{guestName}, '%')
+            </if>
+            <if test="guestPhone != null and guestPhone != ''">
+                AND guest_phone LIKE CONCAT('%', #{guestPhone}, '%')
+            </if>
+            <if test="attractionId != null">
+                AND attraction_id = #{attractionId}
+            </if>
+            <if test="bookingStatus != null and bookingStatus != ''">
+                AND booking_status = #{bookingStatus}
+            </if>
+            <if test="bookingMethod != null and bookingMethod != ''">
+                AND booking_method = #{bookingMethod}
+            </if>
+            <if test="visitDateStart != null">
+                AND visit_date &gt;= #{visitDateStart}
+            </if>
+            <if test="visitDateEnd != null">
+                AND visit_date &lt;= #{visitDateEnd}
+            </if>
+            <if test="ticketSpecialist != null and ticketSpecialist != ''">
+                AND ticket_specialist = #{ticketSpecialist}
+            </if>
+        </where>
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 统计查询总数 -->
+    <select id="countQuery" resultType="java.lang.Long">
+        SELECT COUNT(*)
+        FROM ticket_bookings 
+        <where>
+            <if test="guestName != null and guestName != ''">
+                AND guest_name LIKE CONCAT('%', #{guestName}, '%')
+            </if>
+            <if test="guestPhone != null and guestPhone != ''">
+                AND guest_phone LIKE CONCAT('%', #{guestPhone}, '%')
+            </if>
+            <if test="attractionId != null">
+                AND attraction_id = #{attractionId}
+            </if>
+            <if test="bookingStatus != null and bookingStatus != ''">
+                AND booking_status = #{bookingStatus}
+            </if>
+            <if test="bookingMethod != null and bookingMethod != ''">
+                AND booking_method = #{bookingMethod}
+            </if>
+            <if test="visitDateStart != null">
+                AND visit_date &gt;= #{visitDateStart}
+            </if>
+            <if test="visitDateEnd != null">
+                AND visit_date &lt;= #{visitDateEnd}
+            </if>
+            <if test="ticketSpecialist != null and ticketSpecialist != ''">
+                AND ticket_specialist = #{ticketSpecialist}
+            </if>
+        </where>
+    </select>
+
+    <!-- 根据景点ID和游览日期查询预订 -->
+    <select id="getByAttractionAndDate" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ticket_bookings 
+        WHERE attraction_id = #{attractionId} AND visit_date = #{visitDate}
+        ORDER BY booking_status, created_at ASC
+    </select>
+
+    <!-- 根据游览日期范围查询预订 -->
+    <select id="getByVisitDateRange" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ticket_bookings 
+        WHERE visit_date BETWEEN #{startDate} AND #{endDate}
+        ORDER BY visit_date, attraction_id
+    </select>
+
+    <!-- 统计预订状态 -->
+    <select id="getStatusStatistics" resultType="java.util.Map">
+        SELECT 
+            booking_status as status,
+            COUNT(*) as count,
+            SUM(total_amount) as totalAmount
+        FROM ticket_bookings 
+        <where>
+            <if test="attractionId != null">
+                AND attraction_id = #{attractionId}
+            </if>
+            <if test="startDate != null">
+                AND visit_date &gt;= #{startDate}
+            </if>
+            <if test="endDate != null">
+                AND visit_date &lt;= #{endDate}
+            </if>
+        </where>
+        GROUP BY booking_status
+    </select>
+
+    <!-- 获取当日预订参考号的最大序号 -->
+    <select id="getMaxSequenceByDatePrefix" parameterType="java.lang.String" resultType="java.lang.Integer">
+        SELECT MAX(CAST(RIGHT(booking_reference, 3) AS UNSIGNED)) as maxSeq
+        FROM ticket_bookings 
+        WHERE booking_reference LIKE CONCAT(#{datePrefix}, '%')
+    </select>
+
+    <!-- 根据票务专员查询预订 -->
+    <select id="getByTicketSpecialist" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ticket_bookings 
+        WHERE ticket_specialist = #{ticketSpecialist}
+        <if test="bookingStatus != null and bookingStatus != ''">
+            AND booking_status = #{bookingStatus}
+        </if>
+        ORDER BY visit_date DESC, created_at DESC
+    </select>
+
+</mapper>

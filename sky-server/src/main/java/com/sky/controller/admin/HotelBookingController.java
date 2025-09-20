@@ -137,13 +137,15 @@ public class HotelBookingController {
             @RequestParam(required = false) String guestPhone,
             @ApiParam(name = "hotelId", value = "酒店ID")
             @RequestParam(required = false) Integer hotelId,
+            @ApiParam(name = "hotelSpecialist", value = "酒店专员")
+            @RequestParam(required = false) String hotelSpecialist,
             @ApiParam(name = "checkInDate", value = "入住日期开始")
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate checkInDate,
             @ApiParam(name = "checkOutDate", value = "入住日期结束")
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate checkOutDate) {
         log.info("分页查询酒店预订列表，页码：{}，每页记录数：{}", page, pageSize);
         PageResult pageResult = hotelBookingService.pageQuery(page, pageSize, status, guestName, guestPhone,
-                hotelId, checkInDate, checkOutDate);
+                hotelId, hotelSpecialist, checkInDate, checkOutDate);
         return Result.success(pageResult);
     }
 
@@ -190,6 +192,18 @@ public class HotelBookingController {
     public Result<String> confirmBooking(@PathVariable Integer id) {
         log.info("确认酒店预订：{}", id);
         Boolean success = hotelBookingService.confirmBooking(id);
+        return success ? Result.success("确认成功") : Result.error("确认失败");
+    }
+
+    /**
+     * 确认酒店预订并设置预订号
+     */
+    @PostMapping("/{id}/confirm-with-number")
+    @ApiOperation("确认酒店预订并设置预订号")
+    public Result<String> confirmBookingWithNumber(@PathVariable Integer id, 
+                                                  @RequestParam String hotelBookingNumber) {
+        log.info("确认酒店预订并设置预订号：{}, 预订号：{}", id, hotelBookingNumber);
+        Boolean success = hotelBookingService.confirmBookingWithNumber(id, hotelBookingNumber);
         return success ? Result.success("确认成功") : Result.error("确认失败");
     }
 
@@ -380,6 +394,21 @@ public class HotelBookingController {
             log.error("批量删除酒店预订失败", e);
             return Result.error("批量删除失败：" + e.getMessage());
         }
+    }
+
+    /**
+     * 根据日期范围批量查询酒店预订
+     */
+    @GetMapping("/date-range")
+    @ApiOperation("根据日期范围批量查询酒店预订")
+    public Result<List<HotelBooking>> getByDateRange(
+            @ApiParam(name = "startDate", value = "开始日期", required = true)
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
+            @ApiParam(name = "endDate", value = "结束日期", required = true)
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate) {
+        log.info("根据日期范围批量查询酒店预订，开始日期：{}，结束日期：{}", startDate, endDate);
+        List<HotelBooking> bookings = hotelBookingService.getByDateRange(startDate, endDate);
+        return Result.success(bookings);
     }
 
 

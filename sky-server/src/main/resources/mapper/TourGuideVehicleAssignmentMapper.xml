@@ -386,6 +386,14 @@
         WHERE id = #{id}
     </update>
 
+    <!-- 更新乘客详情 -->
+    <update id="updatePassengerDetails">
+        UPDATE tour_guide_vehicle_assignment
+        SET passenger_details = #{passengerDetails},
+            updated_time = NOW()
+        WHERE id = #{id}
+    </update>
+
     <!-- 删除分配记录 -->
     <delete id="deleteById">
         DELETE FROM tour_guide_vehicle_assignment WHERE id = #{id}

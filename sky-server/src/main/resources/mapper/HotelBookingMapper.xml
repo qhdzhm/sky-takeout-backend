@@ -6,6 +6,7 @@
     <resultMap id="BaseResultMap" type="com.sky.entity.HotelBooking">
         <id column="id" property="id" jdbcType="BIGINT"/>
         <result column="booking_reference" property="bookingReference" jdbcType="VARCHAR"/>
+        <result column="hotel_booking_number" property="hotelBookingNumber" jdbcType="VARCHAR"/>
         <result column="tour_booking_id" property="tourBookingId" jdbcType="BIGINT"/>
         <result column="schedule_order_id" property="scheduleOrderId" jdbcType="BIGINT"/>
         <result column="assignment_id" property="assignmentId" jdbcType="BIGINT"/>
@@ -30,6 +31,7 @@
         <result column="cancellation_policy" property="cancellationPolicy" jdbcType="VARCHAR"/>
         <result column="booking_source" property="bookingSource" jdbcType="VARCHAR"/>
         <result column="booked_by" property="bookedBy" jdbcType="BIGINT"/>
+        <result column="hotel_specialist" property="hotelSpecialist" jdbcType="VARCHAR"/>
         <result column="notes" property="notes" jdbcType="VARCHAR"/>
         <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
         <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
@@ -37,22 +39,22 @@
 
     <!-- 基础列 -->
     <sql id="Base_Column_List">
-        id, booking_reference, tour_booking_id, schedule_order_id, assignment_id, hotel_id, 
+        id, booking_reference, hotel_booking_number, tour_booking_id, schedule_order_id, assignment_id, hotel_id, 
         room_type_id, guest_name, guest_phone, guest_email, check_in_date, check_out_date, 
         nights, room_count, adult_count, child_count, total_guests, room_rate, total_amount, 
         currency, special_requests, booking_status, payment_status, cancellation_policy, 
-        booking_source, booked_by, notes, created_at, updated_at
+        booking_source, booked_by, hotel_specialist, notes, created_at, updated_at
     </sql>
 
     <!-- 插入酒店预订 -->
     <insert id="insert" parameterType="com.sky.entity.HotelBooking" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO hotel_bookings (
-            booking_reference, tour_booking_id, schedule_order_id, assignment_id, hotel_id,
+            booking_reference, hotel_booking_number, tour_booking_id, schedule_order_id, assignment_id, hotel_id,
             room_type_id, guest_name, guest_phone, guest_email, check_in_date, check_out_date,
             room_count, adult_count, child_count, room_rate, booking_status, payment_status,
             special_requests, booking_source, booked_by, notes
         ) VALUES (
-            #{bookingReference}, #{tourBookingId}, #{scheduleOrderId}, #{assignmentId}, #{hotelId},
+            #{bookingReference}, #{hotelBookingNumber}, #{tourBookingId}, #{scheduleOrderId}, #{assignmentId}, #{hotelId},
             #{roomTypeId}, #{guestName}, #{guestPhone}, #{guestEmail}, #{checkInDate}, #{checkOutDate},
             #{roomCount}, #{adultCount}, #{childCount}, #{roomRate}, #{bookingStatus}, #{paymentStatus},
             #{specialRequests}, #{bookingSource}, #{bookedBy}, #{notes}
@@ -150,6 +152,7 @@
         SELECT 
             hb.id,
             hb.booking_reference AS bookingReference,
+            hb.hotel_booking_number AS hotelBookingNumber,
             hb.tour_booking_id AS tourBookingId,
             tb.order_number AS orderNumber,
             h.hotel_name AS hotelName,
@@ -172,6 +175,7 @@
             hb.booking_status AS bookingStatus,
             hb.payment_status AS paymentStatus,
             hb.special_requests AS specialRequests,
+            hb.hotel_specialist AS hotelSpecialist,
             a.email AS agentEmail,
             hb.created_at AS createdAt
         FROM hotel_bookings hb
@@ -197,6 +201,9 @@
             </if>
             <if test="checkOutDate != null">
                 AND hb.check_out_date &lt;= #{checkOutDate}
+            </if>
+            <if test="hotelSpecialist != null and hotelSpecialist != ''">
+                AND hb.hotel_specialist = #{hotelSpecialist}
             </if>
         </where>
         ORDER BY hb.created_at DESC
@@ -381,7 +388,7 @@
 
     <!-- 更新邮件发送信息 -->
     <update id="updateEmailSentInfo">
-        UPDATE hotel_bookings 
+        UPDATE hotel_bookings
         SET email_sent_at = NOW(),
             email_sent_to = #{emailTo},
             email_content = #{emailContent},
@@ -390,4 +397,29 @@
         WHERE id = #{bookingId}
     </update>
 
-</mapper> 
+    <!-- 根据旅游订单ID更新酒店专员 -->
+    <update id="updateHotelSpecialistByTourBookingId">
+        UPDATE hotel_bookings
+        SET hotel_specialist = #{hotelSpecialist},
+            updated_at = NOW()
+        WHERE tour_booking_id = #{tourBookingId}
+    </update>
+
+    <!-- 更新酒店预订号 -->
+    <update id="updateHotelBookingNumber">
+        UPDATE hotel_bookings
+        SET hotel_booking_number = #{hotelBookingNumber},
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 根据日期范围批量查询酒店预订 -->
+    <select id="getByDateRange" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM hotel_bookings hb
+        WHERE hb.check_in_date &lt;= #{endDate}
+          AND hb.check_out_date &gt;= #{startDate}
+        ORDER BY hb.check_in_date ASC, hb.created_at DESC
+    </select>
+
+</mapper>

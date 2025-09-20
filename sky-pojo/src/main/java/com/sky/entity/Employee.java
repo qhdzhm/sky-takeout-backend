@@ -58,4 +58,24 @@ public class Employee implements Serializable {
     
     // 是否有分配订单权限
     private Boolean canAssignOrders;
+    
+    // ====== 个人邮箱配置字段 ======
+    
+    // 邮箱密码（加密存储）
+    private String emailPassword;
+    
+    // SMTP服务器地址
+    private String emailHost;
+    
+    // SMTP端口
+    private Integer emailPort;
+    
+    // 是否启用个人邮箱发送
+    private Boolean emailEnabled;
+    
+    // 是否启用SSL
+    private Boolean emailSslEnabled;
+    
+    // 是否需要SMTP认证
+    private Boolean emailAuthEnabled;
 }

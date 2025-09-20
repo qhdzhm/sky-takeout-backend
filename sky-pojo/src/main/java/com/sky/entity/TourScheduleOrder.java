@@ -235,6 +235,11 @@ public class TourScheduleOrder implements Serializable {
     private String roomDetails;
     
     /**
+     * 酒店预订号
+     */
+    private String hotelBookingNumber;
+    
+    /**
      * 特殊请求
      */
     private String specialRequests;

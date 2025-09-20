@@ -70,6 +70,11 @@ public interface TourGuideVehicleAssignmentMapper {
     void update(TourGuideVehicleAssignment assignment);
 
     /**
+     * 更新乘客详情
+     */
+    void updatePassengerDetails(@Param("id") Long id, @Param("passengerDetails") String passengerDetails);
+
+    /**
      * 删除分配记录
      */
     void deleteById(Long id);

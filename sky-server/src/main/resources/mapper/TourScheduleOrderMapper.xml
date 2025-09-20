@@ -31,6 +31,7 @@
         <result column="hotel_check_in_date" property="hotelCheckInDate"/>
         <result column="hotel_check_out_date" property="hotelCheckOutDate"/>
         <result column="room_details" property="roomDetails"/>
+        <result column="hotel_booking_number" property="hotelBookingNumber"/>
         <result column="flight_number" property="flightNumber"/>
         <result column="arrival_departure_time" property="arrivalDepartureTime"/>
         <result column="arrival_landing_time" property="arrivalLandingTime"/>
@@ -113,7 +114,7 @@
             created_at, updated_at, order_number, adult_count, child_count, contact_person, 
             contact_phone, pickup_location, dropoff_location, special_requests, guide_remarks, luggage_count,
             hotel_level, room_type, hotel_room_count, hotel_check_in_date, hotel_check_out_date,
-            room_details, flight_number, arrival_departure_time, arrival_landing_time,
+            room_details, hotel_booking_number, flight_number, arrival_departure_time, arrival_landing_time,
             return_flight_number, departure_departure_time, departure_landing_time,
             tour_start_date, tour_end_date, pickup_date, dropoff_date, passenger_contact,
             itinerary_details, is_first_order, from_referral, referral_code, service_type,
@@ -132,7 +133,7 @@
             created_at, updated_at, order_number, adult_count, child_count, contact_person, 
             contact_phone, pickup_location, dropoff_location, special_requests, guide_remarks, luggage_count,
             hotel_level, room_type, hotel_room_count, hotel_check_in_date, hotel_check_out_date,
-            room_details, flight_number, arrival_departure_time, arrival_landing_time,
+            room_details, hotel_booking_number, flight_number, arrival_departure_time, arrival_landing_time,
             return_flight_number, departure_departure_time, departure_landing_time,
             tour_start_date, tour_end_date, pickup_date, dropoff_date, passenger_contact,
             itinerary_details, is_first_order, from_referral, referral_code, service_type,
@@ -218,5 +219,17 @@
         </if>
         ORDER BY tgva.guide_name ASC, tso.order_number ASC
     </select>
+
+    <!-- 更新酒店预订号到入住日期 -->
+    <update id="updateHotelBookingNumberForCheckInDates">
+        UPDATE tour_schedule_order
+        SET hotel_booking_number = #{hotelBookingNumber},
+            updated_at = NOW()
+        WHERE booking_id = #{bookingId}
+        AND tour_date IN
+        <foreach collection="checkInDates" item="checkInDate" open="(" close=")" separator=",">
+            #{checkInDate}
+        </foreach>
+    </update>
 
 </mapper> 

@@ -36,7 +36,14 @@
         e.status,
         e.operator_type as operatorType,
         e.is_tour_master as isTourMaster,
-        e.can_assign_orders as canAssignOrders
+        e.can_assign_orders as canAssignOrders,
+        -- 邮箱配置字段
+        e.email_password as emailPassword,
+        e.email_host as emailHost,
+        e.email_port as emailPort,
+        e.email_enabled as emailEnabled,
+        e.email_ssl_enabled as emailSslEnabled,
+        e.email_auth_enabled as emailAuthEnabled
         FROM
         employees e
 
@@ -82,6 +89,13 @@
             <if test="operatorType != null">operator_type = #{operatorType},</if>
             <if test="isTourMaster != null">is_tour_master = #{isTourMaster},</if>
             <if test="canAssignOrders != null">can_assign_orders = #{canAssignOrders},</if>
+            <!-- ====== 邮箱配置字段 ====== -->
+            <if test="emailPassword != null">email_password = #{emailPassword},</if>
+            <if test="emailHost != null">email_host = #{emailHost},</if>
+            <if test="emailPort != null">email_port = #{emailPort},</if>
+            <if test="emailEnabled != null">email_enabled = #{emailEnabled},</if>
+            <if test="emailSslEnabled != null">email_ssl_enabled = #{emailSslEnabled},</if>
+            <if test="emailAuthEnabled != null">email_auth_enabled = #{emailAuthEnabled},</if>
             update_time = #{updateTime},
             update_user = #{updateUser}
         </set>
