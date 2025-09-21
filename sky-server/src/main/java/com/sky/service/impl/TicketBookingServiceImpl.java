@@ -73,6 +73,17 @@ public class TicketBookingServiceImpl implements TicketBookingService {
             ticketBooking.setBookingSource("system");
         }
         
+        // 处理批量订票相关字段
+        if (ticketBooking.getRelatedOrderIds() != null || ticketBooking.getRelatedOrderNumbers() != null) {
+            // 批量订票时，不设置单个订单的ID关联，避免Long类型冲突
+            ticketBooking.setScheduleOrderId(null);
+            ticketBooking.setTourBookingId(null);
+            log.info("批量订票模式：清除单个订单ID关联，使用relatedOrderIds和relatedOrderNumbers");
+        }
+        
+        log.info("准备插入票务预订: bookingReference={}, relatedOrderIds={}, relatedOrderNumbers={}", 
+                bookingReference, ticketBooking.getRelatedOrderIds(), ticketBooking.getRelatedOrderNumbers());
+        
         ticketBookingMapper.insert(ticketBooking);
         return bookingReference;
     }
@@ -110,6 +121,27 @@ public class TicketBookingServiceImpl implements TicketBookingService {
     @Override
     public void updateTicketBooking(TicketBooking ticketBooking) {
         log.info("更新票务预订：{}", ticketBooking);
+        
+        // 获取现有记录，确保不覆盖重要字段
+        TicketBooking existingBooking = ticketBookingMapper.getById(ticketBooking.getId());
+        if (existingBooking == null) {
+            throw new RuntimeException("票务预订不存在：" + ticketBooking.getId());
+        }
+        
+        // 保留现有的关键字段，避免被null覆盖
+        if (ticketBooking.getBookingReference() == null) {
+            ticketBooking.setBookingReference(existingBooking.getBookingReference());
+        }
+        if (ticketBooking.getCreatedAt() == null) {
+            ticketBooking.setCreatedAt(existingBooking.getCreatedAt());
+        }
+        if (ticketBooking.getRelatedOrderIds() == null) {
+            ticketBooking.setRelatedOrderIds(existingBooking.getRelatedOrderIds());
+        }
+        if (ticketBooking.getRelatedOrderNumbers() == null) {
+            ticketBooking.setRelatedOrderNumbers(existingBooking.getRelatedOrderNumbers());
+        }
+        
         ticketBooking.setUpdatedAt(LocalDateTime.now());
         
         // 重新计算总游客数
@@ -117,6 +149,7 @@ public class TicketBookingServiceImpl implements TicketBookingService {
         int childCount = ticketBooking.getChildCount() != null ? ticketBooking.getChildCount() : 0;
         ticketBooking.setTotalGuests(adultCount + childCount);
         
+        log.info("更新票务预订，保留bookingReference: {}", ticketBooking.getBookingReference());
         ticketBookingMapper.update(ticketBooking);
     }
 
@@ -219,19 +252,53 @@ public class TicketBookingServiceImpl implements TicketBookingService {
     }
 
     @Override
-    public boolean sendBookingEmail(Long bookingId, String emailContent, String recipientEmail) {
-        log.info("发送预订邮件：bookingId={}, recipientEmail={}", bookingId, recipientEmail);
+    public boolean sendBookingEmail(Long bookingId, String emailContent, String recipientEmail, String subject) {
+        // 从当前线程上下文获取登录员工ID
+        Long employeeId = com.sky.context.BaseContext.getCurrentId();
+        if (employeeId == null) {
+            employeeId = com.sky.context.BaseContext.getCurrentOperatorId();
+        }
+        
+        log.info("发送预订邮件：bookingId={}, recipientEmail={}, 当前登录员工ID={}, subject={}", 
+                bookingId, recipientEmail, employeeId, subject);
         
         try {
-            // 调用邮件服务发送邮件
-            // emailService.sendBookingEmail(recipientEmail, "票务预订确认", emailContent);
+            boolean success;
             
-            // 更新邮件发送时间
-            updateEmailSentTime(bookingId);
-            
-            return true;
+            // 如果能获取到当前员工ID，使用员工邮箱发送；否则使用系统默认邮箱
+            if (employeeId != null) {
+                log.info("🎫 使用当前登录员工邮箱发送预订邮件：employeeId={}", employeeId);
+                success = emailService.sendEmailWithEmployeeAccount(
+                    employeeId, 
+                    recipientEmail, 
+                    subject != null ? subject : "景区预订确认", 
+                    emailContent, 
+                    null, // 没有附件
+                    null  // 没有附件名称
+                );
+                log.info("🎫 员工邮箱发送结果：success={}", success);
+            } else {
+                log.warn("⚠️ 无法获取当前登录员工ID，使用系统默认邮箱发送预订邮件");
+                success = emailService.sendBookingEmail(
+                    recipientEmail, 
+                    subject != null ? subject : "景区预订确认", 
+                    emailContent
+                );
+                log.info("🎫 系统默认邮箱发送结果：success={}", success);
+            }
+
+            if (success) {
+                // 更新邮件发送时间
+                updateEmailSentTime(bookingId);
+                log.info("✅ 预订邮件发送成功：bookingId={}, employeeId={}", bookingId, employeeId);
+            } else {
+                log.warn("❌ 预订邮件发送失败：bookingId={}, employeeId={}", bookingId, employeeId);
+            }
+
+            return success;
         } catch (Exception e) {
-            log.error("发送预订邮件失败：bookingId={}, error={}", bookingId, e.getMessage());
+            log.error("发送预订邮件异常：bookingId={}, employeeId={}, error={}", 
+                    bookingId, employeeId, e.getMessage(), e);
             return false;
         }
     }
@@ -260,4 +327,5 @@ public class TicketBookingServiceImpl implements TicketBookingService {
         
         return assignmentIds.size();
     }
+
 }

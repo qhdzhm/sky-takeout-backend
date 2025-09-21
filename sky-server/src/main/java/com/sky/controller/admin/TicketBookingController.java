@@ -185,11 +185,15 @@ public class TicketBookingController {
      */
     @PostMapping("/send-email")
     @ApiOperation("发送预订邮件")
-    public Result<String> sendBookingEmail(@RequestParam Long bookingId,
-                                          @RequestParam String emailContent,
-                                          @RequestParam String recipientEmail) {
+    public Result<String> sendBookingEmail(@RequestBody Map<String, Object> emailRequest) {
+        Long bookingId = Long.valueOf(String.valueOf(emailRequest.get("bookingId")));
+        String emailContent = (String) emailRequest.get("content");
+        String recipientEmail = (String) emailRequest.get("recipientEmail");
+        String subject = (String) emailRequest.get("subject");
+        
         log.info("发送预订邮件：bookingId={}, recipientEmail={}", bookingId, recipientEmail);
-        boolean success = ticketBookingService.sendBookingEmail(bookingId, emailContent, recipientEmail);
+        
+        boolean success = ticketBookingService.sendBookingEmail(bookingId, emailContent, recipientEmail, subject);
         return success ? Result.success("邮件发送成功") : Result.error("邮件发送失败");
     }
 
@@ -267,5 +271,6 @@ public class TicketBookingController {
         int count = ticketBookingService.createFromAssignments(assignmentIds, ticketBooking);
         return Result.success("成功创建" + count + "个预订");
     }
+
 }
 

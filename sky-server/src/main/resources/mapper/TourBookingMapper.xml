@@ -48,6 +48,8 @@
         <result column="selected_optional_tours" property="selectedOptionalTours"/>
         <result column="group_type" property="groupType"/>
         <result column="group_size_limit" property="groupSizeLimit"/>
+        <result column="pickup_time" property="pickupTime"/>
+        <result column="dropoff_time" property="dropoffTime"/>
         <result column="group_type_price" property="groupTypePrice"/>
     </resultMap>
 
@@ -169,6 +171,10 @@
             <if test="status != null">status = #{status},</if>
             <if test="paymentStatus != null">payment_status = #{paymentStatus},</if>
             <if test="totalPrice != null">total_price = #{totalPrice},</if>
+            
+            <!-- 团型信息 -->
+            <if test="groupType != null">group_type = #{groupType},</if>
+            <if test="groupSizeLimit != null">group_size_limit = #{groupSizeLimit},</if>
             
             <!-- 其他信息 -->
             <if test="luggageCount != null">luggage_count = #{luggageCount},</if>

@@ -160,9 +160,10 @@ public interface TicketBookingService {
      * @param bookingId 预订ID
      * @param emailContent 邮件内容
      * @param recipientEmail 收件人邮箱
+     * @param subject 邮件主题
      * @return 是否发送成功
      */
-    boolean sendBookingEmail(Long bookingId, String emailContent, String recipientEmail);
+    boolean sendBookingEmail(Long bookingId, String emailContent, String recipientEmail, String subject);
 
     /**
      * 从排团订单创建票务预订
@@ -180,5 +181,6 @@ public interface TicketBookingService {
      * @return 创建的预订数量
      */
     int createFromAssignments(List<Long> assignmentIds, TicketBooking ticketBooking);
+
 }
 

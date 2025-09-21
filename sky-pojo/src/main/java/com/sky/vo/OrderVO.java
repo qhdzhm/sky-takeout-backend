@@ -41,7 +41,8 @@ public class OrderVO {
     private String contactPerson; // 联系人
     private String contactPhone; // 联系电话
     private String hotelLevel; // 酒店级别
-    private String roomType; // 房间类型
+    private String roomType; // 房间类型（JSON或单个房型）
+    private List<String> roomTypes; // 房间类型数组（解析后的）
     private Integer hotelRoomCount; // 酒店房间数量
     private String roomDetails; // 酒店房间详情
     private String specialRequests; // 特殊要求
@@ -52,6 +53,13 @@ public class OrderVO {
     private LocalDateTime createdAt; // 创建时间
     private LocalDateTime updatedAt; // 更新时间
     private String selectedOptionalTours; // 选中的可选行程（JSON格式）
+    
+    // 🆕 团型管理字段
+    private String groupType; // 团型类型（standard：普通团，small_12：12人团，small_14：14人团，luxury：精品团）
+    private Integer groupSizeLimit; // 团型人数限制
+    private LocalDateTime arrivalDepartureTime; // 接机时间
+    private LocalDate hotelCheckInDate; // 酒店入住日期
+    private LocalDate hotelCheckOutDate; // 酒店退房日期
     
     // 附加信息
     private String tourName; // 旅行名称

@@ -37,6 +37,9 @@
         <result column="cancelled_time" property="cancelledTime" jdbcType="TIMESTAMP"/>
         <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
         <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+        <!-- 新增批量订票相关字段映射 -->
+        <result column="related_order_ids" property="relatedOrderIds" jdbcType="VARCHAR"/>
+        <result column="related_order_numbers" property="relatedOrderNumbers" jdbcType="VARCHAR"/>
     </resultMap>
 
     <!-- 基础列 -->
@@ -46,7 +49,7 @@
         adult_count, child_count, total_guests, ticket_price, total_amount, currency,
         booking_method, booking_status, payment_status, special_requirements, booking_source,
         booked_by, ticket_specialist, notes, email_sent_time, confirmed_time, visited_time,
-        cancelled_time, created_at, updated_at
+        cancelled_time, created_at, updated_at, related_order_ids, related_order_numbers
     </sql>
 
     <!-- 插入票务预订 -->
@@ -57,14 +60,14 @@
             adult_count, child_count, total_guests, ticket_price, total_amount, currency,
             booking_method, booking_status, payment_status, special_requirements, booking_source,
             booked_by, ticket_specialist, notes, email_sent_time, confirmed_time, visited_time,
-            cancelled_time, created_at, updated_at
+            cancelled_time, created_at, updated_at, related_order_ids, related_order_numbers
         ) VALUES (
             #{bookingReference}, #{confirmationNumber}, #{scheduleOrderId}, #{tourBookingId}, #{assignmentId},
             #{attractionId}, #{ticketTypeId}, #{guestName}, #{guestPhone}, #{guestEmail}, #{visitDate}, #{bookingDate},
             #{adultCount}, #{childCount}, #{totalGuests}, #{ticketPrice}, #{totalAmount}, #{currency},
             #{bookingMethod}, #{bookingStatus}, #{paymentStatus}, #{specialRequirements}, #{bookingSource},
             #{bookedBy}, #{ticketSpecialist}, #{notes}, #{emailSentTime}, #{confirmedTime}, #{visitedTime},
-            #{cancelledTime}, #{createdAt}, #{updatedAt}
+            #{cancelledTime}, #{createdAt}, #{updatedAt}, #{relatedOrderIds}, #{relatedOrderNumbers}
         )
     </insert>
 

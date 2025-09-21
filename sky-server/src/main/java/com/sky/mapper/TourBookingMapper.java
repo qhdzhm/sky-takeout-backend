@@ -24,7 +24,18 @@ public interface TourBookingMapper {
      * @param id 订单ID
      * @return 订单信息
      */
-    @Select("SELECT * FROM tour_bookings WHERE booking_id = #{id}")
+    @Select("SELECT booking_id, order_number, tour_id, tour_type, user_id, agent_id, operator_id, " +
+            "booking_date, flight_number, arrival_departure_time, arrival_landing_time, " +
+            "return_flight_number, departure_departure_time, departure_landing_time, " +
+            "tour_start_date, tour_end_date, pickup_date, dropoff_date, pickup_location, dropoff_location, " +
+            "service_type, group_size, adult_count, child_count, luggage_count, passenger_contact, " +
+            "contact_person, contact_phone, hotel_level, room_type, hotel_room_count, " +
+            "hotel_check_in_date, hotel_check_out_date, room_details, special_requests, " +
+            "itinerary_details, status, payment_status, total_price, created_at, updated_at, " +
+            "selected_optional_tours, from_referral, referral_code, user_hidden, user_hidden_at, " +
+            "assigned_operator_id, assigned_at, assigned_by, assignment_status, " +
+            "group_type, group_size_limit, group_type_price " +
+            "FROM tour_bookings WHERE booking_id = #{id}")
     TourBooking getById(Integer id);
     
     /**

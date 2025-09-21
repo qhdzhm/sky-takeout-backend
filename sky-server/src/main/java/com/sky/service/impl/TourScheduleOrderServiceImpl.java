@@ -5,6 +5,7 @@ import com.sky.dto.DayTourPageQueryDTO;
 import com.sky.dto.GroupTourDTO;
 import com.sky.dto.TourScheduleBatchSaveDTO;
 import com.sky.dto.TourScheduleOrderDTO;
+import com.sky.dto.UpdateTourLocationDTO;
 import com.github.pagehelper.Page;
 import com.sky.entity.DayTour;
 import com.sky.entity.TourBooking;
@@ -858,6 +859,46 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
         } catch (Exception e) {
             log.error("统计酒店客人信息时发生异常，酒店：{}，日期：{}，错误：{}", hotelName, tourDate, e.getMessage(), e);
             throw new RuntimeException("统计酒店客人信息失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 更新订单游玩地点 - 用于同车订票拖拽功能
+     */
+    @Override
+    @Transactional
+    public boolean updateTourLocation(UpdateTourLocationDTO updateLocationDTO) {
+        log.info("开始更新订单游玩地点，订单ID：{}，新地点：{}，日期：{}", 
+                updateLocationDTO.getOrderId(), updateLocationDTO.getNewLocation(), updateLocationDTO.getTourDate());
+        
+        try {
+            // 检查参数
+            if (updateLocationDTO.getOrderId() == null || 
+                updateLocationDTO.getNewLocation() == null || 
+                updateLocationDTO.getTourDate() == null) {
+                log.warn("更新订单游玩地点参数不完整：{}", updateLocationDTO);
+                return false;
+            }
+
+            // 更新排团表中该订单在指定日期的游玩地点
+            int updatedRows = tourScheduleOrderMapper.updateTourLocationByBookingIdAndDate(
+                    updateLocationDTO.getOrderId(),
+                    updateLocationDTO.getNewLocation(),
+                    updateLocationDTO.getTourDate()
+            );
+
+            if (updatedRows > 0) {
+                log.info("订单游玩地点更新成功，订单ID：{}，更新记录数：{}", updateLocationDTO.getOrderId(), updatedRows);
+                return true;
+            } else {
+                log.warn("订单游玩地点更新失败，没有找到匹配的记录，订单ID：{}，日期：{}", 
+                        updateLocationDTO.getOrderId(), updateLocationDTO.getTourDate());
+                return false;
+            }
+
+        } catch (Exception e) {
+            log.error("更新订单游玩地点时发生异常，订单ID：{}，异常：{}", updateLocationDTO.getOrderId(), e.getMessage(), e);
+            throw new RuntimeException("更新订单游玩地点失败：" + e.getMessage());
         }
     }
 } 

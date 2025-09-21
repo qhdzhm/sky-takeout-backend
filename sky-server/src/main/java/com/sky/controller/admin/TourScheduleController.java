@@ -5,6 +5,7 @@ import com.sky.context.BaseContext;
 import com.sky.dto.AssignOrderDTO;
 import com.sky.dto.TourScheduleBatchSaveDTO;
 import com.sky.dto.TourScheduleOrderDTO;
+import com.sky.dto.UpdateTourLocationDTO;
 import com.sky.entity.Employee;
 import com.sky.mapper.EmployeeMapper;
 import com.sky.result.Result;
@@ -348,5 +349,31 @@ public class TourScheduleController {
         result.put("canViewHotel", hasPermission || isTourMaster); // 有权限或是排团主管可以查看酒店
 
         return Result.success(result);
+    }
+
+    /**
+     * 更新订单游玩地点 - 用于同车订票拖拽功能
+     */
+    @PutMapping("/update-tour-location")
+    @ApiOperation("更新订单游玩地点")
+    public Result<String> updateTourLocation(
+            @ApiParam(name = "updateLocationDTO", value = "更新地点请求", required = true) @RequestBody UpdateTourLocationDTO updateLocationDTO) {
+        
+        log.info("更新订单游玩地点，订单ID：{}，新地点：{}，日期：{}", 
+                updateLocationDTO.getOrderId(), updateLocationDTO.getNewLocation(), updateLocationDTO.getTourDate());
+        
+        try {
+            boolean success = tourScheduleOrderService.updateTourLocation(updateLocationDTO);
+            if (success) {
+                log.info("订单游玩地点更新成功，订单ID：{}", updateLocationDTO.getOrderId());
+                return Result.success("游玩地点更新成功");
+            } else {
+                log.warn("订单游玩地点更新失败，订单ID：{}", updateLocationDTO.getOrderId());
+                return Result.error("游玩地点更新失败，请检查订单和日期是否正确");
+            }
+        } catch (Exception e) {
+            log.error("更新订单游玩地点时发生异常，订单ID：{}，异常：{}", updateLocationDTO.getOrderId(), e.getMessage());
+            return Result.error("更新游玩地点时发生异常：" + e.getMessage());
+        }
     }
 } 

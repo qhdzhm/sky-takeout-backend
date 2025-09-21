@@ -893,6 +893,36 @@ public class EmailServiceImpl implements EmailService {
     }
 
     /**
+     * 发送预订邮件
+     * @param to 收件人邮箱
+     * @param subject 邮件主题
+     * @param content 邮件内容
+     * @return 是否发送成功
+     */
+    @Override
+    public boolean sendBookingEmail(String to, String subject, String content) {
+        log.info("发送预订邮件: 收件人={}, 主题={}", to, subject);
+        
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(content);
+            helper.setFrom("Tom.zhang@htas.com.au");
+            
+            mailSender.send(message);
+            log.info("✅ 预订邮件发送成功: 收件人={}", to);
+            return true;
+            
+        } catch (Exception e) {
+            log.error("❌ 预订邮件发送失败: 收件人={}, 错误={}", to, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
      * 将纯文本转换为HTML格式，保持换行和格式
      * @param text 纯文本内容
      * @return HTML格式的内容

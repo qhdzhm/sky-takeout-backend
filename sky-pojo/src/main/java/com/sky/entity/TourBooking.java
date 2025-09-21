@@ -75,6 +75,7 @@ public class TourBooking implements Serializable {
     // 送客日期
     private LocalDate dropoffDate;
     
+    
     // 接客地点
     private String pickupLocation;
     

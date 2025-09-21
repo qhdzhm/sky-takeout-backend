@@ -364,4 +364,121 @@ public interface TourScheduleOrderMapper {
     void updateHotelBookingNumberForCheckInDates(@Param("bookingId") Integer bookingId,
                                                @Param("hotelBookingNumber") String hotelBookingNumber,
                                                @Param("checkInDates") List<LocalDate> checkInDates);
+
+    /**
+     * 根据订单ID和日期更新游玩地点 - 用于同车订票拖拽功能
+     * @param bookingId 订单ID
+     * @param newLocation 新的游玩地点
+     * @param tourDate 游玩日期
+     * @return 影响的行数
+     */
+    @Update("UPDATE tour_schedule_order SET tour_location = #{newLocation}, title = #{newLocation}, updated_at = NOW() " +
+            "WHERE booking_id = #{bookingId} AND tour_date = #{tourDate}")
+    int updateTourLocationByBookingIdAndDate(@Param("bookingId") Integer bookingId,
+                                           @Param("newLocation") String newLocation,
+                                           @Param("tourDate") LocalDate tourDate);
+
+    /**
+     * 根据订单ID更新行程日期信息
+     * @param bookingId 订单ID
+     * @param tourStartDate 行程开始日期
+     * @param tourEndDate 行程结束日期
+     * @return 更新的记录数
+     */
+    @Update("UPDATE tour_schedule_order SET tour_start_date=#{tourStartDate}, tour_end_date=#{tourEndDate}, updated_at=NOW() WHERE booking_id=#{bookingId}")
+    int updateTourDatesByBookingId(Integer bookingId, LocalDate tourStartDate, LocalDate tourEndDate);
+
+    /**
+     * 根据订单ID更新酒店信息
+     * @param bookingId 订单ID
+     * @param hotelLevel 酒店等级
+     * @param hotelRoomCount 房间数量
+     * @return 更新的记录数
+     */
+    @Update("UPDATE tour_schedule_order SET hotel_level=#{hotelLevel}, hotel_room_count=#{hotelRoomCount}, updated_at=NOW() WHERE booking_id=#{bookingId}")
+    int updateHotelInfoByBookingId(Integer bookingId, String hotelLevel, Integer hotelRoomCount);
+
+    /**
+     * 根据订单ID更新房型信息
+     * @param bookingId 订单ID
+     * @param roomType 房型信息（JSON格式）
+     * @return 更新的记录数
+     */
+    @Update("UPDATE tour_schedule_order SET room_type=#{roomType}, updated_at=NOW() WHERE booking_id=#{bookingId}")
+    int updateRoomTypeByBookingId(Integer bookingId, String roomType);
+
+    /**
+     * 根据订单ID更新订单状态信息
+     * @param bookingId 订单ID
+     * @param status 订单状态
+     * @param paymentStatus 支付状态
+     * @return 更新的记录数
+     */
+    @Update("UPDATE tour_schedule_order SET status=#{status}, payment_status=#{paymentStatus}, updated_at=NOW() WHERE booking_id=#{bookingId}")
+    int updateOrderStatusByBookingId(Integer bookingId, String status, String paymentStatus);
+
+    /**
+     * 根据订单ID更新总价信息
+     * @param bookingId 订单ID
+     * @param totalPrice 总价
+     * @return 更新的记录数
+     */
+    @Update("UPDATE tour_schedule_order SET total_price=#{totalPrice}, updated_at=NOW() WHERE booking_id=#{bookingId}")
+    int updateTotalPriceByBookingId(Integer bookingId, java.math.BigDecimal totalPrice);
+
+    /**
+     * 根据订单ID重新生成tour_date - 基于新的tour_start_date和tour_end_date
+     * @param bookingId 订单ID
+     * @return 更新的记录数
+     */
+    int regenerateTourDatesByBookingId(Integer bookingId);
+
+    /**
+     * 根据订单ID删除超出指定天数的多余排团记录
+     * @param bookingId 订单ID
+     * @param maxDays 最大保留天数
+     * @return 删除的记录数
+     */
+    @Delete("DELETE FROM tour_schedule_order WHERE booking_id = #{bookingId} AND day_number > #{maxDays}")
+    int deleteExcessRecordsByBookingId(Integer bookingId, Integer maxDays);
+
+    /**
+     * 根据订单ID更新团型信息
+     * @param bookingId 订单ID
+     * @param groupType 团型类型
+     * @param groupSizeLimit 团型人数限制
+     * @return 更新的记录数
+     */
+    @Update("UPDATE tour_schedule_order SET group_type=#{groupType}, group_size_limit=#{groupSizeLimit}, updated_at=NOW() WHERE booking_id=#{bookingId}")
+    int updateGroupTypeByBookingId(Integer bookingId, String groupType, Integer groupSizeLimit);
+
+    /**
+     * 根据订单ID更新接送机日期信息
+     * @param bookingId 订单ID
+     * @param pickupDate 接机日期
+     * @param dropoffDate 送机日期
+     * @return 更新的记录数
+     */
+    @Update("UPDATE tour_schedule_order SET pickup_date=#{pickupDate}, dropoff_date=#{dropoffDate}, updated_at=NOW() WHERE booking_id=#{bookingId}")
+    int updatePickupDropoffDatesByBookingId(Integer bookingId, LocalDate pickupDate, LocalDate dropoffDate);
+
+    /**
+     * 根据订单ID更新接送机时间信息
+     * @param bookingId 订单ID
+     * @param arrivalDepartureTime 接机时间
+     * @param departureDepartureTime 送机时间
+     * @return 更新的记录数
+     */
+    @Update("UPDATE tour_schedule_order SET pickup_time=#{arrivalDepartureTime}, dropoff_time=#{departureDepartureTime}, updated_at=NOW() WHERE booking_id=#{bookingId}")
+    int updatePickupDropoffTimesByBookingId(Integer bookingId, String arrivalDepartureTime, String departureDepartureTime);
+
+    /**
+     * 根据订单ID更新酒店日期信息
+     * @param bookingId 订单ID
+     * @param hotelCheckInDate 酒店入住日期
+     * @param hotelCheckOutDate 酒店退房日期
+     * @return 更新的记录数
+     */
+    @Update("UPDATE tour_schedule_order SET hotel_check_in_date=#{hotelCheckInDate}, hotel_check_out_date=#{hotelCheckOutDate}, updated_at=NOW() WHERE booking_id=#{bookingId}")
+    int updateHotelDatesByBookingId(Integer bookingId, LocalDate hotelCheckInDate, LocalDate hotelCheckOutDate);
 } 

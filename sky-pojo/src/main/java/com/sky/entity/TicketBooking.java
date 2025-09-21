@@ -102,6 +102,12 @@ public class TicketBooking implements Serializable {
     // 内部备注
     private String notes;
     
+    // 关联的订单ID列表（JSON格式，支持单个ID或多个ID）
+    private String relatedOrderIds;
+    
+    // 关联的订单号列表（JSON格式，支持单个订单号或多个订单号）
+    private String relatedOrderNumbers;
+    
     // 邮件发送时间
     private LocalDateTime emailSentTime;
     

@@ -43,6 +43,13 @@
         <result column="updated_at" property="updatedAt"/>
         <!-- 可选行程选择 -->
         <result column="selected_optional_tours" property="selectedOptionalTours"/>
+        <!-- 🆕 团型管理字段 -->
+        <result column="group_type" property="groupType"/>
+        <result column="group_size_limit" property="groupSizeLimit"/>
+        <result column="arrival_departure_time" property="arrivalDepartureTime"/>
+        <result column="departure_departure_time" property="departureDepartureTime"/>
+        <result column="hotel_check_in_date" property="hotelCheckInDate"/>
+        <result column="hotel_check_out_date" property="hotelCheckOutDate"/>
         <!-- 附加信息 -->
         <result column="tour_name" property="tourName"/>
         <result column="tour_location" property="tourLocation"/>
@@ -64,6 +71,8 @@
             tb.contact_phone, tb.hotel_level, tb.room_type, tb.hotel_room_count, tb.room_details,
             tb.special_requests, tb.itinerary_details, tb.status, tb.payment_status, tb.total_price,
             tb.selected_optional_tours, tb.created_at, tb.updated_at,
+            tb.group_type, tb.group_size_limit, tb.arrival_departure_time, tb.departure_departure_time, 
+            tb.hotel_check_in_date, tb.hotel_check_out_date,
             CASE 
                 WHEN tb.tour_type = 'day_tour' THEN dt.name
                 WHEN tb.tour_type = 'group_tour' THEN gt.title

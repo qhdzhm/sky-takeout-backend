@@ -2,6 +2,7 @@ package com.sky.service;
 
 import com.sky.dto.TourScheduleBatchSaveDTO;
 import com.sky.dto.TourScheduleOrderDTO;
+import com.sky.dto.UpdateTourLocationDTO;
 import com.sky.vo.TourScheduleVO;
 import com.sky.vo.HotelCustomerStatisticsVO;
 
@@ -96,5 +97,11 @@ public interface TourScheduleOrderService {
      */
     HotelCustomerStatisticsVO getHotelCustomerStatistics(String hotelName, LocalDate tourDate);
 
+    /**
+     * 更新订单游玩地点 - 用于同车订票拖拽功能
+     * @param updateLocationDTO 更新地点请求DTO
+     * @return 更新结果
+     */
+    boolean updateTourLocation(UpdateTourLocationDTO updateLocationDTO);
 
 } 

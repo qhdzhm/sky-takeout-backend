@@ -37,6 +37,7 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -924,6 +925,41 @@ public class OrderServiceImpl implements OrderService {
         // 设置联系人信息
         orderVO.setContactPerson(tourBooking.getContactPerson());
         orderVO.setContactPhone(tourBooking.getContactPhone());
+        
+        // 🆕 设置团型管理字段
+        orderVO.setGroupType(tourBooking.getGroupType());
+        orderVO.setGroupSizeLimit(tourBooking.getGroupSizeLimit());
+        
+        // 🆕 设置接送机时间
+        orderVO.setArrivalDepartureTime(tourBooking.getArrivalDepartureTime());
+        orderVO.setDepartureDepartureTime(tourBooking.getDepartureDepartureTime());
+        
+        // 🆕 设置酒店入住退房日期
+        orderVO.setHotelCheckInDate(tourBooking.getHotelCheckInDate());
+        orderVO.setHotelCheckOutDate(tourBooking.getHotelCheckOutDate());
+        
+        // 🆕 解析房型数据：如果是JSON数组则解析，否则作为单个房型处理
+        if (tourBooking.getRoomType() != null) {
+            try {
+                // 尝试解析为JSON数组
+                if (tourBooking.getRoomType().startsWith("[") && tourBooking.getRoomType().endsWith("]")) {
+                    List<String> roomTypesList = com.alibaba.fastjson.JSON.parseArray(tourBooking.getRoomType(), String.class);
+                    orderVO.setRoomTypes(roomTypesList);
+                    orderVO.setRoomType(tourBooking.getRoomType()); // 保持原始JSON
+                    log.info("✅ 解析房型JSON数组成功: {}", roomTypesList);
+                } else {
+                    // 单个房型
+                    orderVO.setRoomType(tourBooking.getRoomType());
+                    orderVO.setRoomTypes(Arrays.asList(tourBooking.getRoomType()));
+                    log.info("使用单个房型: {}", tourBooking.getRoomType());
+                }
+            } catch (Exception e) {
+                log.warn("⚠️ 房型数据解析失败，使用原始数据: {}", e.getMessage());
+                // 解析失败时的降级处理
+                orderVO.setRoomType(tourBooking.getRoomType());
+                orderVO.setRoomTypes(Arrays.asList(tourBooking.getRoomType()));
+            }
+        }
         
         return orderVO;
     }

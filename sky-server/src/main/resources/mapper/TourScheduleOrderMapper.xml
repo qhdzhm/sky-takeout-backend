@@ -232,4 +232,15 @@
         </foreach>
     </update>
 
+    <!-- 根据订单ID重新生成tour_date - 基于新的tour_start_date和tour_end_date -->
+    <update id="regenerateTourDatesByBookingId">
+        UPDATE tour_schedule_order tso
+        SET tso.tour_date = DATE_ADD(tso.tour_start_date, INTERVAL (tso.day_number - 1) DAY),
+            tso.updated_at = NOW()
+        WHERE tso.booking_id = #{bookingId}
+        AND tso.tour_start_date IS NOT NULL
+        AND tso.tour_end_date IS NOT NULL
+        AND tso.day_number IS NOT NULL
+    </update>
+
 </mapper> 

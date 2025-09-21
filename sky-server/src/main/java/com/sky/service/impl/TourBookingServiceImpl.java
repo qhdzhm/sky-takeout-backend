@@ -50,6 +50,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -231,6 +233,27 @@ public class TourBookingServiceImpl implements TourBookingService {
         
         // 将DTO的属性复制到实体中
         BeanUtils.copyProperties(tourBookingDTO, tourBooking);
+        
+        // 🆕 处理房型数组：将房型数组转换为JSON字符串存储
+        if (tourBookingDTO.getRoomTypes() != null && !tourBookingDTO.getRoomTypes().isEmpty()) {
+            try {
+                String roomTypesJson = com.alibaba.fastjson.JSON.toJSONString(tourBookingDTO.getRoomTypes());
+                tourBooking.setRoomType(roomTypesJson);
+                log.info("✅ 房型数组转换为JSON存储: {} -> {}", tourBookingDTO.getRoomTypes(), roomTypesJson);
+            } catch (Exception e) {
+                log.warn("⚠️ 房型数组序列化失败，使用第一个房型: {}", e.getMessage());
+                // 降级处理：如果JSON序列化失败，使用第一个房型
+                tourBooking.setRoomType(tourBookingDTO.getRoomTypes().get(0));
+            }
+        } else if (tourBookingDTO.getRoomType() != null) {
+            // 如果没有房型数组但有单个房型，直接使用
+            tourBooking.setRoomType(tourBookingDTO.getRoomType());
+            log.info("使用单个房型: {}", tourBookingDTO.getRoomType());
+        } else {
+            // 默认房型
+            tourBooking.setRoomType("双人间");
+            log.info("使用默认房型: 双人间");
+        }
         
         // 确保可选行程数据被正确设置
         if (tourBookingDTO.getSelectedOptionalTours() != null) {
@@ -626,6 +649,23 @@ public class TourBookingServiceImpl implements TourBookingService {
         TourBooking tourBooking = new TourBooking();
         BeanUtils.copyProperties(tourBookingDTO, tourBooking);
         
+        // 🆕 处理房型数组：将房型数组转换为JSON字符串存储（更新时也需要处理）
+        if (tourBookingDTO.getRoomTypes() != null && !tourBookingDTO.getRoomTypes().isEmpty()) {
+            try {
+                String roomTypesJson = com.alibaba.fastjson.JSON.toJSONString(tourBookingDTO.getRoomTypes());
+                tourBooking.setRoomType(roomTypesJson);
+                log.info("✅ [更新订单]房型数组转换为JSON存储: {} -> {}", tourBookingDTO.getRoomTypes(), roomTypesJson);
+            } catch (Exception e) {
+                log.warn("⚠️ [更新订单]房型数组序列化失败，使用第一个房型: {}", e.getMessage());
+                // 降级处理：如果JSON序列化失败，使用第一个房型
+                tourBooking.setRoomType(tourBookingDTO.getRoomTypes().get(0));
+            }
+        } else if (tourBookingDTO.getRoomType() != null) {
+            // 如果没有房型数组但有单个房型，直接使用
+            tourBooking.setRoomType(tourBookingDTO.getRoomType());
+            log.info("[更新订单]使用单个房型: {}", tourBookingDTO.getRoomType());
+        }
+        
         // 🆕 确保人数相关字段被正确设置（管理后台可修改人数）
         if (tourBookingDTO.getAdultCount() != null) {
             tourBooking.setAdultCount(tourBookingDTO.getAdultCount());
@@ -833,6 +873,158 @@ public class TourBookingServiceImpl implements TourBookingService {
                     if (totalUpdatedCount > 0) {
                         log.info("✅ 排团表航班接送地点同步完成（管理后台），总更新记录数: {}", totalUpdatedCount);
                     }
+                }
+                
+                // 🆕 同步行程日期信息
+                if (tourBookingDTO.getTourStartDate() != null || tourBookingDTO.getTourEndDate() != null) {
+                    LocalDate syncStartDate = tourBookingDTO.getTourStartDate() != null ? 
+                        tourBookingDTO.getTourStartDate() : currentBooking.getTourStartDate();
+                    LocalDate syncEndDate = tourBookingDTO.getTourEndDate() != null ? 
+                        tourBookingDTO.getTourEndDate() : currentBooking.getTourEndDate();
+                    
+                    // 🚨 关键修复：计算新的日期范围需要多少天
+                    long daysBetween = ChronoUnit.DAYS.between(syncStartDate, syncEndDate) + 1;
+                    log.info("🔄 [排团表日期同步] 新的日期范围: {} 到 {}, 共 {} 天", syncStartDate, syncEndDate, daysBetween);
+                    
+                    // 🗑️ 先删除超出新日期范围的多余记录
+                    int deletedCount = tourScheduleOrderMapper.deleteExcessRecordsByBookingId(
+                        tourBookingDTO.getBookingId(), (int) daysBetween);
+                    log.info("🗑️ 删除多余的排团记录完成，删除记录数: {}", deletedCount);
+                    
+                    // 📝 更新剩余记录的日期范围
+                    int updatedCount = tourScheduleOrderMapper.updateTourDatesByBookingId(
+                        tourBookingDTO.getBookingId(), syncStartDate, syncEndDate);
+                    log.info("✅ 排团表行程日期同步完成，更新记录数: {}, 开始日期:{}, 结束日期:{}", 
+                            updatedCount, syncStartDate, syncEndDate);
+                    
+                    // 🔄 重新生成每天的tour_date
+                    int regeneratedCount = tourScheduleOrderMapper.regenerateTourDatesByBookingId(
+                        tourBookingDTO.getBookingId());
+                    log.info("✅ 排团表tour_date重新生成完成，更新记录数: {}", regeneratedCount);
+                }
+                
+                // 🆕 同步酒店信息
+                if (tourBookingDTO.getHotelLevel() != null || tourBookingDTO.getHotelRoomCount() != null) {
+                    String syncHotelLevel = tourBookingDTO.getHotelLevel() != null ? 
+                        tourBookingDTO.getHotelLevel() : currentBooking.getHotelLevel();
+                    Integer syncHotelRoomCount = tourBookingDTO.getHotelRoomCount() != null ? 
+                        tourBookingDTO.getHotelRoomCount() : currentBooking.getHotelRoomCount();
+                    
+                    int updatedCount = tourScheduleOrderMapper.updateHotelInfoByBookingId(
+                        tourBookingDTO.getBookingId(), syncHotelLevel, syncHotelRoomCount);
+                    log.info("✅ 排团表酒店信息同步完成，更新记录数: {}, 酒店等级:{}, 房间数:{}", 
+                            updatedCount, syncHotelLevel, syncHotelRoomCount);
+                }
+
+                // 🆕 同步房型信息
+                if (tourBookingDTO.getRoomTypes() != null && !tourBookingDTO.getRoomTypes().isEmpty()) {
+                    try {
+                        // 将房型数组转换为JSON字符串
+                        String roomTypeJson = com.alibaba.fastjson.JSON.toJSONString(tourBookingDTO.getRoomTypes());
+                        
+                        int updatedCount = tourScheduleOrderMapper.updateRoomTypeByBookingId(
+                            tourBookingDTO.getBookingId(), roomTypeJson);
+                        log.info("✅ 排团表房型信息同步完成，更新记录数: {}, 房型配置:{}", 
+                                updatedCount, roomTypeJson);
+                    } catch (Exception e) {
+                        log.error("❌ 排团表房型信息同步失败: {}", e.getMessage());
+                        // 如果JSON序列化失败，使用第一个房型作为降级处理
+                        if (tourBookingDTO.getRoomTypes().size() > 0) {
+                            String firstRoomType = tourBookingDTO.getRoomTypes().get(0);
+                            int updatedCount = tourScheduleOrderMapper.updateRoomTypeByBookingId(
+                                tourBookingDTO.getBookingId(), firstRoomType);
+                            log.info("✅ 排团表房型信息同步完成（降级处理），更新记录数: {}, 房型:{}", 
+                                    updatedCount, firstRoomType);
+                        }
+                    }
+                } else if (tourBookingDTO.getRoomType() != null) {
+                    // 如果没有房型数组但有单个房型，直接使用
+                    int updatedCount = tourScheduleOrderMapper.updateRoomTypeByBookingId(
+                        tourBookingDTO.getBookingId(), tourBookingDTO.getRoomType());
+                    log.info("✅ 排团表单个房型信息同步完成，更新记录数: {}, 房型:{}", 
+                            updatedCount, tourBookingDTO.getRoomType());
+                }
+                
+                // 🆕 同步订单状态信息
+                if (tourBookingDTO.getStatus() != null || tourBookingDTO.getPaymentStatus() != null) {
+                    String syncStatus = tourBookingDTO.getStatus() != null ? 
+                        tourBookingDTO.getStatus() : currentBooking.getStatus();
+                    String syncPaymentStatus = tourBookingDTO.getPaymentStatus() != null ? 
+                        tourBookingDTO.getPaymentStatus() : currentBooking.getPaymentStatus();
+                    
+                    int updatedCount = tourScheduleOrderMapper.updateOrderStatusByBookingId(
+                        tourBookingDTO.getBookingId(), syncStatus, syncPaymentStatus);
+                    log.info("✅ 排团表订单状态同步完成，更新记录数: {}, 订单状态:{}, 支付状态:{}", 
+                            updatedCount, syncStatus, syncPaymentStatus);
+                }
+                
+                // 🆕 同步总价信息
+                if (tourBookingDTO.getTotalPrice() != null) {
+                    int updatedCount = tourScheduleOrderMapper.updateTotalPriceByBookingId(
+                        tourBookingDTO.getBookingId(), tourBookingDTO.getTotalPrice());
+                    log.info("✅ 排团表总价同步完成，更新记录数: {}, 总价:{}", 
+                            updatedCount, tourBookingDTO.getTotalPrice());
+                }
+                
+                // 🆕 同步团型信息
+                if (tourBookingDTO.getGroupType() != null) {
+                    // 根据团型设置人数限制
+                    Integer groupSizeLimit = null;
+                    if ("small_12".equals(tourBookingDTO.getGroupType())) {
+                        groupSizeLimit = 12;
+                    } else if ("small_14".equals(tourBookingDTO.getGroupType())) {
+                        groupSizeLimit = 14;
+                    } else if ("luxury".equals(tourBookingDTO.getGroupType())) {
+                        groupSizeLimit = 8;
+                    }
+                    
+                    int updatedCount = tourScheduleOrderMapper.updateGroupTypeByBookingId(
+                        tourBookingDTO.getBookingId(), tourBookingDTO.getGroupType(), groupSizeLimit);
+                    log.info("✅ 排团表团型信息同步完成，更新记录数: {}, 团型:{}, 人数限制:{}", 
+                            updatedCount, tourBookingDTO.getGroupType(), groupSizeLimit);
+                }
+                
+                // 🆕 同步接送机日期信息
+                if (tourBookingDTO.getPickupDate() != null || tourBookingDTO.getDropoffDate() != null) {
+                    LocalDate syncPickupDate = tourBookingDTO.getPickupDate() != null ? 
+                        tourBookingDTO.getPickupDate() : currentBooking.getPickupDate();
+                    LocalDate syncDropoffDate = tourBookingDTO.getDropoffDate() != null ? 
+                        tourBookingDTO.getDropoffDate() : currentBooking.getDropoffDate();
+                    
+                    int updatedCount = tourScheduleOrderMapper.updatePickupDropoffDatesByBookingId(
+                        tourBookingDTO.getBookingId(), syncPickupDate, syncDropoffDate);
+                    log.info("✅ 排团表接送机日期同步完成，更新记录数: {}, 接机日期:{}, 送机日期:{}", 
+                            updatedCount, syncPickupDate, syncDropoffDate);
+                }
+                
+                // 🆕 同步接送机时间信息
+                if (tourBookingDTO.getArrivalDepartureTime() != null || tourBookingDTO.getDepartureDepartureTime() != null) {
+                    String syncArrivalTime = tourBookingDTO.getArrivalDepartureTime() != null ? 
+                        tourBookingDTO.getArrivalDepartureTime().format(DateTimeFormatter.ofPattern("HH:mm")) : 
+                        (currentBooking.getArrivalDepartureTime() != null ? 
+                            currentBooking.getArrivalDepartureTime().format(DateTimeFormatter.ofPattern("HH:mm")) : null);
+                    String syncDepartureTime = tourBookingDTO.getDepartureDepartureTime() != null ? 
+                        tourBookingDTO.getDepartureDepartureTime().format(DateTimeFormatter.ofPattern("HH:mm")) :
+                        (currentBooking.getDepartureDepartureTime() != null ? 
+                            currentBooking.getDepartureDepartureTime().format(DateTimeFormatter.ofPattern("HH:mm")) : null);
+                    
+                    int updatedCount = tourScheduleOrderMapper.updatePickupDropoffTimesByBookingId(
+                        tourBookingDTO.getBookingId(), syncArrivalTime, syncDepartureTime);
+                    log.info("✅ 排团表接送机时间同步完成，更新记录数: {}, 接机时间:{}, 送机时间:{}", 
+                            updatedCount, syncArrivalTime, syncDepartureTime);
+                }
+                
+                // 🆕 同步酒店日期信息
+                if (tourBookingDTO.getHotelCheckInDate() != null || tourBookingDTO.getHotelCheckOutDate() != null) {
+                    LocalDate syncCheckInDate = tourBookingDTO.getHotelCheckInDate() != null ? 
+                        tourBookingDTO.getHotelCheckInDate() : currentBooking.getHotelCheckInDate();
+                    LocalDate syncCheckOutDate = tourBookingDTO.getHotelCheckOutDate() != null ? 
+                        tourBookingDTO.getHotelCheckOutDate() : currentBooking.getHotelCheckOutDate();
+                    
+                    int updatedCount = tourScheduleOrderMapper.updateHotelDatesByBookingId(
+                        tourBookingDTO.getBookingId(), syncCheckInDate, syncCheckOutDate);
+                    log.info("✅ 排团表酒店日期同步完成，更新记录数: {}, 入住日期:{}, 退房日期:{}", 
+                            updatedCount, syncCheckInDate, syncCheckOutDate);
                 }
                 
                 log.info("✅ 管理后台订单修改同步排团表完成，订单ID: {}", tourBookingDTO.getBookingId());

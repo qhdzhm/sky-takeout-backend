@@ -54,4 +54,13 @@ public interface EmailService {
      */
     boolean sendEmailWithEmployeeAccount(Long employeeId, String to, String subject, 
                                        String body, byte[] attachment, String attachmentName);
+
+    /**
+     * 发送预订邮件
+     * @param to 收件人邮箱
+     * @param subject 邮件主题
+     * @param content 邮件内容
+     * @return 是否发送成功
+     */
+    boolean sendBookingEmail(String to, String subject, String content);
 } 
