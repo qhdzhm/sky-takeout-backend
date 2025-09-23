@@ -72,7 +72,7 @@ logging:
 sky:
   jwt:
     admin-secret-key: itcast
-    admin-ttl: 7200000
+    admin-ttl: 900000     # 15分钟 (15 * 60 * 1000)
     admin-token-name: token
 
     user-secret-key: itheima

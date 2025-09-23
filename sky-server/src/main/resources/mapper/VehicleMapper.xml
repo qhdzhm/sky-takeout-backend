@@ -9,6 +9,10 @@
         SELECT v.vehicle_id,
                v.vehicle_type,
                v.license_plate,
+               v.acn,
+               v.maker,
+               v.model,
+               v.year,
                v.rego_expiry_date,
                v.inspection_due_date,
                v.notes,
@@ -38,6 +42,18 @@
             </if>
             <if test="licensePlate != null and licensePlate != ''">
                 AND v.license_plate LIKE CONCAT('%', #{licensePlate}, '%')
+            </if>
+            <if test="acn != null and acn != ''">
+                AND v.acn LIKE CONCAT('%', #{acn}, '%')
+            </if>
+            <if test="maker != null and maker != ''">
+                AND v.maker LIKE CONCAT('%', #{maker}, '%')
+            </if>
+            <if test="model != null and model != ''">
+                AND v.model LIKE CONCAT('%', #{model}, '%')
+            </if>
+            <if test="year != null">
+                AND v.year = #{year}
             </if>
             <if test="location != null and location != ''">
                 AND v.location LIKE CONCAT('%', #{location}, '%')
@@ -74,8 +90,8 @@
                 )
             </if>
         </where>
-        GROUP BY v.vehicle_id, v.vehicle_type, v.license_plate, v.rego_expiry_date, 
-                 v.inspection_due_date, v.status, v.notes, v.max_drivers, v.location, 
+        GROUP BY v.vehicle_id, v.vehicle_type, v.license_plate, v.acn, v.maker, v.model, v.year,
+                 v.rego_expiry_date, v.inspection_due_date, v.status, v.notes, v.max_drivers, v.location, 
                  v.seat_count, v.create_time, v.update_time, v.fuel_level, v.current_location
         ORDER BY v.vehicle_id
     </select>

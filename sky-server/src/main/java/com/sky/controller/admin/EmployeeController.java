@@ -12,10 +12,13 @@ import com.sky.service.EmployeeService;
 import com.sky.utils.JwtUtil;
 import com.sky.utils.CookieUtil;
 import com.sky.vo.EmployeeLoginVO;
+import com.sky.vo.TokenRefreshVO;
+import io.jsonwebtoken.Claims;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.util.HashMap;
 import java.util.Map;
@@ -69,10 +72,10 @@ public class EmployeeController {
                     .build();
 
             // 🔧 新增：设置管理后台专用Cookie，与用户端完全隔离
-            // 管理后台Access Token（延长到2小时，提升用户体验）
-            CookieUtil.setAdminCookieWithMultiplePaths(response, "adminToken", token, true, 2 * 60 * 60);
+            // 管理后台Access Token（15分钟）
+            CookieUtil.setAdminCookieWithMultiplePaths(response, "adminToken", token, true, 15 * 60);
             
-            // 管理后台Refresh Token（长期，8小时）
+            // 管理后台Refresh Token（长期，7天）
             Map<String, Object> refreshClaims = new HashMap<>();
             refreshClaims.put(JwtClaimsConstant.EMP_ID, employee.getId());
             refreshClaims.put(JwtClaimsConstant.USERNAME, employee.getUsername());
@@ -80,11 +83,11 @@ public class EmployeeController {
             
             String refreshToken = JwtUtil.createJWT(
                 jwtProperties.getAdminSecretKey(),
-                8 * 60 * 60 * 1000L, // 8小时
+                7 * 24 * 60 * 60 * 1000L, // 7天
                 refreshClaims
             );
             
-            CookieUtil.setAdminCookieWithMultiplePaths(response, "adminRefreshToken", refreshToken, true, 8 * 60 * 60);
+            CookieUtil.setAdminCookieWithMultiplePaths(response, "adminRefreshToken", refreshToken, true, 7 * 24 * 60 * 60);
 
             // 设置管理后台用户信息Cookie（非HttpOnly，供前端读取）
             Map<String, Object> userInfo = new HashMap<>();
@@ -98,8 +101,8 @@ public class EmployeeController {
             userInfo.put("empId", employee.getId());
             
             String userInfoJson = com.alibaba.fastjson.JSON.toJSONString(userInfo);
-            // 使用专门的管理后台Cookie名称，延长到2小时与adminToken保持一致
-            setAdminUserInfoCookie(response, userInfoJson, 2 * 60 * 60);
+            // 使用专门的管理后台Cookie名称，15分钟与adminToken保持一致
+            setAdminUserInfoCookie(response, userInfoJson, 15 * 60);
             
             log.info("✅ 管理员登录成功，已设置Cookie-only认证: empId={}, username={}", 
                     employee.getId(), employee.getUsername());
@@ -157,6 +160,166 @@ public class EmployeeController {
             clearAdminCookies(response);
             return Result.error("退出失败：" + e.getMessage());
         }
+    }
+    
+    /**
+     * 刷新管理员Token - 使用Refresh Token获取新的Access Token
+     */
+    @PostMapping("/refresh")
+    public Result<TokenRefreshVO> refreshAdminToken(HttpServletRequest request, HttpServletResponse response) {
+        log.info("开始刷新管理员Token");
+        
+        try {
+            // 从HttpOnly Cookie中获取admin refresh token
+            String adminRefreshToken = getAdminRefreshTokenFromCookie(request);
+            
+            if (adminRefreshToken == null || adminRefreshToken.isEmpty()) {
+                log.warn("AdminRefreshToken为空");
+                return Result.error("Refresh Token不存在，请重新登录");
+            }
+
+            // 验证refresh token
+            Claims claims;
+            try {
+                claims = JwtUtil.parseJWT(jwtProperties.getAdminSecretKey(), adminRefreshToken);
+                log.debug("AdminRefreshToken验证成功");
+            } catch (Exception e) {
+                log.warn("AdminRefreshToken无效或已过期: {}", e.getMessage());
+                // 清除无效的refresh token cookie
+                CookieUtil.clearCookie(response, "adminRefreshToken", "/");
+                CookieUtil.clearCookie(response, "adminRefreshToken", "/admin");
+                return Result.error("Refresh Token无效或已过期，请重新登录");
+            }
+
+            // 从refresh token中提取管理员信息
+            Long empId = Long.valueOf(claims.get(JwtClaimsConstant.EMP_ID).toString());
+            String username = claims.get(JwtClaimsConstant.USERNAME) != null ? 
+                             claims.get(JwtClaimsConstant.USERNAME).toString() : null;
+            String userType = claims.get(JwtClaimsConstant.USER_TYPE) != null ?
+                             claims.get(JwtClaimsConstant.USER_TYPE).toString() : "admin";
+
+            if (empId == null || username == null) {
+                log.warn("无法从AdminRefreshToken中提取管理员信息");
+                return Result.error("Token信息不完整，请重新登录");
+            }
+
+            // 验证管理员是否仍然存在且有效
+            Employee employee = employeeService.getEmp(Math.toIntExact(empId));
+            if (employee == null) {
+                log.warn("管理员不存在: {}", empId);
+                CookieUtil.clearCookie(response, "adminRefreshToken", "/");
+                CookieUtil.clearCookie(response, "adminRefreshToken", "/admin");
+                return Result.error("管理员账户不存在，请重新登录");
+            }
+
+            // 生成新的access token
+            Map<String, Object> accessClaims = new HashMap<>();
+            accessClaims.put(JwtClaimsConstant.EMP_ID, empId);
+            accessClaims.put(JwtClaimsConstant.USERNAME, username);
+            accessClaims.put(JwtClaimsConstant.USER_TYPE, userType);
+            accessClaims.put("username", username);
+            accessClaims.put("userType", userType);
+            accessClaims.put("roleId", employee.getRole());
+
+            String newAccessToken = JwtUtil.createJWT(
+                jwtProperties.getAdminSecretKey(),
+                jwtProperties.getAdminTtl(), // 15分钟
+                accessClaims
+            );
+
+            // 检查refresh token是否需要更新（如果剩余时间少于1小时）
+            long currentTime = System.currentTimeMillis() / 1000;
+            long refreshExp = claims.getExpiration().getTime() / 1000;
+            long refreshTimeUntilExpiry = refreshExp - currentTime;
+            
+            boolean refreshTokenUpdated = false;
+            String newRefreshToken = adminRefreshToken;
+
+            if (refreshTimeUntilExpiry < 1 * 60 * 60) { // 如果refresh token在1小时内过期
+                Map<String, Object> refreshClaims = new HashMap<>();
+                refreshClaims.put(JwtClaimsConstant.EMP_ID, empId);
+                refreshClaims.put(JwtClaimsConstant.USERNAME, username);
+                refreshClaims.put(JwtClaimsConstant.USER_TYPE, userType);
+
+                newRefreshToken = JwtUtil.createJWT(
+                    jwtProperties.getAdminSecretKey(),
+                    7 * 24 * 60 * 60 * 1000L, // 7天
+                    refreshClaims
+                );
+
+                // 设置新的refresh token cookie
+                CookieUtil.setAdminCookieWithMultiplePaths(response, "adminRefreshToken", newRefreshToken, true, 7 * 24 * 60 * 60);
+                
+                refreshTokenUpdated = true;
+                log.info("AdminRefreshToken已更新，管理员: {}", username);
+            }
+
+            // 设置新的access token cookie（15分钟有效期）
+            CookieUtil.setAdminCookieWithMultiplePaths(response, "adminToken", newAccessToken, true, 15 * 60);
+
+            // 更新管理后台用户信息cookie
+            Map<String, Object> userInfo = new HashMap<>();
+            userInfo.put("id", employee.getId());
+            userInfo.put("username", employee.getUsername());
+            userInfo.put("name", employee.getName());
+            userInfo.put("userType", getRoleBasedUserType(employee.getRole()));
+            userInfo.put("role", getRoleBasedUserType(employee.getRole()));
+            userInfo.put("roleId", employee.getRole());
+            userInfo.put("isAuthenticated", true);
+            userInfo.put("empId", employee.getId());
+            
+            String userInfoJson = com.alibaba.fastjson.JSON.toJSONString(userInfo);
+            setAdminUserInfoCookie(response, userInfoJson, 15 * 60); // 15分钟，与adminToken同步
+
+            // 构建响应
+            TokenRefreshVO tokenRefreshVO = TokenRefreshVO.builder()
+                    .accessToken(newAccessToken)
+                    .refreshToken(refreshTokenUpdated ? newRefreshToken : null) // 只有更新时才返回
+                    .userId(empId)
+                    .username(username)
+                    .userType(userType)
+                    .accessTokenExpiry(System.currentTimeMillis() + jwtProperties.getAdminTtl())
+                    .refreshTokenExpiry(System.currentTimeMillis() + (7 * 24 * 60 * 60 * 1000L)) // 7天
+                    .refreshTokenUpdated(refreshTokenUpdated)
+                    .build();
+
+            log.info("管理员Token刷新成功，用户: {}, RefreshToken更新: {}", username, refreshTokenUpdated);
+            return Result.success(tokenRefreshVO);
+
+        } catch (Exception e) {
+            log.error("管理员Token刷新失败", e);
+            // 清除可能有问题的cookies
+            CookieUtil.clearCookie(response, "adminRefreshToken", "/");
+            CookieUtil.clearCookie(response, "adminRefreshToken", "/admin");
+            CookieUtil.clearCookie(response, "adminToken", "/");
+            CookieUtil.clearCookie(response, "adminToken", "/admin");
+            return Result.error("Token刷新失败：" + e.getMessage());
+        }
+    }
+    
+    /**
+     * 从管理后台专用Cookie中获取refresh token
+     */
+    private String getAdminRefreshTokenFromCookie(HttpServletRequest request) {
+        if (request.getCookies() != null) {
+            String[] adminRefreshTokenNames = {"adminRefreshToken", "admin_refresh_token"};
+
+            for (String cookieName : adminRefreshTokenNames) {
+                for (javax.servlet.http.Cookie cookie : request.getCookies()) {
+                    if (cookieName.equals(cookie.getName())) {
+                        String tokenValue = cookie.getValue();
+                        if (tokenValue != null && !tokenValue.trim().isEmpty() && 
+                            !"null".equals(tokenValue) && !"undefined".equals(tokenValue)) {
+                            log.debug("从管理后台Cookie中找到RefreshToken: {}", cookieName);
+                            return tokenValue;
+                        }
+                    }
+                }
+            }
+        }
+
+        log.debug("未从管理后台Cookie中找到RefreshToken");
+        return null;
     }
     
     /**
@@ -258,6 +421,7 @@ public class EmployeeController {
                 }
             }
             
+            
             log.info("🔍 更新前调试信息: empId={}, DTO.username={}, DTO.email={}, DTO.avatar={}", 
                     empId, employeeDTO.getUsername(), employeeDTO.getEmail(), employeeDTO.getAvatar());
             
@@ -329,4 +493,23 @@ public class EmployeeController {
                 return "admin";
         }
     }
+
+    /**
+     * 启用/禁用员工状态
+     */
+    @PutMapping("/status/{id}")
+    public Result<String> enableOrDisable(@PathVariable Integer id, @RequestParam Integer status) {
+        log.info("启用/禁用员工：id={}, status={}", id, status);
+        try {
+            EmployeeDTO employeeDTO = new EmployeeDTO();
+            employeeDTO.setId(Long.valueOf(id));
+            employeeDTO.setStatus(status);
+            employeeService.updateEmp(employeeDTO);
+            return Result.success(status == 1 ? "启用员工成功" : "禁用员工成功");
+        } catch (Exception e) {
+            log.error("更新员工状态失败", e);
+            return Result.error("更新员工状态失败：" + e.getMessage());
+        }
+    }
+
 }

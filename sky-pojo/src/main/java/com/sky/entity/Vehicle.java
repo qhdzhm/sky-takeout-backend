@@ -29,6 +29,10 @@ public class Vehicle implements Serializable {
     private Long vehicleId; // 车辆ID
     private String vehicleType; // 车辆类型
     private String licensePlate; // 车牌号
+    private String acn; // ACN号码
+    private String maker; // 制造商
+    private String model; // 车型
+    private Integer year; // 年份
     private LocalDate regoExpiryDate; // 注册到期日期
     private LocalDate inspectionDueDate; // 检查到期日期
     private Integer status; // 状态：0-送修中，1-可用，4-注册过期，5-车检过期

@@ -87,13 +87,52 @@ systemctl enable $APP_NAME
 
 echo "✅ 基础环境安装完成！"
 echo ""
-echo "🔄 接下来需要手动完成："
-echo "1. 上传应用jar包到 $APP_DIR/app.jar"
-echo "2. 上传前端构建文件到 /var/www/"
-echo "3. 配置环境变量"
-echo "4. 导入数据库结构"
-echo "5. 申请SSL证书: certbot --nginx -d your-domain.com"
-echo "6. 启动服务: systemctl start $APP_NAME"
-echo ""
+
+# 如果jar包已经上传，继续部署
+if [ -f "$APP_DIR/app.jar" ]; then
+    echo "🚀 检测到应用文件，开始部署..."
+    
+    echo "🗄️  导入数据库..."
+    if [ -f /tmp/database-full-backup.sql ]; then
+        mysql -u skyapp -pSky2024@Strong! happy_tassie_travel < /tmp/database-full-backup.sql
+        echo "✅ 完整数据库导入完成"
+    elif [ -f /tmp/database-structure.sql ]; then
+        mysql -u skyapp -pSky2024@Strong! happy_tassie_travel < /tmp/database-structure.sql
+        echo "✅ 数据库结构导入完成"
+    fi
+    
+    echo "📁 设置文件权限..."
+    chmod +x $APP_DIR/app.jar
+    chown -R www-data:www-data /var/www/user-frontend/ 2>/dev/null || true
+    chown -R www-data:www-data /var/www/admin-frontend/ 2>/dev/null || true
+    chmod -R 755 /var/www/user-frontend/ 2>/dev/null || true
+    chmod -R 755 /var/www/admin-frontend/ 2>/dev/null || true
+    
+    echo "🚀 启动应用..."
+    systemctl daemon-reload
+    systemctl start $APP_NAME
+    
+    sleep 5
+    
+    if systemctl is-active --quiet $APP_NAME; then
+        echo "✅ 应用启动成功！"
+        echo "🌐 访问地址："
+        echo "  用户端: http://your-domain.com/"
+        echo "  管理后台: http://your-domain.com/admin/"
+        echo ""
+        echo "💡 申请SSL证书: certbot --nginx -d your-domain.com"
+    else
+        echo "❌ 应用启动失败，查看日志: journalctl -u $APP_NAME -n 20"
+    fi
+else
+    echo "🔄 基础环境安装完成，接下来需要手动完成："
+    echo "1. 上传应用jar包到 $APP_DIR/app.jar"
+    echo "2. 上传前端构建文件到 /var/www/"
+    echo "3. 上传数据库文件到 /tmp/"
+    echo "4. 重新运行此脚本完成部署"
+    echo "5. 申请SSL证书: certbot --nginx -d your-domain.com"
+    echo ""
+fi
+
 echo "📝 查看服务状态: systemctl status $APP_NAME"
 echo "📋 查看日志: journalctl -u $APP_NAME -f"

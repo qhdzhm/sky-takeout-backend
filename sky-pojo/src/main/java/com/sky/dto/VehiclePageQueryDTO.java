@@ -24,6 +24,10 @@ public class VehiclePageQueryDTO implements Serializable {
     // 查询条件
     private String licensePlate;   // 车牌号模糊查询
     private String vehicleType;    // 车辆类型
+    private String acn;            // ACN号码模糊查询
+    private String maker;          // 制造商模糊查询
+    private String model;          // 车型模糊查询
+    private Integer year;          // 年份精确查询
     private Integer status;        // 状态过滤
     private LocalDate regoExpiryDate; // 注册到期日期范围
     private LocalDate inspectionDueDate; // 检查到期日期范围
