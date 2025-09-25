@@ -84,7 +84,38 @@ public class HotelBookingServiceImpl implements HotelBookingService {
             hotelBooking.setBookingSource("system");
         }
         
+        // 🔧 修复：如果直接创建已确认状态的预订，必须提供预订号
+        if ("confirmed".equals(hotelBooking.getBookingStatus())) {
+            if (hotelBookingDTO.getHotelBookingNumber() == null || 
+                hotelBookingDTO.getHotelBookingNumber().trim().isEmpty()) {
+                throw new RuntimeException("创建已确认状态的酒店预订时，必须提供酒店预订号");
+            }
+            hotelBooking.setHotelBookingNumber(hotelBookingDTO.getHotelBookingNumber());
+        }
+        
         hotelBookingMapper.insert(hotelBooking);
+        
+        // 🔧 修复：如果创建的是已确认状态预订，需要同步接送信息到排团表
+        if ("confirmed".equals(hotelBooking.getBookingStatus()) && hotelBooking.getTourBookingId() != null) {
+            try {
+                // 获取酒店信息
+                Hotel hotel = hotelMapper.getById(hotelBooking.getHotelId());
+                if (hotel != null) {
+                    // 同步接送信息到排团表
+                    syncPickupDropoffToScheduleOrders(hotelBooking, hotel);
+                    
+                    // 同步酒店预订号到排团表
+                    syncHotelBookingNumberToScheduleOrders(hotelBooking, hotelBooking.getHotelBookingNumber());
+                    
+                    log.info("✅ 已同步已确认酒店预订的接送信息到排团表，预订ID：{}", hotelBooking.getId());
+                } else {
+                    log.warn("⚠️ 酒店信息不存在，无法同步接送信息，酒店ID：{}", hotelBooking.getHotelId());
+                }
+            } catch (Exception e) {
+                log.error("同步已确认酒店预订接送信息失败：", e);
+                // 不抛出异常，避免影响预订创建
+            }
+        }
         
         log.info("酒店预订创建成功，预订ID：{}", hotelBooking.getId());
         return hotelBooking.getId();
@@ -435,29 +466,20 @@ public class HotelBookingServiceImpl implements HotelBookingService {
                 // 入住日：送客人到酒店（dropoff_location）
                 if (tourDate.equals(checkInDate)) {
                     schedule.setDropoffLocation(hotelDisplayName);
-                    String specialRequests = schedule.getSpecialRequests();
-                    schedule.setSpecialRequests(specialRequests != null ? 
-                        specialRequests + " | 送至酒店：" + hotelName : 
-                        "送至酒店：" + hotelName);
+                    // 🔧 修复：不再向specialRequests添加酒店信息，因为接送地点已经设置
                     needUpdate = true;
                 }
                 // 退房日：从酒店接客人（pickup_location）
                 else if (tourDate.equals(checkOutDate)) {
                     schedule.setPickupLocation(hotelDisplayName);
-                    String specialRequests = schedule.getSpecialRequests();
-                    schedule.setSpecialRequests(specialRequests != null ? 
-                        specialRequests + " | 从酒店接客：" + hotelName : 
-                        "从酒店接客：" + hotelName);
+                    // 🔧 修复：不再向specialRequests添加酒店信息，因为接送地点已经设置
                     needUpdate = true;
                 }
                 // 中间日期：从酒店接客，送回酒店
                 else if (tourDate.isAfter(checkInDate) && tourDate.isBefore(checkOutDate)) {
                     schedule.setPickupLocation(hotelDisplayName);
                     schedule.setDropoffLocation(hotelDisplayName);
-                    String specialRequests = schedule.getSpecialRequests();
-                    schedule.setSpecialRequests(specialRequests != null ? 
-                        specialRequests + " | 酒店接送：" + hotelName : 
-                        "酒店接送：" + hotelName);
+                    // 🔧 修复：不再向specialRequests添加酒店信息，因为接送地点已经设置
                     needUpdate = true;
                 }
                 
@@ -656,13 +678,6 @@ public class HotelBookingServiceImpl implements HotelBookingService {
         return true;
     }
 
-    @Override
-    @Transactional
-    public Boolean deleteBooking(Integer id) {
-        log.info("删除酒店预订：{}", id);
-        hotelBookingMapper.deleteById(id);
-        return true;
-    }
 
     @Override
     public List<HotelBooking> getByAssignmentId(Integer assignmentId) {
@@ -848,5 +863,33 @@ public class HotelBookingServiceImpl implements HotelBookingService {
     public List<HotelBooking> getByDateRange(LocalDate startDate, LocalDate endDate) {
         log.info("根据日期范围批量查询酒店预订，开始日期：{}，结束日期：{}", startDate, endDate);
         return hotelBookingMapper.getByDateRange(startDate, endDate);
+    }
+
+    @Override
+    @Transactional
+    public Boolean deleteBooking(Integer id) {
+        log.info("删除酒店预订：{}", id);
+        
+        try {
+            // 1. 获取酒店预订详情（删除前）
+            HotelBooking hotelBooking = hotelBookingMapper.getById(id);
+            if (hotelBooking == null) {
+                log.warn("酒店预订不存在，ID：{}", id);
+                return false;
+            }
+            
+            // 2. 清除排团表中的接送信息
+            clearPickupDropoffFromScheduleOrders(hotelBooking);
+            
+            // 3. 删除酒店预订记录
+            hotelBookingMapper.deleteById(id);
+            
+            log.info("✅ 酒店预订删除成功，ID：{}", id);
+            return true;
+            
+        } catch (Exception e) {
+            log.error("删除酒店预订失败，ID：{}", id, e);
+            throw new RuntimeException("删除酒店预订失败：" + e.getMessage());
+        }
     }
 } 

@@ -227,7 +227,7 @@ public class AuthController {
                 userInfo = String.format("{\"id\":%d,\"username\":\"%s\",\"userType\":\"%s\",\"name\":\"%s\"}", 
                     userId, username, userType, displayName);
             }
-            CookieUtil.setUserInfoCookie(response, userInfo, 900); // 15分钟，与authToken同步
+            CookieUtil.setUserInfoCookie(response, userInfo, 604800); // 7天，与refreshToken同步
 
             // 构建响应
             TokenRefreshVO tokenRefreshVO = TokenRefreshVO.builder()

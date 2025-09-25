@@ -5,7 +5,7 @@ sky:
     port: 3306
     database: happy_tassie_travel
     username: root  
-    password: ${DATABASE_PASSWORD:your-database-password}  # 与部署脚本保持一致
+    password: abc123  # 与部署脚本保持一致
   alioss:
     endpoint: oss-cn-hongkong.aliyuncs.com
     bucket-name: happy-tassie-hongkong

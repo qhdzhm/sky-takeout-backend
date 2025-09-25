@@ -690,14 +690,14 @@ public class EmailServiceImpl implements EmailService {
      */
     private void sendEmailWithAttachment(String to, String subject, String body, 
                                        byte[] attachment, String attachmentName) throws MessagingException {
-        log.info("准备发送邮件: 收件人={}, 主题={}, 附件大小={} bytes", to, subject, attachment.length);
+        log.info("准备发送邮件: 收件人={}, 主题={}, 附件大小={} bytes", to, subject, attachment != null ? attachment.length : 0);
         
         // 检查是否为开发环境的占位符配置
         if ("your-app-password".equals(mailUsername) || mailUsername.contains("your-email")) {
             log.warn("⚠️ 检测到开发环境占位符配置，模拟邮件发送");
             log.info("📧 [模拟邮件发送] 收件人: {}", to);
             log.info("📧 [模拟邮件发送] 主题: {}", subject);
-            log.info("📧 [模拟邮件发送] 附件: {} ({} bytes)", attachmentName, attachment.length);
+            log.info("📧 [模拟邮件发送] 附件: {} ({} bytes)", attachmentName, attachment != null ? attachment.length : 0);
             log.info("📧 [模拟邮件发送] 正文预览: {}", body.length() > 100 ? body.substring(0, 100) + "..." : body);
             log.info("✅ [模拟邮件发送] 邮件发送成功（开发环境模拟）");
             return;
@@ -715,8 +715,10 @@ public class EmailServiceImpl implements EmailService {
         String htmlBody = convertTextToHtml(body);
         helper.setText(htmlBody, true); // 使用HTML邮件正文
 
-        // 添加PDF附件
-        helper.addAttachment(attachmentName, new ByteArrayResource(attachment));
+        // 添加PDF附件（如果存在）
+        if (attachment != null && attachmentName != null) {
+            helper.addAttachment(attachmentName, new ByteArrayResource(attachment));
+        }
 
             log.info("开始发送邮件: 从={}, 到={}", fromEmail, to);
         mailSender.send(message);

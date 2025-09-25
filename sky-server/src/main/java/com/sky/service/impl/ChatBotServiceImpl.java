@@ -21,6 +21,8 @@ import com.sky.mapper.ReviewMapper;
 import com.sky.mapper.GuideMapper;
 import com.sky.mapper.VehicleMapper;
 import com.sky.mapper.DayTourMapper;
+import com.sky.mapper.HotelBookingMapper;
+import com.sky.vo.HotelBookingVO;
 import com.sky.service.ChatBotService;
 import com.sky.service.TourKnowledgeService;
 import com.sky.vo.ChatResponse;
@@ -112,6 +114,9 @@ public class ChatBotServiceImpl implements ChatBotService {
     
     @Autowired
     private DayTourMapper dayTourMapper;
+    
+    @Autowired
+    private HotelBookingMapper hotelBookingMapper;
     
     private OkHttpClient httpClient;
     
@@ -810,7 +815,13 @@ public class ChatBotServiceImpl implements ChatBotService {
                 return handleProductQuery(request);
             }
             
-            // 1. 优先处理天气查询
+            // 1. 最优先处理订单查询（直接检测订单号和订单相关关键词）
+            if (isOrderQueryRequest(message)) {
+                log.info("✅ 检测到订单查询请求，直接处理: {}", message);
+                return handleOrderQuery(request);
+            }
+            
+            // 2. 处理天气查询
             if (isWeatherQueryRequest(message)) {
                 String paused = "天气查询功能已暂停，可在产品页查看目的地天气建议。";
                 saveChatMessage(request, paused, 4, null);
@@ -3507,12 +3518,17 @@ public class ChatBotServiceImpl implements ChatBotService {
     /**
      * 检查是否为订单查询请求
      */
-    private boolean isOrderQueryRequest(String message) {
+     private boolean isOrderQueryRequest(String message) {
         String lowerMessage = message.toLowerCase();
         
-        // 首先检查是否包含订单号（HT开头的14位数字）
-        boolean hasOrderNumber = message.matches(".*\\bHT\\d{14}\\b.*");
-        if (hasOrderNumber) {
+        // 首先检查是否包含订单号
+        // 1. 检查3字母+数字格式订单号（如RLX20250921000285）
+        boolean hasThreeLetterOrderNumber = message.matches(".*\\b[A-Za-z]{3}\\d+\\b.*");
+        
+        // 2. 检查HT格式订单号（系统默认格式）
+        boolean hasHTOrderNumber = message.matches(".*\\bHT\\d{14}\\b.*");
+        
+        if (hasThreeLetterOrderNumber || hasHTOrderNumber) {
             log.info("检测到订单号查询请求: {}", message);
             return true;
         }
@@ -3830,6 +3846,49 @@ public class ChatBotServiceImpl implements ChatBotService {
                 responseBuilder.append(String.format("📊 订单状态：%s\n", getStatusText(booking.getStatus())));
                 responseBuilder.append(String.format("💰 支付状态：%s\n", getPaymentStatusText(booking.getPaymentStatus())));
                 
+                // 🏨 查询酒店住宿信息
+                try {
+                    List<HotelBookingVO> hotelBookings = hotelBookingMapper.getByTourBookingIdWithDetails(booking.getBookingId());
+                    if (hotelBookings != null && !hotelBookings.isEmpty()) {
+                        responseBuilder.append("🏨 **酒店住宿信息**：\n");
+                        for (HotelBookingVO hotelBooking : hotelBookings) {
+                            responseBuilder.append(String.format("  🏨 酒店名称：%s\n", 
+                                hotelBooking.getHotelName() != null ? hotelBooking.getHotelName() : "未知"));
+                            responseBuilder.append(String.format("  📍 酒店地址：%s\n", 
+                                hotelBooking.getHotelAddress() != null ? hotelBooking.getHotelAddress() : "暂无地址信息"));
+                            responseBuilder.append(String.format("  🛏️ 房型：%s\n", 
+                                hotelBooking.getRoomType() != null ? hotelBooking.getRoomType() : "标准房"));
+                            
+                            if (hotelBooking.getCheckInDate() != null && hotelBooking.getCheckOutDate() != null) {
+                                responseBuilder.append(String.format("  📅 入住日期：%s 至 %s", 
+                                    hotelBooking.getCheckInDate(), hotelBooking.getCheckOutDate()));
+                                if (hotelBooking.getNights() != null) {
+                                    responseBuilder.append(String.format("（%d晚）", hotelBooking.getNights()));
+                                }
+                                responseBuilder.append("\n");
+                            }
+                            
+                            if (hotelBooking.getRoomCount() != null) {
+                                responseBuilder.append(String.format("  🚪 房间数量：%d间\n", hotelBooking.getRoomCount()));
+                            }
+                            
+                            if (hotelBooking.getBookingStatus() != null) {
+                                responseBuilder.append(String.format("  📊 预订状态：%s\n", getHotelBookingStatusText(hotelBooking.getBookingStatus())));
+                            }
+                            
+                            // 如果有多个酒店预订，添加分隔符
+                            if (hotelBookings.size() > 1 && hotelBookings.indexOf(hotelBooking) < hotelBookings.size() - 1) {
+                                responseBuilder.append("  ──────────────\n");
+                            }
+                        }
+                    } else {
+                        responseBuilder.append("🏨 **酒店信息**：暂无酒店预订记录\n");
+                    }
+                } catch (Exception e) {
+                    log.warn("查询订单{}的酒店信息失败: {}", booking.getOrderNumber(), e.getMessage());
+                    responseBuilder.append("🏨 **酒店信息**：查询失败\n");
+                }
+                
                 // 生成正确的编辑链接
                 String editUrl = generateEditOrderUrl(booking);
                 responseBuilder.append(String.format("🔗 订单详情链接：%s\n\n", editUrl));
@@ -4046,23 +4105,73 @@ public class ChatBotServiceImpl implements ChatBotService {
     }
 
     /**
-     * 提取订单号（HT开头的订单号）
+     * 提取订单号（支持HT、RLX等多种前缀的订单号）
      */
     private List<String> extractOrderNumbers(String text) {
         List<String> orderNumbers = new ArrayList<>();
         
-        // 订单号格式：HT + 8位日期 + 4位序列号 + 2位随机数，例如：HT20250613000198
-        // 总长度：HT(2) + 14位数字 = 16位
-        Pattern orderPattern = Pattern.compile("HT\\d{14}");
+        // 支持多种订单号格式：
+        // 1. HT + 14位数字，例如：HT20250613000198
+        // 2. RLX + 11位数字，例如：RLX20250921000116  
+        // 3. 通用格式：2-4位字母前缀 + 8-14位数字
+        Pattern orderPattern = Pattern.compile("(?i)\\b([A-Z]{2,4}\\d{8,14})\\b");
         Matcher matcher = orderPattern.matcher(text.toUpperCase());
         
         while (matcher.find()) {
-            String orderNumber = matcher.group();
-            orderNumbers.add(orderNumber);
-            log.info("提取到订单号: {}", orderNumber);
+            String orderNumber = matcher.group(1);
+            
+            // 进一步验证是否为有效的订单号格式
+            if (isValidOrderNumber(orderNumber)) {
+                orderNumbers.add(orderNumber);
+                log.info("✅ 提取到有效订单号: {}", orderNumber);
+            } else {
+                log.debug("⚠️ 跳过无效订单号候选: {}", orderNumber);
+            }
+        }
+        
+        // 如果通用模式没找到，尝试更宽松的匹配（针对用户可能的输入错误）
+        if (orderNumbers.isEmpty()) {
+            // 匹配可能的订单号格式，如带特殊字符或空格
+            Pattern relaxedPattern = Pattern.compile("(?i)\\b([A-Z]{2,4}[\\s\\-_]*\\d{8,14})\\b");
+            Matcher relaxedMatcher = relaxedPattern.matcher(text.toUpperCase());
+            
+            while (relaxedMatcher.find()) {
+                String candidate = relaxedMatcher.group(1).replaceAll("[\\s\\-_]", "");
+                if (isValidOrderNumber(candidate)) {
+                    orderNumbers.add(candidate);
+                    log.info("✅ 通过宽松匹配提取到订单号: {} (原文: {})", candidate, relaxedMatcher.group(1));
+                }
+            }
         }
         
         return orderNumbers;
+    }
+    
+    /**
+     * 验证是否为有效的订单号格式
+     */
+    private boolean isValidOrderNumber(String candidate) {
+        if (candidate == null || candidate.length() < 4) {
+            return false;
+        }
+        
+        // 简化逻辑：前3位字母 + 后面全是数字 = 订单号
+        if (candidate.length() >= 4 && candidate.matches("^[A-Z]{3}\\d+$")) {
+            String prefix = candidate.substring(0, 3);
+            String numberPart = candidate.substring(3);
+            log.debug("✅ 3字母+数字格式订单号: {} (前缀: {}, 数字部分: {}, 数字长度: {})", 
+                     candidate, prefix, numberPart, numberPart.length());
+            return true;
+        }
+        
+        // 兼容原有HT格式（系统默认）：HT + 数字
+        if (candidate.startsWith("HT") && candidate.length() > 2 && candidate.substring(2).matches("\\d+")) {
+            log.debug("✅ HT格式订单号: {}", candidate);
+            return true;
+        }
+        
+        log.debug("❌ 不符合订单号格式: {} (长度: {})", candidate, candidate.length());
+        return false;
     }
     
     /**
@@ -4673,74 +4782,7 @@ public class ChatBotServiceImpl implements ChatBotService {
         }
     }
     
-    /**
-     * 判断是否为汇率查询
-     */
-    // 已移除：汇率查询相关方法
-    
-    /**
-     * 获取汇率信息
-     */
-    // 已移除：汇率信息获取
-    
-    /**
-     * 从消息中提取货币对
-     */
-    // 已移除：货币对解析
-    
-    /**
-     * 从API获取汇率
-     */
-    // 已移除：汇率API调用
-    
-    /**
-     * 解析汇率API响应
-     */
-    // 已移除：汇率响应解析
-    
-    /**
-     * 格式化汇率响应
-     */
-    // 已移除：汇率响应格式化
-    
-    /**
-     * 获取货币名称
-     */
-    // 已移除：货币名映射
-    
-    /**
-     * 获取基本汇率信息
-     */
-    // 已移除：基础汇率信息
-    
-    /**
-     * 判断是否为旅游新闻查询
-     */
-    // 已移除：新闻查询判定
-    
-    /**
-     * 获取旅游新闻信息
-     */
-    // 已移除：新闻内容获取
-    
-    /**
-     * 从API获取旅游新闻
-     */
-    // 已移除：新闻API获取
-    
-    /**
-     * 解析新闻API响应
-     */
-    // 已移除：新闻响应解析
-    
-    /**
-     * 获取塔斯马尼亚旅游新闻
-     */
-    // 已移除：固定旅游新闻
-    
-    /**
-     * 判断是否为交通查询
-     */
+
     private boolean isTrafficQuery(String message) {
         String[] trafficKeywords = {
             "交通", "路况", "堵车", "traffic", "道路", "高速", "路线", "怎么去",
@@ -4855,5 +4897,45 @@ public class ChatBotServiceImpl implements ChatBotService {
                "• 汇率和实用信息\n" +
                "• 订单查询和管理\n\n" +
                "如果您有其他问题，也可以直接告诉我，我会尽力帮助您！😊";
+    }
+    
+    /**
+     * 获取支付状态文本
+     */
+    private String getPaymentStatusText(Integer paymentStatus) {
+        if (paymentStatus == null) return "未知";
+        
+        switch (paymentStatus) {
+            case 1:
+                return "待支付";
+            case 2:
+                return "已支付";
+            case 3:
+                return "已退款";
+            default:
+                return "未知状态";
+        }
+    }
+    
+    /**
+     * 获取酒店预订状态文本
+     */
+    private String getHotelBookingStatusText(String bookingStatus) {
+        if (bookingStatus == null) return "未知";
+        
+        switch (bookingStatus.toLowerCase()) {
+            case "pending":
+                return "待确认";
+            case "confirmed":
+                return "已确认";
+            case "cancelled":
+                return "已取消";
+            case "completed":
+                return "已完成";
+            case "no_show":
+                return "未入住";
+            default:
+                return bookingStatus;
+        }
     }
 } 

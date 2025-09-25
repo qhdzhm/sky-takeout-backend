@@ -252,7 +252,7 @@ public class AgentClientController {
             }
             
             String userInfoJson = com.alibaba.fastjson.JSON.toJSONString(userInfo);
-            CookieUtil.setUserInfoCookie(response, userInfoJson, 900); // 15分钟，与authToken同步
+            CookieUtil.setUserInfoCookie(response, userInfoJson, 604800); // 7天，与refreshToken同步
             
             // 8. 返回结果
             return Result.success(userLoginVO);
