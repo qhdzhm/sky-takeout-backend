@@ -80,13 +80,13 @@ public class ServiceMessageServiceImpl implements ServiceMessageService {
                 throw new RuntimeException("员工不存在，无法接管会话");
             }
             
-            // 允许管理员(role=1)、操作员(role=2)、客服(role=3)接管会话，禁止导游(role=4)
-            if (currentEmployee.getRole() == 4) {
+            // 只允许包含客服、管理相关角色接管会话，禁止导游
+            if (currentEmployee.getRole() != null && currentEmployee.getRole().contains("导游")) {
                 log.error("❌ 权限检查失败: 导游 {} 无权接管客服会话", senderId);
                 throw new RuntimeException("导游无权接管客服会话");
             }
             
-            String roleText = getRoleText(currentEmployee.getRole());
+            String roleText = currentEmployee.getRole() != null ? currentEmployee.getRole() : "未知角色";
             log.info("✅ {} {} 自动接管未分配的会话 {}", roleText, senderId, sessionId);
             
             // 自动分配会话给当前员工（可能是管理员、操作员或客服）

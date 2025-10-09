@@ -1,6 +1,5 @@
 package com.sky.service.impl;
 
-import com.github.pagehelper.Page;
 import com.github.pagehelper.PageHelper;
 import com.sky.dto.AssignOrderDTO;
 import com.sky.dto.OperatorAssignmentPageQueryDTO;
@@ -63,13 +62,41 @@ public class OperatorAssignmentServiceImpl implements OperatorAssignmentService 
             throw new BaseException("订单不存在");
         }
 
-        // 3. 验证操作员是否存在且为酒店专员
+        // 3. 验证操作员是否存在且为运营相关员工
         Employee operator = employeeMapper.getById(assignOrderDTO.getOperatorId().intValue());
         if (operator == null) {
             throw new BaseException("操作员不存在");
         }
-        if (!"hotel_operator".equals(operator.getOperatorType())) {
-            throw new BaseException("只能分配给酒店专员");
+        
+        // 检查是否为运营相关员工
+        String role = operator.getRole();
+        boolean isOperationRelated = false;
+        if (role != null) {
+            isOperationRelated = 
+                role.contains("Senior Operation") ||
+                role.contains("Operating Manager") ||
+                role.contains("Chief Executive") ||
+                role.contains("FIT Team Leader") ||
+                "hotel_operator".equals(operator.getOperatorType()) ||
+                (role.contains("Operation") && !role.contains("导游"));
+            
+            // 排除导游和非运营部门员工
+            boolean isExcluded = 
+                role.contains("导游") || 
+                role.contains("Guide") ||
+                role.contains("IT Manager") ||
+                role.contains("Marketing Manager") ||
+                role.contains("HR Manager") ||
+                role.contains("Finance Manager") ||
+                role.contains("Legal Manager") ||
+                role.contains("Supply Chain Manager") ||
+                role.contains("Customer Service");
+                
+            isOperationRelated = isOperationRelated && !isExcluded;
+        }
+        
+        if (!isOperationRelated) {
+            throw new BaseException("只能分配给运营相关员工");
         }
 
         // 4. 检查订单是否已经分配
@@ -133,13 +160,41 @@ public class OperatorAssignmentServiceImpl implements OperatorAssignmentService 
             throw new BaseException("订单未分配，无法重新分配");
         }
 
-        // 3. 验证新操作员
+        // 3. 验证新操作员是否为运营相关员工
         Employee newOperator = employeeMapper.getById(newOperatorId.intValue());
         if (newOperator == null) {
             throw new BaseException("新操作员不存在");
         }
-        if (!"hotel_operator".equals(newOperator.getOperatorType())) {
-            throw new BaseException("只能分配给酒店专员");
+        
+        // 检查是否为运营相关员工
+        String role = newOperator.getRole();
+        boolean isOperationRelated = false;
+        if (role != null) {
+            isOperationRelated = 
+                role.contains("Senior Operation") ||
+                role.contains("Operating Manager") ||
+                role.contains("Chief Executive") ||
+                role.contains("FIT Team Leader") ||
+                "hotel_operator".equals(newOperator.getOperatorType()) ||
+                (role.contains("Operation") && !role.contains("导游"));
+            
+            // 排除导游和非运营部门员工
+            boolean isExcluded = 
+                role.contains("导游") || 
+                role.contains("Guide") ||
+                role.contains("IT Manager") ||
+                role.contains("Marketing Manager") ||
+                role.contains("HR Manager") ||
+                role.contains("Finance Manager") ||
+                role.contains("Legal Manager") ||
+                role.contains("Supply Chain Manager") ||
+                role.contains("Customer Service");
+                
+            isOperationRelated = isOperationRelated && !isExcluded;
+        }
+        
+        if (!isOperationRelated) {
+            throw new BaseException("只能分配给运营相关员工");
         }
 
         // 4. 标记当前分配为已转移
@@ -285,17 +340,25 @@ public class OperatorAssignmentServiceImpl implements OperatorAssignmentService 
     public PageResult pageQuery(OperatorAssignmentPageQueryDTO queryDTO) {
         PageHelper.startPage(queryDTO.getPage(), queryDTO.getPageSize());
         
-        // 这里需要在Mapper中实现复杂查询，暂时返回所有有效分配
-        List<OperatorAssignment> assignments = operatorAssignmentMapper.getAllActive();
-        Page<OperatorAssignment> page = (Page<OperatorAssignment>) assignments;
+        try {
+            // 这里需要在Mapper中实现复杂查询，暂时返回所有有效分配
+            List<OperatorAssignment> assignments = operatorAssignmentMapper.getAllActive();
+            
+            List<OperatorAssignmentVO> voList = assignments.stream().map(assignment -> {
+                OperatorAssignmentVO vo = new OperatorAssignmentVO();
+                BeanUtils.copyProperties(assignment, vo);
+                return vo;
+            }).collect(Collectors.toList());
 
-        List<OperatorAssignmentVO> voList = assignments.stream().map(assignment -> {
-            OperatorAssignmentVO vo = new OperatorAssignmentVO();
-            BeanUtils.copyProperties(assignment, vo);
-            return vo;
-        }).collect(Collectors.toList());
-
-        return new PageResult(page.getTotal(), voList);
+            // 使用PageInfo来获取分页信息，避免直接转换Page对象
+            com.github.pagehelper.PageInfo<OperatorAssignment> pageInfo = 
+                new com.github.pagehelper.PageInfo<>(assignments);
+            
+            return new PageResult(pageInfo.getTotal(), voList);
+        } finally {
+            // 确保清理PageHelper的ThreadLocal变量
+            PageHelper.clearPage();
+        }
     }
 
     /**
@@ -328,14 +391,32 @@ public class OperatorAssignmentServiceImpl implements OperatorAssignmentService 
     }
 
     /**
-     * 检查操作员是否为排团主管
+     * 检查操作员是否为排团主管或Manager（具有排团主管权限）
      */
     @Override
     public boolean isTourMaster(Long operatorId) {
         Employee employee = employeeMapper.getById(operatorId.intValue());
-        return employee != null && 
-               "tour_master".equals(employee.getOperatorType()) && 
-               Boolean.TRUE.equals(employee.getIsTourMaster());
+        if (employee == null) {
+            return false;
+        }
+        
+        // 1. 检查是否为传统的排团主管
+        boolean isActualTourMaster = "tour_master".equals(employee.getOperatorType()) && 
+                                    Boolean.TRUE.equals(employee.getIsTourMaster());
+        
+        // 2. 检查是否为Manager级别（基于role字段的职位名称）
+        String role = employee.getRole();
+        boolean isManager = false;
+        if (role != null) {
+            isManager = role.contains("Manager") ||           // 包括所有Manager角色
+                       role.contains("经理") || 
+                       role.contains("Chief Executive") ||
+                       role.contains("Chief") ||
+                       role.contains("主管");
+        }
+        
+        // Manager或排团主管都有排团权限
+        return isActualTourMaster || isManager;
     }
 
     /**

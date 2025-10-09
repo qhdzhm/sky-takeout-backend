@@ -283,23 +283,72 @@ public class TourScheduleController {
         log.info("获取可分配的酒店专员列表");
 
         try {
-            // 查询所有酒店专员
-            List<Employee> hotelOperators = employeeMapper.findByOperatorType("hotel_operator");
-            log.info("查询到 {} 个酒店专员", hotelOperators.size());
+            // 查询所有运营相关员工（不仅仅是hotel_operator）
+            // 使用分页查询获取所有员工
+            com.sky.dto.EmployeePageQueryDTO queryDTO = new com.sky.dto.EmployeePageQueryDTO();
+            queryDTO.setPage(1);
+            queryDTO.setPageSize(1000); // 设置大页面确保获取所有员工
+            
+            com.github.pagehelper.Page<Employee> pageResult = employeeMapper.pageQuery(queryDTO);
+            List<Employee> allEmployees = pageResult.getResult();
+            log.info("查询到 {} 个员工，开始筛选运营相关员工", allEmployees.size());
 
             List<Map<String, Object>> operators = new ArrayList<>();
-            for (Employee operator : hotelOperators) {
-                Map<String, Object> operatorInfo = new HashMap<>();
-                operatorInfo.put("id", operator.getId());
-                operatorInfo.put("name", operator.getName());
-                operatorInfo.put("username", operator.getUsername());
-                operators.add(operatorInfo);
+            for (Employee employee : allEmployees) {
+                String role = employee.getRole();
+                Long deptId = employee.getDeptId();
+                
+                if (role != null) {
+                    // 🔧 修复：排除GMO（部门ID=1）和IT部门（部门ID=10）的员工
+                    // 这些部门的人员虽然有全局管理权限，但不应该作为"酒店专员"出现在分配列表中
+                    if (deptId != null && (deptId == 1L || deptId == 10L)) {
+                        log.debug("跳过GMO/IT部门员工: {} (部门ID: {})", employee.getName(), deptId);
+                        continue;
+                    }
+                    
+                    // 包括运营部门（部门ID=2）的相关员工：
+                    // 1. Senior Operation - 高级运营员工
+                    // 2. Operating Manager - 运营经理  
+                    // 3. FIT Team Leader - 散客团队主管
+                    // 4. 已设置为 hotel_operator 的员工
+                    boolean isOperationRelated = 
+                        role.contains("Senior Operation") ||
+                        role.contains("Operating Manager") ||
+                        role.contains("FIT Team Leader") ||
+                        "hotel_operator".equals(employee.getOperatorType()) ||
+                        (role.contains("Operation") && !role.contains("导游") && !role.contains("Chief Executive")); // 包含Operation但排除导游和CEO
+                    
+                    // 排除导游和非运营部门员工
+                    boolean isExcluded = 
+                        role.contains("导游") || 
+                        role.contains("Guide") ||
+                        role.contains("IT Manager") ||
+                        role.contains("Marketing Manager") ||
+                        role.contains("HR Manager") ||
+                        role.contains("Finance Manager") ||
+                        role.contains("Legal Manager") ||
+                        role.contains("Supply Chain Manager") ||
+                        role.contains("Customer Service") ||
+                        role.contains("Chief Executive"); // 🔧 明确排除CEO角色
+                    
+                    if (isOperationRelated && !isExcluded) {
+                        Map<String, Object> operatorInfo = new HashMap<>();
+                        operatorInfo.put("id", employee.getId());
+                        operatorInfo.put("name", employee.getName());
+                        operatorInfo.put("username", employee.getUsername());
+                        operatorInfo.put("role", role);
+                        operatorInfo.put("operatorType", employee.getOperatorType());
+                        operators.add(operatorInfo);
+                        
+                        log.debug("添加运营员工: {} ({})", employee.getName(), role);
+                    }
+                }
             }
 
-            log.info("返回可分配的酒店专员列表: {}", operators);
+            log.info("筛选出 {} 个可分配的运营员工", operators.size());
             return Result.success(operators);
         } catch (Exception e) {
-            log.error("获取酒店专员列表失败：{}", e.getMessage());
+            log.error("获取运营员工列表失败：{}", e.getMessage(), e);
             return Result.error("获取操作员列表失败");
         }
     }

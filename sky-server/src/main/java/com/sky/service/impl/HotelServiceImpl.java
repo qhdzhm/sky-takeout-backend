@@ -61,9 +61,5 @@ public class HotelServiceImpl implements HotelService {
         hotelMapper.deleteById(id.intValue());
     }
 
-    @Override
-    public List<Hotel> getHotelsBySupplierId(Long supplierId) {
-        log.info("根据供应商ID获取酒店列表：{}", supplierId);
-        return hotelMapper.getBySupplierId(supplierId.intValue());
-    }
+
 } 

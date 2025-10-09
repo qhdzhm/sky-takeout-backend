@@ -32,7 +32,7 @@ public class EmployeeRoleController {
      */
     @PutMapping("/operator-type")
     @ApiOperation("更新员工操作员类型")
-    @RequireOperatorPermission(requireTourMaster = true, description = "只有排团主管可以分配操作员类型")
+    @RequireOperatorPermission(requireTourMaster = true, description = "只有Manager或排团主管可以分配操作员类型")
     public Result<String> updateOperatorType(@Valid @RequestBody EmployeeRoleUpdateDTO roleUpdateDTO) {
         log.info("更新员工操作员类型：{}", roleUpdateDTO);
         
@@ -40,26 +40,13 @@ public class EmployeeRoleController {
         return Result.success("操作员类型更新成功");
     }
 
-    /**
-     * 设置排团主管
-     */
-    @PutMapping("/set-tour-master/{employeeId}")
-    @ApiOperation("设置排团主管")
-    @RequireOperatorPermission(requireTourMaster = true, description = "只有当前排团主管可以转移职责")
-    public Result<String> setTourMaster(@PathVariable Long employeeId, 
-                                       @RequestParam(required = false) String reason) {
-        log.info("设置排团主管：employeeId={}, reason={}", employeeId, reason);
-        
-        employeeRoleService.setTourMaster(employeeId, reason);
-        return Result.success("排团主管设置成功");
-    }
 
     /**
      * 批量更新员工分配权限
      */
     @PutMapping("/assign-permission")
     @ApiOperation("批量更新员工分配权限")
-    @RequireOperatorPermission(requireTourMaster = true, description = "只有排团主管可以管理分配权限")
+    @RequireOperatorPermission(requireTourMaster = true, description = "只有Manager或排团主管可以管理分配权限")
     public Result<String> updateAssignPermission(@RequestBody List<Long> employeeIds, 
                                                 @RequestParam Boolean canAssignOrders) {
         log.info("批量更新员工分配权限：employeeIds={}, canAssignOrders={}", employeeIds, canAssignOrders);
@@ -80,18 +67,6 @@ public class EmployeeRoleController {
         return Result.success(statistics);
     }
 
-    /**
-     * 获取可设置为排团主管的员工列表
-     */
-    @GetMapping("/tour-master-candidates")
-    @ApiOperation("获取可设置为排团主管的员工列表")
-    @RequireOperatorPermission(requireTourMaster = true, description = "只有排团主管可以查看候选人")
-    public Result<List<Employee>> getTourMasterCandidates() {
-        log.info("获取可设置为排团主管的员工列表");
-        
-        List<Employee> candidates = employeeRoleService.getTourMasterCandidates();
-        return Result.success(candidates);
-    }
 
     /**
      * 获取酒店操作员列表
@@ -110,7 +85,7 @@ public class EmployeeRoleController {
      */
     @PutMapping("/reset-role/{employeeId}")
     @ApiOperation("重置员工职责")
-    @RequireOperatorPermission(requireTourMaster = true, description = "只有排团主管可以重置职责")
+    @RequireOperatorPermission(requireTourMaster = true, description = "只有Manager或排团主管可以重置职责")
     public Result<String> resetEmployeeRole(@PathVariable Long employeeId) {
         log.info("重置员工职责：employeeId={}", employeeId);
         

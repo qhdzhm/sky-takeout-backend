@@ -8,6 +8,7 @@
         <id column="id" property="id" jdbcType="INTEGER"/>
         <result column="hotel_id" property="hotelId" jdbcType="INTEGER"/>
         <result column="room_type" property="roomType" jdbcType="VARCHAR"/>
+        <result column="room_level" property="roomLevel" jdbcType="VARCHAR"/>
         <result column="room_type_code" property="roomTypeCode" jdbcType="VARCHAR"/>
         <result column="max_occupancy" property="maxOccupancy" jdbcType="INTEGER"/>
         <result column="bed_type" property="bedType" jdbcType="VARCHAR"/>
@@ -21,17 +22,17 @@
 
     <!-- 基础列 -->
     <sql id="Base_Column_List">
-        id, hotel_id, room_type, room_type_code, max_occupancy, bed_type, 
+        id, hotel_id, room_type, room_level, room_type_code, max_occupancy, bed_type, 
         room_size, base_price, room_facilities, status, created_at, updated_at
     </sql>
 
     <!-- 插入房型 -->
     <insert id="insert" parameterType="com.sky.entity.HotelRoomType">
         INSERT INTO hotel_room_types (
-            hotel_id, room_type, room_type_code, max_occupancy, bed_type, 
+            hotel_id, room_type, room_level, room_type_code, max_occupancy, bed_type, 
             room_size, base_price, room_facilities, status, created_at, updated_at
         ) VALUES (
-            #{hotelId}, #{roomType}, #{roomTypeCode}, #{maxOccupancy}, #{bedType}, 
+            #{hotelId}, #{roomType}, #{roomLevel}, #{roomTypeCode}, #{maxOccupancy}, #{bedType}, 
             #{roomSize}, #{basePrice}, #{amenities}, #{status}, #{createdAt}, #{updatedAt}
         )
     </insert>
@@ -63,6 +64,7 @@
         UPDATE hotel_room_types
         SET hotel_id = #{hotelId},
             room_type = #{roomType},
+            room_level = #{roomLevel},
             room_type_code = #{roomTypeCode},
             max_occupancy = #{maxOccupancy},
             bed_type = #{bedType},

@@ -17,12 +17,6 @@ public interface EmployeeRoleService {
      */
     void updateOperatorType(Long employeeId, String operatorType);
 
-    /**
-     * 设置排团主管
-     * @param employeeId 员工ID
-     * @param reason 设置原因
-     */
-    void setTourMaster(Long employeeId, String reason);
 
     /**
      * 批量更新员工分配权限
@@ -37,11 +31,6 @@ public interface EmployeeRoleService {
      */
     List<OperatorStatisticsVO> getOperatorStatistics();
 
-    /**
-     * 获取可设置为排团主管的员工列表
-     * @return 候选员工列表
-     */
-    List<Employee> getTourMasterCandidates();
 
     /**
      * 获取酒店操作员列表
@@ -62,17 +51,5 @@ public interface EmployeeRoleService {
      */
     List<Object> getRoleChangeHistory(Long employeeId);
 
-    /**
-     * 检查是否可以设置为排团主管
-     * @param employeeId 员工ID
-     * @return 是否可以设置
-     */
-    boolean canSetAsTourMaster(Long employeeId);
-
-    /**
-     * 获取当前排团主管信息
-     * @return 当前排团主管
-     */
-    Employee getCurrentTourMaster();
 }
 

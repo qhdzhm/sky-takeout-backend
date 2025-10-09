@@ -15,7 +15,7 @@ public class EmployeePageQueryDTO implements Serializable {
 
     // 查询条件
     private String name;           // 姓名模糊查询
-    private Integer role;          // 按角色过滤
+    private String role;           // 按职位名称过滤（模糊匹配）
     private Integer workStatus;    // 按工作状态过滤
     private Integer status;        // 按账号状态过滤
     private Long assignedVehicleId; // 按分配的车辆ID过滤
@@ -23,4 +23,5 @@ public class EmployeePageQueryDTO implements Serializable {
     private LocalDate beginDate;   // 创建时间范围查询
     private LocalDate endDate;
     private String licensePlate;
+    private Long deptId;        // 按部门ID过滤（用于部门权限控制）
 }

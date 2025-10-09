@@ -93,8 +93,11 @@ public class AuthController {
             String refreshToken = CookieUtil.getCookieValue(request, "refreshToken");
             
             if (refreshToken == null || refreshToken.isEmpty()) {
-                log.warn("Refresh Token为空");
-                return Result.error("Refresh Token不存在，请重新登录");
+                log.warn("Refresh Token为空 - 可能是Cookie设置或传输问题");
+                // 清除所有认证相关的Cookie，强制用户重新登录
+                CookieUtil.clearAllUserCookies(response);
+                // 返回特殊错误码，让前端知道需要停止重试并重定向到登录页
+                return Result.error(4001, "认证已过期，请重新登录");
             }
 
             // 尝试用不同的密钥验证refresh token（支持普通用户和代理商）
@@ -121,15 +124,18 @@ public class AuthController {
                     log.debug("代理商Refresh token验证成功");
                 } catch (Exception e2) {
                     log.warn("Refresh Token无效或已过期: {}", e.getMessage());
-                    // 清除无效的refresh token cookie
-                    CookieUtil.clearCookieAllPaths(response, "refreshToken");
-                    return Result.error("Refresh Token无效或已过期，请重新登录");
+                    // 清除所有认证相关的Cookie
+                    CookieUtil.clearAllUserCookies(response);
+                    // 返回特殊错误码，让前端知道需要停止重试并重定向到登录页
+                    return Result.error(4001, "认证已过期，请重新登录");
                 }
             }
 
             if (userId == null || username == null) {
                 log.warn("无法从Refresh Token中提取用户信息");
-                return Result.error("Token信息不完整，请重新登录");
+                // 清除所有认证相关的Cookie
+                CookieUtil.clearAllUserCookies(response);
+                return Result.error(4001, "认证信息不完整，请重新登录");
             }
 
             // 根据用户类型验证用户是否仍然存在且有效
@@ -140,8 +146,8 @@ public class AuthController {
                 user = userService.getById(userId);
                 if (user == null) {
                     log.warn("普通用户不存在: {}", userId);
-                    CookieUtil.clearCookieAllPaths(response, "refreshToken");
-                    return Result.error("用户不存在，请重新登录");
+                    CookieUtil.clearAllUserCookies(response);
+                    return Result.error(4001, "用户不存在，请重新登录");
                 }
                 displayName = user.getName();
             } else if ("agent".equals(userType) || "agent_operator".equals(userType)) {

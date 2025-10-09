@@ -5,7 +5,6 @@
     <!-- 结果映射 -->
     <resultMap id="BaseResultMap" type="com.sky.entity.Hotel">
         <id column="id" property="id" jdbcType="INTEGER"/>
-        <result column="supplier_id" property="supplierId" jdbcType="INTEGER"/>
         <result column="hotel_name" property="hotelName" jdbcType="VARCHAR"/>
         <result column="hotel_level" property="hotelLevel" jdbcType="VARCHAR"/>
         <result column="address" property="address" jdbcType="VARCHAR"/>
@@ -27,7 +26,7 @@
 
     <!-- 基础列 -->
     <sql id="Base_Column_List">
-        id, supplier_id, hotel_name, hotel_level, address, location_area, 
+        id, hotel_name, hotel_level, address, location_area, 
         phone, contact_phone, contact_email, contact_person, check_in_time, check_out_time, 
         facilities, description, images, status, created_at, updated_at, rating
     </sql>
@@ -35,11 +34,11 @@
     <!-- 插入酒店 -->
     <insert id="insert" parameterType="com.sky.entity.Hotel">
         INSERT INTO hotels (
-            supplier_id, hotel_name, hotel_level, address, location_area, 
+            hotel_name, hotel_level, address, location_area, 
             phone, contact_phone, contact_email, contact_person, check_in_time, check_out_time, 
             facilities, description, images, status, created_at, updated_at, rating
         ) VALUES (
-            #{supplierId}, #{hotelName}, #{hotelLevel}, #{address}, #{locationArea}, 
+            #{hotelName}, #{hotelLevel}, #{address}, #{locationArea}, 
             #{phone}, #{contactPhone}, #{contactEmail}, #{contactPerson}, #{checkInTime}, #{checkOutTime}, 
             #{facilities}, #{description}, #{images}, #{status}, #{createdAt}, #{updatedAt}, #{rating}
         )
@@ -57,14 +56,6 @@
         SELECT <include refid="Base_Column_List"/>
         FROM hotels
         WHERE status = 'active'
-        ORDER BY hotel_name
-    </select>
-
-    <!-- 根据供应商ID获取酒店列表 -->
-    <select id="getBySupplierId" parameterType="java.lang.Integer" resultMap="BaseResultMap">
-        SELECT <include refid="Base_Column_List"/>
-        FROM hotels
-        WHERE supplier_id = #{supplierId} AND status = 'active'
         ORDER BY hotel_name
     </select>
 
@@ -87,8 +78,7 @@
     <!-- 更新酒店 -->
     <update id="update" parameterType="com.sky.entity.Hotel">
         UPDATE hotels
-        SET supplier_id = #{supplierId},
-            hotel_name = #{hotelName},
+        SET hotel_name = #{hotelName},
             hotel_level = #{hotelLevel},
             address = #{address},
             location_area = #{locationArea},
@@ -122,9 +112,8 @@
     <!-- 根据条件搜索酒店 -->
     <select id="searchHotels" resultType="com.sky.vo.HotelVO">
         SELECT h.id, h.hotel_name, h.hotel_level, h.address, h.location_area, 
-               h.phone, h.rating, h.status, s.supplier_name
+               h.phone, h.rating, h.status
         FROM hotels h
-        LEFT JOIN hotel_suppliers s ON h.supplier_id = s.id
         WHERE h.status = 'active'
         <if test="locationArea != null and locationArea != ''">
             AND h.location_area = #{locationArea}
@@ -164,9 +153,8 @@
     <select id="getDetailById" parameterType="java.lang.Integer" resultType="com.sky.vo.HotelVO">
         SELECT h.id, h.hotel_name, h.hotel_level, h.address, h.location_area, 
                h.phone, h.facilities, h.description, h.images, h.rating, h.status,
-               s.supplier_name, s.contact_person, s.contact_phone, s.contact_email
+               h.contact_person, h.contact_phone, h.contact_email
         FROM hotels h
-        LEFT JOIN hotel_suppliers s ON h.supplier_id = s.id
         WHERE h.id = #{id}
     </select>
 

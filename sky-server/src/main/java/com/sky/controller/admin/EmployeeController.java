@@ -10,9 +10,12 @@ import com.sky.result.PageResult;
 import com.sky.result.Result;
 import com.sky.service.EmployeeService;
 import com.sky.utils.JwtUtil;
+import com.sky.context.BaseContext;
+import com.sky.exception.BaseException;
 import com.sky.utils.CookieUtil;
 import com.sky.vo.EmployeeLoginVO;
 import com.sky.vo.TokenRefreshVO;
+import com.sky.vo.EmployeeWithDeptVO;
 import io.jsonwebtoken.Claims;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -338,8 +341,24 @@ public class EmployeeController {
     @GetMapping("/page")
     public Result<PageResult> page(EmployeePageQueryDTO employeePageQueryDTO) {
         log.info("员工分页查询：{}", employeePageQueryDTO);
-        PageResult pageResult = employeeService.pageQuery(employeePageQueryDTO);
+        
+        // 获取当前登录的员工信息
+        Long currentEmployeeId = BaseContext.getCurrentId();
+        Employee currentEmployee = employeeService.getEmp(Math.toIntExact(currentEmployeeId));
+        
+        // 根据当前用户的角色和部门权限过滤员工数据
+        PageResult pageResult = employeeService.pageQueryWithDepartmentPermission(employeePageQueryDTO, currentEmployee);
         return Result.success(pageResult);
+    }
+
+    /**
+     * 获取所有员工详细信息（包含部门职位信息）
+     */
+    @GetMapping("/with-dept-position")
+    public Result<java.util.List<EmployeeWithDeptVO>> getEmployeesWithDeptInfo() {
+        log.info("获取员工详细信息（包含部门职位）");
+        java.util.List<EmployeeWithDeptVO> employees = employeeService.getAllEmployeesWithDeptInfo();
+        return Result.success(employees);
     }
 
     /**
@@ -348,8 +367,81 @@ public class EmployeeController {
     @PostMapping
     public Result<String> addEmp(@RequestBody EmployeeDTO employeeDTO) {
         log.info("新增员工：{}", employeeDTO);
+        
+        // 获取当前登录的员工信息
+        Long currentEmployeeId = BaseContext.getCurrentId();
+        Employee currentEmployee = employeeService.getEmp(Math.toIntExact(currentEmployeeId));
+        
+        // 根据当前用户的权限验证是否可以创建员工
+        validateAddEmployeePermission(currentEmployee, employeeDTO);
+        
         employeeService.addEmp(employeeDTO);
         return Result.success();
+    }
+
+    /**
+     * 验证添加员工的权限
+     */
+    private void validateAddEmployeePermission(Employee currentEmployee, EmployeeDTO employeeDTO) {
+        String currentUserRole = currentEmployee.getRole();
+        Long currentUserDeptId = currentEmployee.getDeptId();
+        
+        // 🔧 GMO（ID=1）和IT部门（ID=10）拥有全局管理权限
+        boolean isGlobalAdmin = currentUserDeptId == null || 
+                                currentUserDeptId == 1L || 
+                                currentUserDeptId == 10L;
+        
+        if (isGlobalAdmin) {
+            log.info("用户{}属于全局管理部门（GMO/IT），可创建任何部门员工", currentEmployee.getName());
+            return;
+        }
+        
+        // Full权限用户可以创建任何部门的员工
+        if (hasFullPermission(currentUserRole)) {
+            log.info("用户{}具有Full权限，可创建任何部门员工", currentEmployee.getName());
+            return;
+        }
+        
+        // 部门Manager只能创建自己部门的员工
+        if (isDepartmentManager(currentUserRole)) {
+            if (employeeDTO.getDeptId() == null || !employeeDTO.getDeptId().equals(currentUserDeptId)) {
+                throw new BaseException("权限不足：只能在自己的部门(" + getDepartmentName(currentUserDeptId) + ")中创建员工");
+            }
+            log.info("用户{}在自己的部门中创建员工", currentEmployee.getName());
+            return;
+        }
+        
+        // 普通员工无权限创建员工
+        throw new BaseException("权限不足：您无权限创建员工");
+    }
+
+    /**
+     * 检查是否有完全权限
+     */
+    private boolean hasFullPermission(String role) {
+        if (role == null) return false;
+        return role.contains("IT Manager") || 
+               role.contains("Chief Executive") ||
+               role.contains("Chief");
+    }
+
+    /**
+     * 检查是否是部门Manager
+     */
+    private boolean isDepartmentManager(String role) {
+        if (role == null) return false;
+        return role.contains("Manager") || 
+               role.contains("经理") ||
+               role.contains("主管");
+    }
+
+    /**
+     * 获取部门名称（用于错误提示）
+     */
+    private String getDepartmentName(Long deptId) {
+        if (deptId == null) return "未知部门";
+        // 这里可以添加部门查询逻辑，暂时返回部门ID
+        return "部门ID:" + deptId;
     }
 
     /**
@@ -470,7 +562,32 @@ public class EmployeeController {
     }
 
     /**
-     * 🔒 根据员工角色获取对应的用户类型
+     * 🔒 根据员工角色获取对应的用户类型（String版本）
+     * @param role 角色名称：如"A级导游"、"Operating Manager"等
+     * @return 用户类型字符串
+     */
+    private String getRoleBasedUserType(String role) {
+        if (role == null || role.trim().isEmpty()) {
+            return "admin"; // 默认管理员
+        }
+        
+        // 根据角色名称判断用户类型
+        if (role.contains("导游")) {
+            return "guide";     // 导游
+        } else if (role.contains("Manager") || role.contains("经理") || role.contains("Chief")) {
+            return "admin";     // 管理员
+        } else if (role.contains("Operation") || role.contains("运营") || role.contains("Leader")) {
+            return "operator";  // 操作员
+        } else if (role.contains("Service") || role.contains("客服")) {
+            return "service";   // 客服
+        } else {
+            log.warn("未知的员工角色: {}, 默认设置为admin", role);
+            return "admin";
+        }
+    }
+    
+    /**
+     * 🔒 根据员工角色获取对应的用户类型（Integer版本，保持向下兼容）
      * @param roleId 角色ID：0-导游，1-操作员，2-管理员，3-客服
      * @return 用户类型字符串
      */
@@ -504,10 +621,18 @@ public class EmployeeController {
             EmployeeDTO employeeDTO = new EmployeeDTO();
             employeeDTO.setId(Long.valueOf(id));
             employeeDTO.setStatus(status);
+            
+            // 设置更新时间和更新人
+            employeeDTO.setUpdateTime(java.time.LocalDateTime.now());
+            Long currentUserId = com.sky.context.BaseContext.getCurrentId();
+            employeeDTO.setUpdateUser(String.valueOf(currentUserId));
+            
+            log.info("🔍 准备更新员工状态: employeeDTO={}", employeeDTO);
             employeeService.updateEmp(employeeDTO);
+            log.info("✅ 员工状态更新成功: id={}, status={}", id, status);
             return Result.success(status == 1 ? "启用员工成功" : "禁用员工成功");
         } catch (Exception e) {
-            log.error("更新员工状态失败", e);
+            log.error("❌ 更新员工状态失败", e);
             return Result.error("更新员工状态失败：" + e.getMessage());
         }
     }

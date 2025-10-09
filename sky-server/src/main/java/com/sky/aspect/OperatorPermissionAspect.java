@@ -57,10 +57,10 @@ public class OperatorPermissionAspect {
                                   "（需要：" + requireOperatorPermission.operatorType() + "）");
         }
 
-        // 3. 检查排团主管权限
+        // 3. 检查排团主管权限（Manager级别也有此权限）
         if (requireOperatorPermission.requireTourMaster()) {
-            if (!isTourMaster(currentEmployee)) {
-                throw new BaseException("权限不足：需要排团主管权限");
+            if (!isManagerOrTourMaster(currentEmployee)) {
+                throw new BaseException("权限不足：需要Manager或排团主管权限");
             }
         }
 
@@ -107,6 +107,29 @@ public class OperatorPermissionAspect {
     private boolean isTourMaster(Employee employee) {
         return "tour_master".equals(employee.getOperatorType()) && 
                Boolean.TRUE.equals(employee.getIsTourMaster());
+    }
+    
+    /**
+     * 检查是否为Manager或排团主管
+     * Manager级别具有所有职责分配权限，包括设置排团主管
+     */
+    private boolean isManagerOrTourMaster(Employee employee) {
+        // 1. 检查是否为排团主管
+        if (isTourMaster(employee)) {
+            return true;
+        }
+        
+        // 2. 检查是否为Manager级别（基于role字段的职位名称）
+        String role = employee.getRole();
+        if (role != null) {
+            return role.contains("Manager") || 
+                   role.contains("经理") || 
+                   role.contains("Chief Executive") ||
+                   role.contains("Operating Manager") ||
+                   role.contains("主管");
+        }
+        
+        return false;
     }
 
     /**

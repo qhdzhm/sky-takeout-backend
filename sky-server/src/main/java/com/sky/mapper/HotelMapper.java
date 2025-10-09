@@ -76,13 +76,6 @@ public interface HotelMapper {
     List<Hotel> getByLocationArea(String locationArea);
 
     /**
-     * 根据供应商ID查询酒店列表
-     * @param supplierId 供应商ID
-     * @return 酒店列表
-     */
-    List<Hotel> getBySupplierId(Integer supplierId);
-
-    /**
      * 获取所有活跃的酒店
      * @return 酒店列表
      */

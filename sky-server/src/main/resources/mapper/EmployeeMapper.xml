@@ -33,7 +33,7 @@
         e.is_guide as isGuide,
         e.guide_level as guideLevel,
         e.department,
-        e.status,
+        e.status as status,
         e.operator_type as operatorType,
         e.is_tour_master as isTourMaster,
         e.can_assign_orders as canAssignOrders,
@@ -48,11 +48,90 @@
         employees e
 
         <where>
+            <!-- 默认只查询在职员工(status=1)，除非明确指定status参数 -->
+            <if test="status == null">
+                AND e.status = 1
+            </if>
+            <if test="status != null">
+                AND e.status = #{status}
+            </if>
             <if test="name != null and name != ''">
                 AND e.name LIKE CONCAT('%', #{name}, '%')
             </if>
-            <if test="role != null">
-                AND e.role = #{role}
+            <if test="role != null and role != ''">
+                AND e.role LIKE CONCAT('%', #{role}, '%')
+            </if>
+            <if test="workStatus != null">
+                AND e.work_status = #{workStatus}
+            </if>
+        </where>
+
+        ORDER BY e.id DESC
+    </select>
+
+    <!-- 按部门分页查询（用于部门权限控制） -->
+    <select id="pageQueryByDepartment" resultType="com.sky.entity.Employee">
+        SELECT
+        e.id,
+        e.username,
+        e.name,
+        e.password,
+        e.phone,
+        e.email,
+        e.avatar,
+        e.sex,
+        e.id_number as idNumber,
+        e.role,
+        e.work_status as workStatus,
+        e.create_time as createTime,
+        e.update_time as updateTime,
+        e.create_user as createUser,
+        e.update_user as updateUser,
+        e.service_no as serviceNo,
+        e.online_status as onlineStatus,
+        e.max_concurrent_customers as maxConcurrentCustomers,
+        e.current_customer_count as currentCustomerCount,
+        e.skill_tags as skillTags,
+        e.service_level as serviceLevel,
+        e.last_login_time as lastLoginTime,
+        e.last_active_time as lastActiveTime,
+        e.is_guide as isGuide,
+        e.guide_level as guideLevel,
+        e.department,
+        e.status as status,
+        e.operator_type as operatorType,
+        e.is_tour_master as isTourMaster,
+        e.can_assign_orders as canAssignOrders,
+        e.dept_id as deptId,
+        e.position_id as positionId,
+        -- 邮箱配置字段
+        e.email_password as emailPassword,
+        e.email_host as emailHost,
+        e.email_port as emailPort,
+        e.email_enabled as emailEnabled,
+        e.email_ssl_enabled as emailSslEnabled,
+        e.email_auth_enabled as emailAuthEnabled
+        FROM
+        employees e
+        
+        <where>
+            <!-- 默认只查询在职员工(status=1)，除非明确指定status参数 -->
+            <if test="status == null">
+                AND e.status = 1
+            </if>
+            <if test="status != null">
+                AND e.status = #{status}
+            </if>
+            <!-- 部门权限过滤 -->
+            <if test="deptId != null">
+                AND e.dept_id = #{deptId}
+            </if>
+            <!-- 其他过滤条件 -->
+            <if test="name != null and name != ''">
+                AND e.name LIKE CONCAT('%', #{name}, '%')
+            </if>
+            <if test="role != null and role != ''">
+                AND e.role LIKE CONCAT('%', #{role}, '%')
             </if>
             <if test="workStatus != null">
                 AND e.work_status = #{workStatus}
@@ -82,7 +161,8 @@
             <if test="avatar != null">avatar = #{avatar},</if>
             <if test="sex != null and sex != ''">sex = #{sex},</if>
             <if test="idNumber != null and idNumber != ''">id_number = #{idNumber},</if>
-            <if test="role != null">role = #{role},</if>
+            <if test="role != null and role != ''">role = #{role},</if>
+            <if test="status != null">status = #{status},</if>
             <if test="workStatus != null">work_status = #{workStatus},</if>
             <if test="lastLoginTime != null">last_login_time = #{lastLoginTime},</if>
             <!-- ====== 操作员分工管理字段 ====== -->
@@ -140,7 +220,7 @@
             WHERE employee_id IS NOT NULL
             GROUP BY employee_id
         ) session_stats ON e.id = session_stats.employee_id
-        WHERE e.role IN (1, 2, 3)
+        WHERE (e.role LIKE '%Service%' OR e.role LIKE '%客服%' OR e.role LIKE '%Manager%' OR e.role LIKE '%管理%')
         <if test="name != null and name != ''">
             AND e.name LIKE CONCAT('%', #{name}, '%')
         </if>
@@ -185,14 +265,14 @@
             <if test="lastActiveTime != null">last_active_time = #{lastActiveTime},</if>
             update_time = #{updateTime}
         </set>
-        WHERE id = #{id} AND role IN (1, 2, 3)
+        WHERE id = #{id} AND (role LIKE '%Service%' OR role LIKE '%客服%' OR role LIKE '%Manager%' OR role LIKE '%管理%')
     </update>
 
     <!-- 获取客服统计信息 -->
     <select id="getCustomerServiceStatistics" resultType="com.sky.vo.CustomerServiceStatisticsVO">
         SELECT 
-            (SELECT COUNT(*) FROM employees WHERE role IN (1, 2, 3)) as totalServices,
-            (SELECT COUNT(*) FROM employees WHERE role IN (1, 2, 3) AND online_status = 1) as onlineServices,
+            (SELECT COUNT(*) FROM employees WHERE (role LIKE '%Service%' OR role LIKE '%客服%' OR role LIKE '%Manager%' OR role LIKE '%管理%')) as totalServices,
+            (SELECT COUNT(*) FROM employees WHERE (role LIKE '%Service%' OR role LIKE '%客服%' OR role LIKE '%Manager%' OR role LIKE '%管理%') AND online_status = 1) as onlineServices,
             (SELECT COUNT(*) FROM service_session WHERE session_status IN (0,1)) as activeSessions,
             (SELECT COUNT(*) FROM service_session WHERE session_status = 0) as waitingQueue,
             (SELECT COUNT(*) FROM service_session WHERE DATE(create_time) = CURDATE()) as todayServices,

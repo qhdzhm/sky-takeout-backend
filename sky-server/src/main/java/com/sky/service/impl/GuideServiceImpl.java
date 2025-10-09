@@ -80,7 +80,7 @@ public class GuideServiceImpl implements GuideService {
                     .phone(guide.getPhone())
                     .sex("男") // 默认值，可以后续修改
                     .idNumber("000000000000000000") // 默认值，可以后续修改
-                    .role(0) // 导游角色
+                    .role("导游员工") // 导游角色
                     .workStatus(0) // 空闲状态
                     .createTime(LocalDateTime.now())
                     .updateTime(LocalDateTime.now())

@@ -25,7 +25,14 @@ public class Employee implements Serializable {
     private String avatar; // 头像URL
     private String sex; // 性别
     private String idNumber; // 身份证号
-    private Integer role; // 角色：0-导游，1-操作员，2-管理员，3-客服
+    private String role; // 职位头衔：如"Operating Manager", "A级导游", "Senior Operation"等
+    private Integer oldRoleBackup; // 原role值备份（用于兼容性）
+    
+    // 部门职位相关字段
+    private Long deptId; // 部门ID
+    private Long positionId; // 职位ID
+    private Long directSupervisorId; // 直属上级ID
+    
     private Integer workStatus; // 工作状态：0-空闲，1-忙碌，2-休假，3-出团，4-待命
     private LocalDateTime createTime; // 创建时间
     private LocalDateTime updateTime; // 更新时间

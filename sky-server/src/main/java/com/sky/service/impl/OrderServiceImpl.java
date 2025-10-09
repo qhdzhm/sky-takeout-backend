@@ -573,9 +573,11 @@ public class OrderServiceImpl implements OrderService {
             throw new BusinessException("订单不存在");
         }
         
-        // 🔍 获取更新前的支付状态（用于支付状态变化检测）
+        // 🔍 获取更新前的支付状态和订单状态（用于状态变化检测）
         String originalPaymentStatus = existingOrder.getPaymentStatus();
-        log.info("🔍 管理后台订单状态更新前支付状态检查，订单ID: {}, 原始支付状态: {}", bookingId, originalPaymentStatus);
+        String originalStatus = existingOrder.getStatus();
+        log.info("🔍 管理后台订单状态更新前检查，订单ID: {}, 原始状态: {}, 原始支付状态: {}", 
+                bookingId, originalStatus, originalPaymentStatus);
         
         // 创建订单更新对象
         TourBooking updateOrder = new TourBooking();
@@ -648,6 +650,29 @@ public class OrderServiceImpl implements OrderService {
                             
                 } catch (Exception e) {
                     log.error("❌ 管理后台同步订单到排团表失败: 订单ID={}, 错误: {}", bookingId, e.getMessage(), e);
+                    // 不抛出异常，避免影响订单状态更新
+                }
+            }
+        }
+        
+        // 🗑️ 检测订单状态变化：如果订单状态变为"已取消"，删除排团表数据
+        if (result > 0 && StringUtils.hasText(orderUpdateDTO.getStatus())) {
+            String newStatus = orderUpdateDTO.getStatus();
+            
+            if ("cancelled".equals(newStatus) && !"cancelled".equals(originalStatus)) {
+                try {
+                    log.warn("⚠️ 管理后台检测到订单状态变为已取消，开始清理排团表数据，订单ID: {}", bookingId);
+                    
+                    // 删除排团表中的相关记录
+                    tourScheduleOrderMapper.deleteByBookingId(bookingId);
+                    log.info("✅ 排团表数据清理完成（订单已取消），订单ID: {}", bookingId);
+                    
+                    // 记录操作日志
+                    log.info("📝 管理后台订单状态变化日志：订单ID={}, 原状态={}, 新状态={}, 已清理排团表数据", 
+                            bookingId, originalStatus, newStatus);
+                            
+                } catch (Exception e) {
+                    log.error("❌ 管理后台清理排团表数据失败（订单已取消）: 订单ID={}, 错误: {}", bookingId, e.getMessage(), e);
                     // 不抛出异常，避免影响订单状态更新
                 }
             }

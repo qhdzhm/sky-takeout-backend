@@ -1,7 +1,10 @@
 package com.sky.controller.admin;
 
+import com.sky.context.BaseContext;
 import com.sky.result.Result;
+import com.sky.service.EmployeeService;
 import com.sky.service.ImageService;
+import com.sky.dto.EmployeeDTO;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +23,9 @@ public class AvatarController {
 
     @Autowired
     private ImageService imageService;
+    
+    @Autowired
+    private EmployeeService employeeService;
 
     /**
      * 上传头像
@@ -44,7 +50,26 @@ public class AvatarController {
         }
         
         try {
+            // 1. 上传图片文件到OSS
             String url = imageService.upload(file);
+            log.info("头像上传成功，URL: {}", url);
+            
+            // 2. 获取当前登录的管理员ID
+            Long empId = BaseContext.getCurrentId();
+            if (empId == null) {
+                return Result.error("用户未登录");
+            }
+            
+            // 3. 更新数据库中的头像URL
+            EmployeeDTO employeeDTO = new EmployeeDTO();
+            employeeDTO.setId(empId);
+            employeeDTO.setAvatar(url);
+            employeeDTO.setUpdateTime(java.time.LocalDateTime.now());
+            employeeDTO.setUpdateUser(String.valueOf(empId));
+            
+            employeeService.updateEmp(employeeDTO);
+            log.info("头像URL已保存到数据库：empId={}, url={}", empId, url);
+            
             return Result.success(url);
         } catch (Exception e) {
             log.error("头像上传失败：{}", e.getMessage());

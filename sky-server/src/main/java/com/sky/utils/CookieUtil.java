@@ -62,14 +62,15 @@ public class CookieUtil {
      */
     public static void setCookie(HttpServletResponse response, String name, String value, String path, boolean httpOnly, int maxAge) {
         if (httpOnly) {
-            // 对于HttpOnly Cookie，使用Set-Cookie头部设置，确保兼容性
-            response.addHeader("Set-Cookie", String.format("%s=%s; Path=%s; Max-Age=%d; HttpOnly; SameSite=Lax", 
+            // 对于HttpOnly Cookie，使用Set-Cookie头部设置，优化兼容性
+            // 不设置Domain让浏览器自动使用当前域名，提高兼容性
+            response.addHeader("Set-Cookie", String.format("%s=%s; Path=%s; Max-Age=%d; HttpOnly; Secure; SameSite=Strict", 
                 name, value, path, maxAge));
         } else {
             // 对于普通Cookie，使用标准方式
             Cookie cookie = new Cookie(name, value);
             cookie.setHttpOnly(false);
-            cookie.setSecure(false); // 开发环境设为false，生产环境应设为true
+            cookie.setSecure(true); // 生产环境HTTPS必须设为true
             cookie.setPath(path);
             cookie.setMaxAge(maxAge);
             response.addCookie(cookie);

@@ -24,9 +24,6 @@ public class Hotel implements Serializable {
     // 酒店ID
     private Integer id;
     
-    // 供应商ID
-    private Integer supplierId;
-    
     // 酒店名称
     private String hotelName;
     

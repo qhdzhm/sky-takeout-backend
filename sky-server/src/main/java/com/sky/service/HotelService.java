@@ -36,5 +36,5 @@ public interface HotelService {
     /**
      * 根据供应商ID获取酒店列表
      */
-    List<Hotel> getHotelsBySupplierId(Long supplierId);
+
 } 

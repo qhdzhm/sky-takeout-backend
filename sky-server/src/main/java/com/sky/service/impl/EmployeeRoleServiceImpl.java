@@ -44,9 +44,19 @@ public class EmployeeRoleServiceImpl implements EmployeeRoleService {
             throw new BaseException("员工不存在");
         }
 
-        // 如果设置为排团主管，需要特殊处理
+        // 更新操作员类型
         if ("tour_master".equals(operatorType)) {
-            setTourMaster(employeeId, "管理员指定");
+            // 设置为排团主管
+            Employee updateEmployee = new Employee();
+            updateEmployee.setId(employeeId);
+            updateEmployee.setOperatorType(operatorType);
+            updateEmployee.setIsTourMaster(true);
+            updateEmployee.setCanAssignOrders(true);
+            updateEmployee.setUpdateTime(LocalDateTime.now());
+            updateEmployee.setUpdateUser(BaseContext.getCurrentId());
+            
+            employeeMapper.update(updateEmployee);
+            log.info("✅ 员工操作员类型更新成功：employeeId={}, operatorType={}", employeeId, operatorType);
         } else {
             // 更新操作员类型
             Employee updateEmployee = new Employee();
@@ -70,40 +80,6 @@ public class EmployeeRoleServiceImpl implements EmployeeRoleService {
         }
     }
 
-    /**
-     * 设置排团主管
-     */
-    @Override
-    @Transactional
-    public void setTourMaster(Long employeeId, String reason) {
-        log.info("设置排团主管：employeeId={}, reason={}", employeeId, reason);
-        
-        Employee targetEmployee = employeeMapper.getById(employeeId.intValue());
-        if (targetEmployee == null) {
-            throw new BaseException("目标员工不存在");
-        }
-
-        // 检查是否可以设置为排团主管
-        if (!canSetAsTourMaster(employeeId)) {
-            throw new BaseException("该员工不符合排团主管条件");
-        }
-
-        // 1. 先清除所有员工的排团主管标记
-        employeeMapper.clearAllTourMasterFlags();
-
-        // 2. 设置新的排团主管
-        Employee updateEmployee = new Employee();
-        updateEmployee.setId(employeeId);
-        updateEmployee.setOperatorType("tour_master");
-        updateEmployee.setIsTourMaster(true);
-        updateEmployee.setCanAssignOrders(true);
-        updateEmployee.setUpdateTime(LocalDateTime.now());
-        updateEmployee.setUpdateUser(BaseContext.getCurrentId());
-        
-        employeeMapper.update(updateEmployee);
-        
-        log.info("✅ 排团主管设置成功：employeeId={}, reason={}", employeeId, reason);
-    }
 
     /**
      * 批量更新员工分配权限
@@ -133,7 +109,45 @@ public class EmployeeRoleServiceImpl implements EmployeeRoleService {
     public List<OperatorStatisticsVO> getOperatorStatistics() {
         log.info("获取操作员统计信息");
         
-        List<Employee> operators = employeeMapper.getAllOperators();
+        // 使用新的基于字符串角色的筛选逻辑
+        com.sky.dto.EmployeePageQueryDTO queryDTO = new com.sky.dto.EmployeePageQueryDTO();
+        queryDTO.setPage(1);
+        queryDTO.setPageSize(200);
+        
+        com.github.pagehelper.Page<Employee> pageResult = employeeMapper.pageQuery(queryDTO);
+        List<Employee> allEmployees = pageResult.getResult();
+        
+        // 筛选出运营相关员工
+        List<Employee> operators = new ArrayList<>();
+        for (Employee employee : allEmployees) {
+            String role = employee.getRole();
+            if (role != null) {
+                // 包括所有运营相关员工
+                boolean isOperationRelated = 
+                    role.contains("Senior Operation") ||
+                    role.contains("Operating Manager") ||
+                    role.contains("Chief Executive") ||
+                    role.contains("FIT Team Leader") ||
+                    "hotel_operator".equals(employee.getOperatorType()) ||
+                    (role.contains("Operation") && !role.contains("导游"));
+                
+                // 排除导游和非运营部门员工
+                boolean isExcluded = 
+                    role.contains("导游") || 
+                    role.contains("Guide") ||
+                    role.contains("IT Manager") ||
+                    role.contains("Marketing Manager") ||
+                    role.contains("HR Manager") ||
+                    role.contains("Finance Manager") ||
+                    role.contains("Legal Manager") ||
+                    role.contains("Supply Chain Manager") ||
+                    role.contains("Customer Service");
+                
+                if (isOperationRelated && !isExcluded) {
+                    operators.add(employee);
+                }
+            }
+        }
         List<OperatorStatisticsVO> statistics = new ArrayList<>();
         
         for (Employee employee : operators) {
@@ -167,16 +181,6 @@ public class EmployeeRoleServiceImpl implements EmployeeRoleService {
         return statistics;
     }
 
-    /**
-     * 获取可设置为排团主管的员工列表
-     */
-    @Override
-    public List<Employee> getTourMasterCandidates() {
-        log.info("获取可设置为排团主管的员工列表");
-        
-        // 查询角色为操作员或管理员的员工
-        return employeeMapper.getTourMasterCandidates();
-    }
 
     /**
      * 获取酒店操作员列表
@@ -185,7 +189,29 @@ public class EmployeeRoleServiceImpl implements EmployeeRoleService {
     public List<Employee> getHotelOperators() {
         log.info("获取酒店操作员列表");
         
-        return employeeMapper.findByOperatorType("hotel_operator");
+        try {
+            // 获取所有员工，筛选出酒店操作员
+            com.sky.dto.EmployeePageQueryDTO queryDTO = new com.sky.dto.EmployeePageQueryDTO();
+            queryDTO.setPage(1);
+            queryDTO.setPageSize(200);
+            
+            com.github.pagehelper.Page<Employee> pageResult = employeeMapper.pageQuery(queryDTO);
+            List<Employee> allEmployees = pageResult.getResult();
+            List<Employee> hotelOperators = new ArrayList<>();
+            
+            for (Employee employee : allEmployees) {
+                if ("hotel_operator".equals(employee.getOperatorType())) {
+                    hotelOperators.add(employee);
+                }
+            }
+            
+            log.info("找到 {} 个酒店操作员", hotelOperators.size());
+            return hotelOperators;
+            
+        } catch (Exception e) {
+            log.error("获取酒店操作员失败", e);
+            return new ArrayList<>();
+        }
     }
 
     /**
@@ -232,27 +258,7 @@ public class EmployeeRoleServiceImpl implements EmployeeRoleService {
         return new ArrayList<>();
     }
 
-    /**
-     * 检查是否可以设置为排团主管
-     */
-    @Override
-    public boolean canSetAsTourMaster(Long employeeId) {
-        Employee employee = employeeMapper.getById(employeeId.intValue());
-        if (employee == null) {
-            return false;
-        }
-        
-        // 必须是操作员或管理员角色
-        return employee.getRole() != null && (employee.getRole() == 1 || employee.getRole() == 2);
-    }
 
-    /**
-     * 获取当前排团主管信息
-     */
-    @Override
-    public Employee getCurrentTourMaster() {
-        return employeeMapper.getCurrentTourMaster();
-    }
 
     // === 私有辅助方法 ===
 
@@ -348,5 +354,6 @@ public class EmployeeRoleServiceImpl implements EmployeeRoleService {
             return "heavy";
         }
     }
+
 }
 

@@ -54,4 +54,10 @@ public interface GuideMapper {
      */
     @Select("SELECT * FROM guides WHERE status = 1 ORDER BY guide_id")
     List<Guide> getAllActiveGuides();
+
+    /**
+     * 根据员工ID更新导游状态
+     */
+    @Update("UPDATE guides SET status = #{status}, is_active = #{isActive} WHERE employee_id = #{employeeId}")
+    void updateGuideStatusByEmployeeId(Long employeeId, Integer status, Boolean isActive);
 } 

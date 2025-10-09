@@ -60,7 +60,7 @@ public class CustomerServiceServiceImpl implements CustomerServiceService {
         }
 
         // 检查是否是客服角色
-        if (employee.getRole() != 3) {
+        if (employee.getRole() == null || (!employee.getRole().contains("Service") && !employee.getRole().contains("客服"))) {
             throw new LoginFailedException("非客服账号，无法登录");
         }
 
@@ -170,13 +170,13 @@ public class CustomerServiceServiceImpl implements CustomerServiceService {
         Employee employee = new Employee();
         BeanUtils.copyProperties(customerServiceDTO, employee);
         
-        // 设置角色：如果未指定角色，默认为客服(role=3)
-        if (employee.getRole() == null) {
-            employee.setRole(3); // 默认客服角色
+        // 设置角色：如果未指定角色，默认为客服
+        if (employee.getRole() == null || employee.getRole().trim().isEmpty()) {
+            employee.setRole("Customer Service Staff"); // 默认客服角色
         }
-        // 只允许创建管理员(1)、操作员(2)、客服(3)角色，不允许创建导游(4)
-        if (employee.getRole() != 1 && employee.getRole() != 2 && employee.getRole() != 3) {
-            employee.setRole(3); // 强制设置为客服
+        // 只允许客服相关角色，不允许导游角色
+        if (employee.getRole() != null && employee.getRole().contains("导游")) {
+            employee.setRole("Customer Service Staff"); // 强制设置为客服
         }
         
         employee.setWorkStatus(0); // 默认空闲
@@ -189,7 +189,7 @@ public class CustomerServiceServiceImpl implements CustomerServiceService {
         
         // 生成工号（根据角色生成不同前缀）
         if (employee.getServiceNo() == null || employee.getServiceNo().isEmpty()) {
-            String prefix = getRolePrefix(employee.getRole());
+            String prefix = getServicePrefix(employee.getRole());
             employee.setServiceNo(prefix + System.currentTimeMillis());
         }
         
@@ -271,5 +271,24 @@ public class CustomerServiceServiceImpl implements CustomerServiceService {
     @Override
     public Employee getAvailableEmployee(String skillTag) {
         return employeeMapper.getAvailableCustomerService(skillTag);
+    }
+    
+    /**
+     * 根据角色获取工号前缀
+     */
+    private String getServicePrefix(String role) {
+        if (role == null) {
+            return "CS"; // Customer Service
+        }
+        
+        if (role.contains("Manager") || role.contains("经理")) {
+            return "MGR";
+        } else if (role.contains("Service") || role.contains("客服")) {
+            return "CS";
+        } else if (role.contains("Operation") || role.contains("运营")) {
+            return "OP";
+        } else {
+            return "EMP";
+        }
     }
 } 

@@ -29,6 +29,9 @@ public class HotelRoomType implements Serializable {
     // 房型名称
     private String roomType;
     
+    // 房间星级（3星、4星、4.5星、5星）
+    private String roomLevel;
+    
     // 房型代码
     private String roomTypeCode;
     

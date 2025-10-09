@@ -38,8 +38,11 @@ public class EmployeeDTO implements Serializable {
     @NotNull(message = "状态不能为空")
     private Integer status;
 
-    @NotNull(message = "角色不能为空")
-    private Integer role;
+    @NotBlank(message = "职位不能为空")
+    private String role;
+
+    private Long deptId; // 部门ID
+    private Long positionId; // 职位ID
 
     private Integer workStatus; // 工作状态：0-空闲，1-忙碌，2-休假，3-出团，4-待命
 

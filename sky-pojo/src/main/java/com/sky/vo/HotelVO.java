@@ -53,9 +53,6 @@ public class HotelVO implements Serializable {
     @ApiModelProperty("评分")
     private BigDecimal rating;
 
-    @ApiModelProperty("供应商名称")
-    private String supplierName;
-
     @ApiModelProperty("可用房型列表")
     private List<HotelRoomTypeVO> roomTypes;
 
