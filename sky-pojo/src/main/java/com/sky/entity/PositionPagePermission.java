@@ -38,3 +38,4 @@ public class PositionPagePermission implements Serializable {
     private Integer status;
 }
 
+

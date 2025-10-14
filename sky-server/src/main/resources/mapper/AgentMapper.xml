@@ -74,6 +74,7 @@
     <update id="update" parameterType="com.sky.entity.Agent">
         update agents
         <set>
+            <if test="username != null">username = #{username},</if>
             <if test="companyName != null">company_name = #{companyName},</if>
             <if test="contactPerson != null">contact_person = #{contactPerson},</if>
             <if test="phone != null">phone = #{phone},</if>

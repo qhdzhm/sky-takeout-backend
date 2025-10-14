@@ -188,4 +188,20 @@ public class CreditAdminController {
         
         return Result.success(result);
     }
+    
+    /**
+     * 冲正充值记录
+     * @param transactionId 原充值交易记录ID
+     * @param reason 冲正原因
+     * @return 操作结果
+     */
+    @PostMapping("/transactions/{transactionId}/reverse")
+    @ApiOperation("冲正充值记录")
+    public Result<Boolean> reverseTopupTransaction(
+            @PathVariable Long transactionId,
+            @RequestParam String reason) {
+        log.info("管理员冲正交易记录：transactionId={}, reason={}", transactionId, reason);
+        boolean result = adminCreditService.reverseTopupTransaction(transactionId, reason);
+        return Result.success(result);
+    }
 } 

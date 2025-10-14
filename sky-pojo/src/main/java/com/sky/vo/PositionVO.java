@@ -75,3 +75,4 @@ public class PositionVO implements Serializable {
     private LocalDateTime lastPermissionUpdate;
 }
 
+

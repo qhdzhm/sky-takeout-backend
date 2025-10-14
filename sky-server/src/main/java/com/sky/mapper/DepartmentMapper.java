@@ -73,3 +73,4 @@ public interface DepartmentMapper {
     List<Department> findDepartmentStatistics();
 }
 
+

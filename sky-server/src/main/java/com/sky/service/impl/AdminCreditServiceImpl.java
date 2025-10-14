@@ -751,4 +751,96 @@ public class AdminCreditServiceImpl implements AdminCreditService {
         
         return successCount;
     }
+    
+    /**
+     * 冲正充值记录（通过创建反向调整记录来撤销错误充值）
+     * @param transactionId 原充值交易记录ID
+     * @param reason 冲正原因
+     * @return 是否成功
+     */
+    @Override
+    @Transactional
+    public boolean reverseTopupTransaction(Long transactionId, String reason) {
+        log.info("开始冲正交易记录，交易ID: {}, 原因: {}", transactionId, reason);
+        
+        // 1. 查询原交易记录
+        CreditTransaction originalTransaction = creditTransactionMapper.getById(transactionId);
+        if (originalTransaction == null) {
+            throw new BusinessException("原交易记录不存在");
+        }
+        
+        // 2. 验证交易类型（只允许冲正充值记录）
+        if (!"topup".equals(originalTransaction.getTransactionType())) {
+            throw new BusinessException("只能冲正充值类型的交易记录");
+        }
+        
+        // 3. 获取代理商信用额度信息
+        Long agentId = originalTransaction.getAgentId();
+        AgentCredit agentCredit = agentCreditMapper.getByAgentId(agentId);
+        if (agentCredit == null) {
+            throw new BusinessException("代理商信用额度记录不存在");
+        }
+        
+        BigDecimal reverseAmount = originalTransaction.getAmount();
+        
+        // 4. 执行反向操作（撤销充值）
+        // 充值时的逻辑是：先减少usedCredit，不足时再增加depositBalance
+        // 冲正时的逻辑应该相反：先减少depositBalance，不足时再增加usedCredit
+        
+        BigDecimal depositBalance = agentCredit.getDepositBalance() != null ? 
+            agentCredit.getDepositBalance() : BigDecimal.ZERO;
+        
+        // 记录交易前余额
+        BigDecimal balanceBefore = agentCredit.getAvailableCredit();
+        
+        if (depositBalance.compareTo(reverseAmount) >= 0) {
+            // 预存余额足够，直接从预存余额中扣除
+            agentCredit.setDepositBalance(depositBalance.subtract(reverseAmount));
+        } else if (depositBalance.compareTo(BigDecimal.ZERO) > 0) {
+            // 预存余额不足，先扣除全部预存余额，剩余部分增加已用额度
+            BigDecimal remaining = reverseAmount.subtract(depositBalance);
+            agentCredit.setDepositBalance(BigDecimal.ZERO);
+            agentCredit.setUsedCredit(agentCredit.getUsedCredit().add(remaining));
+        } else {
+            // 没有预存余额，全部增加到已用额度
+            agentCredit.setUsedCredit(agentCredit.getUsedCredit().add(reverseAmount));
+        }
+        
+        // 5. 重新计算可用额度
+        depositBalance = agentCredit.getDepositBalance() != null ? 
+            agentCredit.getDepositBalance() : BigDecimal.ZERO;
+        BigDecimal newAvailableCredit = agentCredit.getTotalCredit()
+            .subtract(agentCredit.getUsedCredit())
+            .add(depositBalance);
+        agentCredit.setAvailableCredit(newAvailableCredit);
+        
+        // 6. 更新最后操作时间
+        agentCredit.setLastUpdated(LocalDateTime.now());
+        
+        // 7. 更新数据库
+        agentCreditMapper.update(agentCredit);
+        
+        // 8. 创建冲正交易记录
+        CreditTransaction reversalTransaction = new CreditTransaction();
+        reversalTransaction.setTransactionNo("R" + System.currentTimeMillis());
+        reversalTransaction.setAgentId(agentId);
+        reversalTransaction.setAmount(reverseAmount.negate()); // 负数表示扣减
+        reversalTransaction.setTransactionType("adjustment");
+        reversalTransaction.setBalanceBefore(balanceBefore);
+        reversalTransaction.setBalanceAfter(newAvailableCredit);
+        reversalTransaction.setNote(String.format("冲正交易[%s]，原因：%s", 
+            originalTransaction.getTransactionNo(), reason));
+        reversalTransaction.setCreatedAt(LocalDateTime.now());
+        
+        // 获取当前登录的管理员ID
+        Long currentEmpId = BaseContext.getCurrentId();
+        reversalTransaction.setCreatedBy(currentEmpId);
+        
+        creditTransactionMapper.insert(reversalTransaction);
+        
+        log.info("交易记录冲正成功，原交易号: {}, 冲正交易号: {}", 
+            originalTransaction.getTransactionNo(), reversalTransaction.getTransactionNo());
+        
+        return true;
+    }
 } 

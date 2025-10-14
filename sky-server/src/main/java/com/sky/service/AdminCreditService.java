@@ -110,4 +110,12 @@ public interface AdminCreditService {
      * @return 初始化成功的代理商数量
      */
     int initializeCreditForExistingAgents(BigDecimal defaultCredit);
+    
+    /**
+     * 冲正充值记录（通过创建反向调整记录来撤销错误充值）
+     * @param transactionId 原充值交易记录ID
+     * @param reason 冲正原因
+     * @return 是否成功
+     */
+    boolean reverseTopupTransaction(Long transactionId, String reason);
 }

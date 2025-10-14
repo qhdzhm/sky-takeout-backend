@@ -64,16 +64,19 @@ public class CookieUtil {
         if (httpOnly) {
             // 对于HttpOnly Cookie，使用Set-Cookie头部设置，优化兼容性
             // 不设置Domain让浏览器自动使用当前域名，提高兼容性
-            response.addHeader("Set-Cookie", String.format("%s=%s; Path=%s; Max-Age=%d; HttpOnly; Secure; SameSite=Strict", 
+            // 🔧 修复：SameSite从Strict改为Lax，减少跨站限制
+            response.addHeader("Set-Cookie", String.format("%s=%s; Path=%s; Max-Age=%d; HttpOnly; Secure; SameSite=Lax", 
                 name, value, path, maxAge));
+            log.debug("设置HttpOnly Cookie: {}={}, Path={}, MaxAge={}", name, value.substring(0, Math.min(value.length(), 20)) + "...", path, maxAge);
         } else {
             // 对于普通Cookie，使用标准方式
             Cookie cookie = new Cookie(name, value);
             cookie.setHttpOnly(false);
-            cookie.setSecure(true); // 生产环境HTTPS必须设为true
+            cookie.setSecure(true); // HTTPS环境必须设为true
             cookie.setPath(path);
             cookie.setMaxAge(maxAge);
             response.addCookie(cookie);
+            log.debug("设置普通Cookie: {}={}, Path={}, MaxAge={}", name, value.substring(0, Math.min(value.length(), 20)) + "...", path, maxAge);
         }
     }
     

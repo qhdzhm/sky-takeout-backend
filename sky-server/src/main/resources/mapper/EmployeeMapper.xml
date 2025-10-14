@@ -144,9 +144,9 @@
     <!-- 插入员工数据 -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO employees
-        (username, name, password, phone, email, avatar, sex, id_number, role, work_status, create_time, update_time, create_user, update_user)
+        (username, name, password, phone, email, avatar, sex, id_number, role, dept_id, position_id, work_status, create_time, update_time, create_user, update_user)
         VALUES
-        (#{username}, #{name}, #{password}, #{phone}, #{email}, #{avatar}, #{sex}, #{idNumber}, #{role}, #{workStatus}, #{createTime}, #{updateTime}, #{createUser}, #{updateUser})
+        (#{username}, #{name}, #{password}, #{phone}, #{email}, #{avatar}, #{sex}, #{idNumber}, #{role}, #{deptId}, #{positionId}, #{workStatus}, #{createTime}, #{updateTime}, #{createUser}, #{updateUser})
     </insert>
 
     <!-- 更新员工信息 -->
@@ -162,6 +162,8 @@
             <if test="sex != null and sex != ''">sex = #{sex},</if>
             <if test="idNumber != null and idNumber != ''">id_number = #{idNumber},</if>
             <if test="role != null and role != ''">role = #{role},</if>
+            <if test="deptId != null">dept_id = #{deptId},</if>
+            <if test="positionId != null">position_id = #{positionId},</if>
             <if test="status != null">status = #{status},</if>
             <if test="workStatus != null">work_status = #{workStatus},</if>
             <if test="lastLoginTime != null">last_login_time = #{lastLoginTime},</if>
