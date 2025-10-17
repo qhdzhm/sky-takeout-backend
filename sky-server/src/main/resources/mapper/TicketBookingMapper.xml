@@ -100,10 +100,13 @@
     </select>
 
     <!-- 根据旅游订单ID查询 -->
+    <!-- 🆕 支持批量订票：同时查询 tour_booking_id 和 related_order_ids -->
     <select id="getByTourBookingId" parameterType="java.lang.Long" resultMap="BaseResultMap">
         SELECT <include refid="Base_Column_List"/>
         FROM ticket_bookings 
         WHERE tour_booking_id = #{tourBookingId}
+           OR (related_order_ids IS NOT NULL 
+               AND JSON_CONTAINS(related_order_ids, CAST(#{tourBookingId} AS JSON), '$'))
         ORDER BY visit_date ASC
     </select>
 
@@ -312,6 +315,48 @@
             AND booking_status = #{bookingStatus}
         </if>
         ORDER BY visit_date DESC, created_at DESC
+    </select>
+
+    <!-- 根据旅游订单ID查询票务预订详细信息（包含景点信息） -->
+    <!-- 🆕 支持批量订票：同时查询 tour_booking_id 和 related_order_ids -->
+    <select id="getByTourBookingIdWithDetails" resultType="com.sky.vo.TicketBookingVO">
+        SELECT 
+            tb.id,
+            tb.booking_reference as bookingReference,
+            tb.confirmation_number as confirmationNumber,
+            tb.schedule_order_id as scheduleOrderId,
+            tb.tour_booking_id as tourBookingId,
+            tb.attraction_id as attractionId,
+            a.attraction_name as attractionName,
+            a.attraction_name_en as attractionNameEn,
+            tb.ticket_type_id as ticketTypeId,
+            tt.ticket_type as ticketTypeName,
+            tb.guest_name as guestName,
+            tb.guest_phone as guestPhone,
+            tb.guest_email as guestEmail,
+            tb.visit_date as visitDate,
+            tb.booking_date as bookingDate,
+            tb.adult_count as adultCount,
+            tb.child_count as childCount,
+            tb.total_guests as totalGuests,
+            tb.ticket_price as ticketPrice,
+            tb.total_amount as totalAmount,
+            tb.currency,
+            tb.booking_method as bookingMethod,
+            tb.booking_status as bookingStatus,
+            tb.payment_status as paymentStatus,
+            tb.special_requirements as specialRequirements,
+            tb.ticket_specialist as ticketSpecialist,
+            tb.confirmed_time as confirmedTime,
+            tb.created_at as createdAt,
+            tb.updated_at as updatedAt
+        FROM ticket_bookings tb
+        LEFT JOIN attractions a ON tb.attraction_id = a.id
+        LEFT JOIN ticket_types tt ON tb.ticket_type_id = tt.id
+        WHERE tb.tour_booking_id = #{tourBookingId}
+           OR (tb.related_order_ids IS NOT NULL 
+               AND JSON_CONTAINS(tb.related_order_ids, CAST(#{tourBookingId} AS JSON), '$'))
+        ORDER BY tb.visit_date ASC, tb.created_at ASC
     </select>
 
 </mapper>

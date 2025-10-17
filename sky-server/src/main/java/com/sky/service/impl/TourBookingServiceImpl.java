@@ -195,7 +195,7 @@ public class TourBookingServiceImpl implements TourBookingService {
     @Override
     @Transactional
     public Integer save(TourBookingDTO tourBookingDTO) {
-        // 生成订单号 - 尝试使用代理商前缀
+        // 生成订单号 - 使用代理商用户名作为前缀
         String orderNumber;
         try {
             // 获取当前代理商ID
@@ -203,14 +203,14 @@ public class TourBookingServiceImpl implements TourBookingService {
             if (agentId != null) {
                 // 查询代理商信息
                 Agent agent = agentMapper.getById(agentId);
-                if (agent != null && agent.getCompanyName() != null) {
-                    // 使用代理商公司名生成订单号
-                    orderNumber = OrderNumberGenerator.generateWithAgent(agent.getCompanyName());
-                    log.info("使用代理商前缀生成订单号: {} (代理商: {})", orderNumber, agent.getCompanyName());
+                if (agent != null && agent.getUsername() != null && !agent.getUsername().trim().isEmpty()) {
+                    // 使用代理商用户名生成订单号
+                    orderNumber = OrderNumberGenerator.generateWithAgentUsername(agent.getUsername());
+                    log.info("使用代理商用户名前缀生成订单号: {} (用户名: {})", orderNumber, agent.getUsername());
                 } else {
-                    // 代理商信息不完整，使用默认生成方法
+                    // 代理商用户名为空，使用默认生成方法
                     orderNumber = OrderNumberGenerator.generate();
-                    log.info("代理商信息不完整，使用默认前缀生成订单号: {}", orderNumber);
+                    log.info("代理商用户名为空，使用默认前缀生成订单号: {}", orderNumber);
                 }
             } else {
                 // 没有代理商ID，使用默认生成方法

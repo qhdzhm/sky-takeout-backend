@@ -48,6 +48,9 @@ public class HotelCustomerStatisticsVO {
         @ApiModelProperty("车辆信息")
         private String vehicleInfo;
 
+        @ApiModelProperty("当天目的地")
+        private String destination;
+
         @ApiModelProperty("该导游负责的客人数")
         private Integer customerCount;
 
@@ -91,5 +94,31 @@ public class HotelCustomerStatisticsVO {
 
         @ApiModelProperty("预订ID")
         private Integer bookingId;
+        
+        @ApiModelProperty("乘客列表")
+        private List<PassengerInfo> passengers;
+    }
+    
+    /**
+     * 乘客信息
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @ApiModel(description = "乘客信息")
+    public static class PassengerInfo {
+        
+        @ApiModelProperty("乘客姓名")
+        private String fullName;
+        
+        @ApiModelProperty("联系电话")
+        private String phone;
+        
+        @ApiModelProperty("微信号")
+        private String wechatId;
+        
+        @ApiModelProperty("是否为儿童")
+        private Boolean isChild;
     }
 } 

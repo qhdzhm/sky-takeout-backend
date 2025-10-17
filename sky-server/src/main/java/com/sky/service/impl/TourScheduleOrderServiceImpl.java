@@ -56,6 +56,9 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
     
     @Autowired
     private GroupTourMapper groupTourMapper;
+    
+    @Autowired
+    private com.sky.mapper.PassengerMapper passengerMapper;
 
     /**
      * 通过订单ID获取行程排序
@@ -805,9 +808,35 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
                     .findFirst()
                     .orElse("未分配车辆");
                 
-                // 构建客人详细信息列表
-                List<HotelCustomerStatisticsVO.CustomerDetail> customerDetails = guideCustomers.stream()
-                    .map(customer -> HotelCustomerStatisticsVO.CustomerDetail.builder()
+                // 🆕 获取当天目的地（同一导游的客人去相同目的地）
+                String destination = guideCustomers.stream()
+                    .map(TourScheduleOrder::getTourDestination)
+                    .filter(dest -> dest != null && !dest.trim().isEmpty())
+                    .findFirst()
+                    .orElse("未分配目的地");
+                
+                // 构建客人详细信息列表（包含乘客信息）
+                List<HotelCustomerStatisticsVO.CustomerDetail> customerDetails = new ArrayList<>();
+                for (TourScheduleOrder customer : guideCustomers) {
+                    // 🆕 获取该订单的所有乘客信息
+                    List<HotelCustomerStatisticsVO.PassengerInfo> passengers = new ArrayList<>();
+                    try {
+                        List<com.sky.entity.Passenger> passengerList = passengerMapper.getByBookingId(customer.getBookingId());
+                        if (passengerList != null && !passengerList.isEmpty()) {
+                            passengers = passengerList.stream()
+                                .map(p -> HotelCustomerStatisticsVO.PassengerInfo.builder()
+                                    .fullName(p.getFullName())
+                                    .phone(p.getPhone())
+                                    .wechatId(p.getWechatId())
+                                    .isChild(p.getIsChild() != null && p.getIsChild())
+                                    .build())
+                                .collect(Collectors.toList());
+                        }
+                    } catch (Exception e) {
+                        log.warn("获取订单 {} 的乘客信息失败: {}", customer.getBookingId(), e.getMessage());
+                    }
+                    
+                    customerDetails.add(HotelCustomerStatisticsVO.CustomerDetail.builder()
                         .orderNumber(customer.getOrderNumber())
                         .contactPerson(customer.getContactPerson())
                         .contactPhone(customer.getContactPhone())
@@ -817,13 +846,15 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
                         .dropoffLocation(customer.getDropoffLocation())
                         .specialRequests(customer.getSpecialRequests())
                         .bookingId(customer.getBookingId())
-                        .build())
-                    .collect(Collectors.toList());
+                        .passengers(passengers)
+                        .build());
+                }
                 
                 // 构建导游分组
                 HotelCustomerStatisticsVO.GuideCustomerGroup guideGroup = HotelCustomerStatisticsVO.GuideCustomerGroup.builder()
                     .guideName(guideName)
                     .vehicleInfo(vehicleInfo)
+                    .destination(destination)
                     .customerCount(guideCustomers.size())
                     .customers(customerDetails)
                     .build();
@@ -843,16 +874,22 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
                 return g1.getGuideName().compareTo(g2.getGuideName());
             });
             
+            // 🔧 修复：计算总人数（成人+儿童），而不是订单数
+            int totalPeople = allCustomers.stream()
+                .mapToInt(c -> (c.getAdultCount() != null ? c.getAdultCount() : 0) + 
+                               (c.getChildCount() != null ? c.getChildCount() : 0))
+                .sum();
+            
             // 构建最终结果
             HotelCustomerStatisticsVO result = HotelCustomerStatisticsVO.builder()
                 .hotelName(hotelName)
                 .tourDate(tourDate)
-                .totalCustomers(allCustomers.size())
+                .totalCustomers(totalPeople)
                 .guideGroups(guideGroups)
                 .build();
             
-            log.info("酒店客人统计完成，酒店：{}，日期：{}，总客人数：{}，导游分组数：{}", 
-                    hotelName, tourDate, result.getTotalCustomers(), guideGroups.size());
+            log.info("酒店客人统计完成，酒店：{}，日期：{}，总客人数：{}，订单数：{}，导游分组数：{}", 
+                    hotelName, tourDate, totalPeople, allCustomers.size(), guideGroups.size());
             
             return result;
             

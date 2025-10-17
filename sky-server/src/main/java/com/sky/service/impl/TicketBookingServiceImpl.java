@@ -75,10 +75,32 @@ public class TicketBookingServiceImpl implements TicketBookingService {
         
         // 处理批量订票相关字段
         if (ticketBooking.getRelatedOrderIds() != null || ticketBooking.getRelatedOrderNumbers() != null) {
-            // 批量订票时，不设置单个订单的ID关联，避免Long类型冲突
-            ticketBooking.setScheduleOrderId(null);
-            ticketBooking.setTourBookingId(null);
-            log.info("批量订票模式：清除单个订单ID关联，使用relatedOrderIds和relatedOrderNumbers");
+            // 🆕 如果只关联一个订单，同时设置tour_booking_id方便查询
+            String relatedOrderIdsStr = ticketBooking.getRelatedOrderIds();
+            if (relatedOrderIdsStr != null && relatedOrderIdsStr.contains("[") && relatedOrderIdsStr.contains("]")) {
+                // 尝试解析JSON数组，判断是否只有一个订单
+                try {
+                    String content = relatedOrderIdsStr.substring(
+                        relatedOrderIdsStr.indexOf("[") + 1, 
+                        relatedOrderIdsStr.indexOf("]")
+                    ).trim();
+                    String[] orderIds = content.split(",");
+                    
+                    if (orderIds.length == 1 && !orderIds[0].trim().isEmpty()) {
+                        // 只有一个订单，设置tour_booking_id
+                        Long singleOrderId = Long.parseLong(orderIds[0].trim());
+                        ticketBooking.setTourBookingId(singleOrderId);
+                        log.info("单订单模式：同时设置tour_booking_id={} 和 relatedOrderIds", singleOrderId);
+                    } else if (orderIds.length > 1) {
+                        // 多个订单，批量订票模式
+                        ticketBooking.setScheduleOrderId(null);
+                        ticketBooking.setTourBookingId(null);
+                        log.info("批量订票模式（{}个订单）：清除单个订单ID关联，使用relatedOrderIds", orderIds.length);
+                    }
+                } catch (Exception e) {
+                    log.warn("解析relatedOrderIds失败，保持原有逻辑: {}", e.getMessage());
+                }
+            }
         }
         
         log.info("准备插入票务预订: bookingReference={}, relatedOrderIds={}, relatedOrderNumbers={}", 

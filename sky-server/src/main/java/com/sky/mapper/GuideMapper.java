@@ -3,6 +3,7 @@ package com.sky.mapper;
 import com.github.pagehelper.Page;
 import com.sky.dto.GuidePageQueryDTO;
 import com.sky.entity.Guide;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Select;
@@ -60,4 +61,10 @@ public interface GuideMapper {
      */
     @Update("UPDATE guides SET status = #{status}, is_active = #{isActive} WHERE employee_id = #{employeeId}")
     void updateGuideStatusByEmployeeId(Long employeeId, Integer status, Boolean isActive);
+
+    /**
+     * 删除导游记录
+     */
+    @Delete("DELETE FROM guides WHERE guide_id = #{guideId}")
+    void deleteGuide(Integer guideId);
 } 

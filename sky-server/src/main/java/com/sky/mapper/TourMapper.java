@@ -150,4 +150,12 @@ public interface TourMapper {
         "</script>"
     })
     void insertTourSuitable(@Param("tourId") Integer tourId, @Param("suitableId") Integer suitableId, @Param("tourType") String tourType);
+
+    /**
+     * 获取基于订单统计的热门产品（近N天）
+     * @param days 统计天数
+     * @param limit 限制数量
+     * @return 热门产品列表（包含一日游和多日游）
+     */
+    List<Map<String, Object>> getPopularToursByOrders(@Param("days") Integer days, @Param("limit") Integer limit);
 } 

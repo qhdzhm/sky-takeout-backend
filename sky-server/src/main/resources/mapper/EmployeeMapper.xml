@@ -48,10 +48,7 @@
         employees e
 
         <where>
-            <!-- 默认只查询在职员工(status=1)，除非明确指定status参数 -->
-            <if test="status == null">
-                AND e.status = 1
-            </if>
+            <!-- 🔧 修改：默认显示所有员工（包括禁用的），除非明确指定status参数 -->
             <if test="status != null">
                 AND e.status = #{status}
             </if>
@@ -115,10 +112,7 @@
         employees e
         
         <where>
-            <!-- 默认只查询在职员工(status=1)，除非明确指定status参数 -->
-            <if test="status == null">
-                AND e.status = 1
-            </if>
+            <!-- 🔧 修改：默认显示所有员工（包括禁用的），除非明确指定status参数 -->
             <if test="status != null">
                 AND e.status = #{status}
             </if>

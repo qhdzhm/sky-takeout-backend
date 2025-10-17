@@ -181,4 +181,16 @@ public class TourServiceImpl implements TourService {
     public List<Map<String, Object>> getSuitableForByTourId(Integer tourId, String tourType) {
         return tourMapper.getSuitableForByTourId(tourId, tourType);
     }
+
+    /**
+     * 获取基于订单统计的热门产品（近N天）
+     * @param days 统计天数
+     * @param limit 限制数量
+     * @return 热门产品列表（包含一日游和多日游）
+     */
+    @Override
+    public List<Map<String, Object>> getPopularToursByOrders(Integer days, Integer limit) {
+        log.info("获取基于订单统计的热门产品，统计天数：{}，限制数量：{}", days, limit);
+        return tourMapper.getPopularToursByOrders(days, limit);
+    }
 } 

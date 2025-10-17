@@ -75,8 +75,8 @@ public class EmployeeController {
                     .build();
 
             // 🔧 新增：设置管理后台专用Cookie，与用户端完全隔离
-            // 管理后台Access Token（15分钟）
-            CookieUtil.setAdminCookieWithMultiplePaths(response, "adminToken", token, true, 15 * 60);
+            // 管理后台Access Token（4小时）
+            CookieUtil.setAdminCookieWithMultiplePaths(response, "adminToken", token, true, 4 * 60 * 60);
             
             // 管理后台Refresh Token（长期，7天）
             Map<String, Object> refreshClaims = new HashMap<>();
@@ -104,8 +104,8 @@ public class EmployeeController {
             userInfo.put("empId", employee.getId());
             
             String userInfoJson = com.alibaba.fastjson.JSON.toJSONString(userInfo);
-            // 使用专门的管理后台Cookie名称，15分钟与adminToken保持一致
-            setAdminUserInfoCookie(response, userInfoJson, 15 * 60);
+            // 使用专门的管理后台Cookie名称，4小时与adminToken保持一致
+            setAdminUserInfoCookie(response, userInfoJson, 4 * 60 * 60);
             
             log.info("✅ 管理员登录成功，已设置Cookie-only认证: empId={}, username={}", 
                     employee.getId(), employee.getUsername());
@@ -226,7 +226,7 @@ public class EmployeeController {
 
             String newAccessToken = JwtUtil.createJWT(
                 jwtProperties.getAdminSecretKey(),
-                jwtProperties.getAdminTtl(), // 15分钟
+                jwtProperties.getAdminTtl(), // 4小时
                 accessClaims
             );
 
@@ -257,8 +257,8 @@ public class EmployeeController {
                 log.info("AdminRefreshToken已更新，管理员: {}", username);
             }
 
-            // 设置新的access token cookie（15分钟有效期）
-            CookieUtil.setAdminCookieWithMultiplePaths(response, "adminToken", newAccessToken, true, 15 * 60);
+            // 设置新的access token cookie（4小时有效期）
+            CookieUtil.setAdminCookieWithMultiplePaths(response, "adminToken", newAccessToken, true, 4 * 60 * 60);
 
             // 更新管理后台用户信息cookie
             Map<String, Object> userInfo = new HashMap<>();
@@ -272,7 +272,7 @@ public class EmployeeController {
             userInfo.put("empId", employee.getId());
             
             String userInfoJson = com.alibaba.fastjson.JSON.toJSONString(userInfo);
-            setAdminUserInfoCookie(response, userInfoJson, 15 * 60); // 15分钟，与adminToken同步
+            setAdminUserInfoCookie(response, userInfoJson, 4 * 60 * 60); // 4小时，与adminToken同步
 
             // 构建响应
             TokenRefreshVO tokenRefreshVO = TokenRefreshVO.builder()
@@ -634,6 +634,24 @@ public class EmployeeController {
         } catch (Exception e) {
             log.error("❌ 更新员工状态失败", e);
             return Result.error("更新员工状态失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 永久删除员工（仅限已禁用的员工）
+     */
+    @DeleteMapping("/{id}")
+    public Result<String> deleteEmployee(@PathVariable Long id) {
+        log.info("删除员工：id={}", id);
+        try {
+            employeeService.deleteEmp(id);
+            return Result.success("删除员工成功");
+        } catch (BaseException e) {
+            log.error("❌ 删除员工失败: {}", e.getMessage());
+            return Result.error(e.getMessage());
+        } catch (Exception e) {
+            log.error("❌ 删除员工失败", e);
+            return Result.error("删除员工失败：" + e.getMessage());
         }
     }
 

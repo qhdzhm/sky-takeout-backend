@@ -138,6 +138,12 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Override
     @Transactional
     public void addEmp(EmployeeDTO employeeDTO) {
+        // 检查用户名是否已存在
+        Employee existingEmployee = employeeMapper.getByUsername(employeeDTO.getUsername());
+        if (existingEmployee != null) {
+            throw new BaseException("用户名 '" + employeeDTO.getUsername() + "' 已存在，请使用其他用户名");
+        }
+        
         Employee employee = new Employee();
         BeanUtils.copyProperties(employeeDTO, employee);
 
@@ -186,6 +192,17 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Transactional
     public void updateEmp(EmployeeDTO employeeDTO) {
         log.info("🔍 updateEmp 开始: employeeDTO={}", employeeDTO);
+        
+        // 如果更新了用户名，检查用户名是否已被其他员工使用
+        if (employeeDTO.getUsername() != null && !employeeDTO.getUsername().trim().isEmpty()) {
+            Employee existingEmployee = employeeMapper.getByUsernameExcludingId(
+                employeeDTO.getUsername(), 
+                employeeDTO.getId()
+            );
+            if (existingEmployee != null) {
+                throw new BaseException("用户名 '" + employeeDTO.getUsername() + "' 已被其他员工使用，请使用其他用户名");
+            }
+        }
         
         Employee employee = new Employee();
         BeanUtils.copyProperties(employeeDTO, employee);
@@ -261,5 +278,38 @@ public class EmployeeServiceImpl implements EmployeeService {
         // 🔧 部门权限隔离：其他部门主管只能查看自己部门的员工
         log.info("应用部门权限过滤，只返回部门ID: {} 的员工", currentUserDeptId);
         return employeeMapper.findEmployeesWithDeptInfoByDeptId(currentUserDeptId);
+    }
+
+    /**
+     * 永久删除员工（仅限已禁用的员工）
+     */
+    @Override
+    @Transactional
+    public void deleteEmp(Long id) {
+        log.info("尝试删除员工，ID: {}", id);
+        
+        // 检查员工是否存在
+        Employee employee = employeeMapper.getById(id.intValue());
+        if (employee == null) {
+            throw new BaseException("员工不存在");
+        }
+        
+        // 检查员工是否已禁用，只能删除已禁用的员工
+        if (employee.getStatus() == null || employee.getStatus()) {
+            throw new BaseException("只能删除已禁用的员工，请先禁用该员工");
+        }
+        
+        // 如果是导游，同时删除导游表中的记录
+        if (employee.getRole() != null && employee.getRole().contains("导游")) {
+            Guide guide = guideMapper.getGuideByEmployeeId(employee.getId());
+            if (guide != null) {
+                log.info("删除导游记录，导游ID: {}", guide.getGuideId());
+                guideMapper.deleteGuide(guide.getGuideId());
+            }
+        }
+        
+        // 删除员工
+        employeeMapper.deleteById(id);
+        log.info("成功删除员工，ID: {}, 姓名: {}", id, employee.getName());
     }
 }

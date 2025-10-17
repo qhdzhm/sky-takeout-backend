@@ -264,12 +264,44 @@ public class JwtTokenUserInterceptor implements HandlerInterceptor {
      */
     private String getTokenFromCookie(HttpServletRequest request) {
         if (request.getCookies() != null) {
+            // 🔍 详细记录所有Cookie
+            StringBuilder cookieList = new StringBuilder();
+            String authToken = null;
+            String refreshToken = null;
+            
             for (Cookie cookie : request.getCookies()) {
-                if ("authToken".equals(cookie.getName())) {
-                    log.debug("从Cookie中找到authToken");
-                    return cookie.getValue();
+                cookieList.append(cookie.getName()).append(", ");
+                
+                // 优先查找 authToken
+                if ("authToken".equals(cookie.getName()) || 
+                    "token".equals(cookie.getName()) ||
+                    "userToken".equals(cookie.getName()) ||
+                    "jwt".equals(cookie.getName())) {
+                    authToken = cookie.getValue();
+                    log.info("✅ 从Cookie中找到认证token: {}", cookie.getName());
+                }
+                
+                // 也记录 refreshToken（作为备用）
+                if ("refreshToken".equals(cookie.getName())) {
+                    refreshToken = cookie.getValue();
+                    log.info("🔄 从Cookie中找到refreshToken");
                 }
             }
+            
+            // 如果有 authToken，优先使用
+            if (authToken != null) {
+                return authToken;
+            }
+            
+            // 如果没有 authToken 但有 refreshToken，使用 refreshToken
+            if (refreshToken != null) {
+                log.info("⚡ authToken已过期，使用refreshToken进行认证");
+                return refreshToken;
+            }
+            
+            log.warn("❌ 未找到认证token Cookie，所有Cookie: [{}]", cookieList.toString());
+        } else {
+            log.warn("❌ 请求中没有任何Cookie");
         }
         return null;
     }

@@ -411,6 +411,24 @@ public class GuideAssignmentController {
     }
 
     /**
+     * 获取当天已分配的导游和车辆列表（用于酒店摆渡分配）
+     */
+    @GetMapping("/active-for-shuttle")
+    @ApiOperation("获取当天活跃的导游和车辆（用于摆渡分配）")
+    public Result<Map<String, Object>> getActiveResourcesForShuttle(
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
+        log.info("获取当天活跃的导游和车辆：日期={}", date);
+        
+        try {
+            Map<String, Object> resources = assignmentService.getActiveResourcesForShuttle(date);
+            return Result.success(resources);
+        } catch (Exception e) {
+            log.error("获取活跃导游车辆失败：{}", e.getMessage(), e);
+            return Result.error("获取活跃导游车辆失败");
+        }
+    }
+
+    /**
      * 分配状态响应VO
      */
     public static class AssignmentStatusVO {

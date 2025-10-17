@@ -335,4 +335,9 @@ public class TourScheduleOrder implements Serializable {
      * 车辆信息 (来自tour_guide_vehicle_assignment表)
      */
     private String vehicleInfo;
+    
+    /**
+     * 当天目的地 (来自tour_guide_vehicle_assignment表)
+     */
+    private String tourDestination;
 } 

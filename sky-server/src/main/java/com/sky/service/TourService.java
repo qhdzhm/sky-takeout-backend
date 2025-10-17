@@ -95,4 +95,12 @@ public interface TourService {
      * @return 适合人群列表
      */
     List<Map<String, Object>> getSuitableForByTourId(Integer tourId, String tourType);
+
+    /**
+     * 获取基于订单统计的热门产品
+     * @param days 统计天数
+     * @param limit 限制数量
+     * @return 热门产品列表（包含一日游和多日游）
+     */
+    List<Map<String, Object>> getPopularToursByOrders(Integer days, Integer limit);
 }

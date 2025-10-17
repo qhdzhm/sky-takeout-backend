@@ -198,6 +198,22 @@ public class TourController {
     }
 
     /**
+     * 获取基于订单统计的热门产品（近7天）
+     * @param days 统计天数，默认7天
+     * @param limit 限制数量，默认6个
+     * @return 热门产品列表
+     */
+    @GetMapping("/popular-by-orders")
+    @ApiOperation("获取基于订单统计的热门产品")
+    public Result<List<Map<String, Object>>> getPopularToursByOrders(
+            @RequestParam(defaultValue = "7") Integer days,
+            @RequestParam(defaultValue = "6") Integer limit) {
+        log.info("获取基于订单统计的热门产品，统计天数：{}，限制数量：{}", days, limit);
+        List<Map<String, Object>> tours = tourService.getPopularToursByOrders(days, limit);
+        return Result.success(tours);
+    }
+
+    /**
      * 获取推荐一日游
      * @param limit 限制数量
      * @return 推荐一日游列表

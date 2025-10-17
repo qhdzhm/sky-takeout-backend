@@ -121,8 +121,15 @@ public class TourGuideVehicleAssignmentServiceImpl implements TourGuideVehicleAs
         log.info("导游信息获取成功：{}", guide.getName());
 
         // 2. 检查导游可用性（使用guide_id）
-        if (checkGuideAssigned(guide.getGuideId().longValue(), assignmentDTO.getAssignmentDate())) {
+        // 🚌 酒店摆渡任务允许与正常行程共存，跳过唯一性检查
+        boolean isShuttleTask = assignmentDTO.getDestination() != null && assignmentDTO.getDestination().contains("酒店摆渡");
+        
+        if (!isShuttleTask && checkGuideAssigned(guide.getGuideId().longValue(), assignmentDTO.getAssignmentDate())) {
             throw new BaseException("导游在指定日期已有分配，无法重复分配");
+        }
+        
+        if (isShuttleTask) {
+            log.info("🚌 酒店摆渡任务，允许导游在同一天多次分配");
         }
 
         // 3. 获取车辆详细信息
@@ -135,7 +142,21 @@ public class TourGuideVehicleAssignmentServiceImpl implements TourGuideVehicleAs
         log.info("车辆信息获取成功：{}", vehicle.getLicensePlate());
 
         // 4. 完整的车辆可用性检查（按优先级检查）
-        checkVehicleAvailabilityForAssignment(vehicle, assignmentDTO.getAssignmentDate(), assignmentDTO.getTotalPeople());
+        // 🚌 酒店摆渡任务跳过重复分配检查
+        if (!isShuttleTask) {
+            checkVehicleAvailabilityForAssignment(vehicle, assignmentDTO.getAssignmentDate(), assignmentDTO.getTotalPeople());
+        } else {
+            // 摆渡任务只检查基础状态和座位数
+            checkVehicleBasicStatus(vehicle, assignmentDTO.getAssignmentDate());
+            
+            // 检查座位数
+            if (vehicle.getSeatCount() != null && vehicle.getSeatCount() < assignmentDTO.getTotalPeople()) {
+                throw new BaseException(String.format("车辆座位数不足，需要%d人，车辆只有%d座", 
+                        assignmentDTO.getTotalPeople(), vehicle.getSeatCount()));
+            }
+            
+            log.info("🚌 酒店摆渡任务，跳过车辆分配唯一性检查");
+        }
 
         // 6. 构建分配实体
         log.info("开始构建分配实体");
@@ -494,12 +515,19 @@ public class TourGuideVehicleAssignmentServiceImpl implements TourGuideVehicleAs
         boolean guideChanged = !existingAssignment.getGuide().getGuideId().equals(guide.getGuideId().longValue());
         boolean vehicleChanged = !existingAssignment.getVehicle().getVehicleId().equals(assignmentDTO.getVehicleId());
 
-        // 如果导游或车辆发生变化，需要检查新资源的可用性
-        if (guideChanged && checkGuideAssigned(guide.getGuideId().longValue(), assignmentDTO.getAssignmentDate())) {
-            throw new BaseException("导游在指定日期已有分配，无法重复分配");
+        // 🚌 酒店摆渡任务允许与正常行程共存
+        boolean isShuttleTask = assignmentDTO.getDestination() != null && assignmentDTO.getDestination().contains("酒店摆渡");
+
+        // 如果导游或车辆发生变化，需要检查新资源的可用性（摆渡任务除外）
+        if (!isShuttleTask) {
+            if (guideChanged && checkGuideAssigned(guide.getGuideId().longValue(), assignmentDTO.getAssignmentDate())) {
+                throw new BaseException("导游在指定日期已有分配，无法重复分配");
             }
-        if (vehicleChanged && checkVehicleAssigned(assignmentDTO.getVehicleId(), assignmentDTO.getAssignmentDate())) {
-            throw new BaseException("车辆在指定日期已有分配，无法重复分配");
+            if (vehicleChanged && checkVehicleAssigned(assignmentDTO.getVehicleId(), assignmentDTO.getAssignmentDate())) {
+                throw new BaseException("车辆在指定日期已有分配，无法重复分配");
+            }
+        } else {
+            log.info("🚌 酒店摆渡任务更新，允许导游和车辆在同一天多次分配");
         }
 
         // 构建更新实体
@@ -705,12 +733,19 @@ public class TourGuideVehicleAssignmentServiceImpl implements TourGuideVehicleAs
             guideVehicleDateCombinations.add(guideKey);
             guideVehicleDateCombinations.add(vehicleKey);
 
-            // 检查现有分配（使用guide_id）
-            if (checkGuideAssigned(guide.getGuideId().longValue(), dto.getAssignmentDate())) {
-                throw new BaseException("导游在 " + dto.getAssignmentDate() + " 已有分配");
-            }
-            if (checkVehicleAssigned(dto.getVehicleId(), dto.getAssignmentDate())) {
-                throw new BaseException("车辆在 " + dto.getAssignmentDate() + " 已有分配");
+            // 🚌 酒店摆渡任务允许与正常行程共存，跳过唯一性检查
+            boolean isShuttleTask = dto.getDestination() != null && dto.getDestination().contains("酒店摆渡");
+            
+            if (!isShuttleTask) {
+                // 只对非摆渡任务进行唯一性检查
+                if (checkGuideAssigned(guide.getGuideId().longValue(), dto.getAssignmentDate())) {
+                    throw new BaseException("导游在 " + dto.getAssignmentDate() + " 已有分配");
+                }
+                if (checkVehicleAssigned(dto.getVehicleId(), dto.getAssignmentDate())) {
+                    throw new BaseException("车辆在 " + dto.getAssignmentDate() + " 已有分配");
+                }
+            } else {
+                log.info("🚌 酒店摆渡任务，允许导游和车辆在同一天多次分配");
             }
         }
     }
@@ -934,5 +969,69 @@ public class TourGuideVehicleAssignmentServiceImpl implements TourGuideVehicleAs
             default:
                 return "未知状态(" + status + ")";
         }
+    }
+
+    /**
+     * 获取当天已分配的导游和车辆列表（用于酒店摆渡分配）
+     */
+    @Override
+    public Map<String, Object> getActiveResourcesForShuttle(LocalDate date) {
+        log.info("🚌 获取当天活跃的导游和车辆：日期={}", date);
+        
+        // 1. 查询当天所有导游车辆分配记录
+        List<TourGuideVehicleAssignmentVO> assignments = assignmentMapper.getByDate(date);
+        log.info("📊 当天共有 {} 条分配记录", assignments.size());
+        
+        // 2. 提取去重后的导游列表（已带团的导游）
+        List<Map<String, Object>> activeGuides = new ArrayList<>();
+        Set<Long> processedGuideIds = new HashSet<>();
+        
+        for (TourGuideVehicleAssignmentVO assignment : assignments) {
+            if (assignment.getGuide() != null) {
+                Long guideId = assignment.getGuide().getGuideId();
+                if (guideId != null && !processedGuideIds.contains(guideId)) {
+                    Map<String, Object> guideInfo = new java.util.HashMap<>();
+                    guideInfo.put("id", guideId);
+                    guideInfo.put("name", assignment.getGuide().getGuideName());
+                    guideInfo.put("destination", assignment.getDestination()); // 当天去的地点
+                    if (assignment.getVehicle() != null) {
+                        guideInfo.put("vehicle", assignment.getVehicle().getLicensePlate()); // 当天使用的车辆
+                    }
+                    activeGuides.add(guideInfo);
+                    processedGuideIds.add(guideId);
+                }
+            }
+        }
+        
+        // 3. 提取去重后的车辆列表（已使用的车辆）
+        List<Map<String, Object>> activeVehicles = new ArrayList<>();
+        Set<Long> processedVehicleIds = new HashSet<>();
+        
+        for (TourGuideVehicleAssignmentVO assignment : assignments) {
+            if (assignment.getVehicle() != null) {
+                Long vehicleId = assignment.getVehicle().getVehicleId();
+                if (vehicleId != null && !processedVehicleIds.contains(vehicleId)) {
+                    Map<String, Object> vehicleInfo = new java.util.HashMap<>();
+                    vehicleInfo.put("id", vehicleId);
+                    vehicleInfo.put("licensePlate", assignment.getVehicle().getLicensePlate());
+                    vehicleInfo.put("vehicleType", assignment.getVehicle().getVehicleType());
+                    vehicleInfo.put("seatingCapacity", assignment.getVehicle().getSeatCount());
+                    if (assignment.getGuide() != null) {
+                        vehicleInfo.put("guideName", assignment.getGuide().getGuideName()); // 当天使用的导游
+                    }
+                    vehicleInfo.put("destination", assignment.getDestination()); // 当天去的地点
+                    activeVehicles.add(vehicleInfo);
+                    processedVehicleIds.add(vehicleId);
+                }
+            }
+        }
+        
+        log.info("✅ 提取完成：活跃导游 {} 人，活跃车辆 {} 辆", activeGuides.size(), activeVehicles.size());
+        
+        // 4. 返回结果
+        Map<String, Object> result = new java.util.HashMap<>();
+        result.put("activeGuides", activeGuides);
+        result.put("activeVehicles", activeVehicles);
+        return result;
     }
 } 

@@ -72,4 +72,7 @@ public class Tour implements Serializable {
     
     /** 地区名称（非数据库字段，关联查询） */
     private String regionName;
+    
+    /** 包含项目（非数据库字段，从tour_inclusions表关联查询） */
+    private String inclusions;
 } 

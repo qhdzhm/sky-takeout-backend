@@ -1,6 +1,7 @@
 package com.sky.mapper;
 
 import com.sky.entity.TicketBooking;
+import com.sky.vo.TicketBookingVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -194,5 +195,12 @@ public interface TicketBookingMapper {
      */
     List<TicketBooking> getByTicketSpecialist(@Param("ticketSpecialist") String ticketSpecialist,
                                              @Param("bookingStatus") String bookingStatus);
+    
+    /**
+     * 根据旅游订单ID查询票务预订详细信息（包含景点信息）
+     * @param tourBookingId 旅游订单ID
+     * @return 票务预订详细信息列表
+     */
+    List<TicketBookingVO> getByTourBookingIdWithDetails(Long tourBookingId);
 }
 

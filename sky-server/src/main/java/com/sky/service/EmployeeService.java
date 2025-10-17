@@ -45,4 +45,9 @@ public interface EmployeeService {
      * 获取所有员工详细信息（包含部门职位信息）
      */
     java.util.List<EmployeeWithDeptVO> getAllEmployeesWithDeptInfo();
+
+    /**
+     * 永久删除员工（仅限已禁用的员工）
+     */
+    void deleteEmp(Long id);
 }

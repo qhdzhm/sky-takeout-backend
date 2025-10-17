@@ -115,6 +115,7 @@
         SELECT 
             hb.id,
             hb.booking_reference AS bookingReference,
+            hb.hotel_booking_number AS hotelBookingNumber,
             hb.tour_booking_id AS tourBookingId,
             h.hotel_name AS hotelName,
             h.hotel_level AS hotelLevel,

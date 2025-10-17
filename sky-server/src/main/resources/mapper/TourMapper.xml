@@ -108,44 +108,154 @@
     <!-- 获取热门一日游 -->
     <select id="getHotDayTours" resultType="com.sky.entity.Tour">
         SELECT 
-            day_tour_id as id, name, description, price, duration as duration, location, 
-            departure_address, guide_fee, rating, category,
-            image_url as cover_image, 'day_tour' as tour_type
-        FROM day_tours
-        ORDER BY rating DESC, day_tour_id DESC
+            dt.day_tour_id as id, 
+            dt.name, 
+            dt.description, 
+            dt.price, 
+            dt.duration as duration, 
+            dt.location, 
+            dt.departure_address, 
+            dt.guide_fee, 
+            dt.rating, 
+            dt.category,
+            dt.image_url as cover_image, 
+            'day_tour' as tour_type,
+            GROUP_CONCAT(dti.description SEPARATOR '；') as inclusions
+        FROM day_tours dt
+        LEFT JOIN day_tour_inclusions dti ON dt.day_tour_id = dti.day_tour_id
+        GROUP BY dt.day_tour_id
+        ORDER BY dt.rating DESC, dt.day_tour_id DESC
         LIMIT #{limit}
     </select>
 
     <!-- 获取热门跟团游 -->
     <select id="getHotGroupTours" resultType="com.sky.entity.Tour">
         SELECT 
-            group_tour_id as id, title as name, description, price, duration as duration, location, 
-            departure_address, guide_fee, rating, category,
-            image_url as cover_image, 'group_tour' as tour_type
-        FROM group_tours
-        ORDER BY rating DESC, group_tour_id DESC
+            gt.group_tour_id as id, 
+            gt.title as name, 
+            gt.description, 
+            gt.price, 
+            gt.duration as duration, 
+            gt.location, 
+            gt.departure_address, 
+            gt.guide_fee, 
+            gt.rating, 
+            gt.category,
+            gt.image_url as cover_image, 
+            'group_tour' as tour_type,
+            GROUP_CONCAT(ti.description SEPARATOR '；') as inclusions
+        FROM group_tours gt
+        LEFT JOIN tour_inclusions ti ON gt.group_tour_id = ti.group_tour_id
+        GROUP BY gt.group_tour_id
+        ORDER BY gt.rating DESC, gt.group_tour_id DESC
         LIMIT #{limit}
     </select>
 
     <!-- 获取推荐一日游 -->
     <select id="getRecommendedDayTours" resultType="com.sky.entity.Tour">
         SELECT 
-            day_tour_id as id, name, description, price, duration as duration, location, 
-            departure_address, guide_fee, rating, category,
-            image_url as cover_image, 'day_tour' as tour_type
-        FROM day_tours
-        ORDER BY day_tour_id DESC
+            dt.day_tour_id as id, 
+            dt.name, 
+            dt.description, 
+            dt.price, 
+            dt.duration as duration, 
+            dt.location, 
+            dt.departure_address, 
+            dt.guide_fee, 
+            dt.rating, 
+            dt.category,
+            dt.image_url as cover_image, 
+            'day_tour' as tour_type,
+            GROUP_CONCAT(dti.description SEPARATOR '；') as inclusions
+        FROM day_tours dt
+        LEFT JOIN day_tour_inclusions dti ON dt.day_tour_id = dti.day_tour_id
+        GROUP BY dt.day_tour_id
+        ORDER BY dt.day_tour_id DESC
         LIMIT #{limit}
     </select>
 
     <!-- 获取推荐跟团游 -->
     <select id="getRecommendedGroupTours" resultType="com.sky.entity.Tour">
         SELECT 
-            group_tour_id as id, title as name, description, price, duration as duration, location, 
-            departure_address, guide_fee, rating, category,
-            image_url as cover_image, 'group_tour' as tour_type
-        FROM group_tours
-        ORDER BY group_tour_id DESC
+            gt.group_tour_id as id, 
+            gt.title as name, 
+            gt.description, 
+            gt.price, 
+            gt.duration as duration, 
+            gt.location, 
+            gt.departure_address, 
+            gt.guide_fee, 
+            gt.rating, 
+            gt.category,
+            gt.image_url as cover_image, 
+            'group_tour' as tour_type,
+            GROUP_CONCAT(ti.description SEPARATOR '；') as inclusions
+        FROM group_tours gt
+        LEFT JOIN tour_inclusions ti ON gt.group_tour_id = ti.group_tour_id
+        GROUP BY gt.group_tour_id
+        ORDER BY gt.group_tour_id DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 获取基于订单统计的热门产品（近N天） -->
+    <select id="getPopularToursByOrders" resultType="java.util.Map">
+        SELECT 
+            tour_data.id,
+            tour_data.name,
+            tour_data.coverImage,
+            tour_data.image,
+            tour_data.bannerImage,
+            tour_data.price,
+            tour_data.duration,
+            tour_data.location,
+            tour_data.rating,
+            tour_data.tourType,
+            COALESCE(order_counts.order_count, 0) as orderCount
+        FROM (
+            -- 一日游数据：显示 location
+            SELECT 
+                day_tour_id as id,
+                location as name,
+                image_url as coverImage,
+                image_url as image,
+                banner_image as bannerImage,
+                price,
+                duration,
+                location,
+                rating,
+                'day_tour' as tourType
+            FROM day_tours
+            
+            UNION ALL
+            
+            -- 多日游数据：显示 short_title
+            SELECT 
+                group_tour_id as id,
+                COALESCE(short_title, title) as name,
+                image_url as coverImage,
+                image_url as image,
+                banner_image as bannerImage,
+                price,
+                duration,
+                location,
+                rating,
+                'group_tour' as tourType
+            FROM group_tours
+        ) as tour_data
+        LEFT JOIN (
+            -- 统计近N天订单数量
+            SELECT 
+                tour_id,
+                tour_type,
+                COUNT(*) as order_count
+            FROM tour_bookings
+            WHERE booking_date >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+                AND status != 'cancelled'
+            GROUP BY tour_id, tour_type
+        ) as order_counts 
+        ON tour_data.id = order_counts.tour_id 
+        AND tour_data.tourType = order_counts.tour_type
+        ORDER BY order_counts.order_count DESC, tour_data.rating DESC, tour_data.id DESC
         LIMIT #{limit}
     </select>
 

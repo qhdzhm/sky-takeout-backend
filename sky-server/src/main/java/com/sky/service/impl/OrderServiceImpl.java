@@ -26,6 +26,7 @@ import com.sky.service.DayTourService;
 import com.sky.service.NotificationService;
 import com.sky.service.TourBookingService;
 import com.sky.service.TourScheduleOrderService;
+import com.sky.service.AgentCreditService;
 import com.sky.vo.OrderVO;
 import com.sky.vo.PageResultVO;
 import lombok.extern.slf4j.Slf4j;
@@ -51,8 +52,11 @@ import com.sky.vo.PassengerVO;
 import com.sky.mapper.DayTourMapper;
 import com.sky.mapper.GroupTourMapper;
 import com.sky.mapper.TourItineraryMapper;
+import com.sky.mapper.PaymentAuditLogMapper;
 import com.sky.entity.DayTour;
 import com.sky.entity.GroupTour;
+import com.sky.entity.PaymentAuditLog;
+import java.math.BigDecimal;
 
 /**
  * 订单服务实现类
@@ -104,7 +108,19 @@ public class OrderServiceImpl implements OrderService {
     private TourScheduleOrderService tourScheduleOrderService;
 
     @Autowired
-    private TourBookingService tourBookingService; // 新注入
+    private TourBookingService tourBookingService;
+    
+    @Autowired
+    private AgentCreditService agentCreditService;
+    
+    @Autowired
+    private PaymentAuditLogMapper paymentAuditLogMapper;
+    
+    @Autowired
+    private com.sky.service.HotelBookingService hotelBookingService;
+    
+    @Autowired
+    private com.sky.mapper.TicketBookingMapper ticketBookingMapper;
 
     /**
      * 分页查询订单
@@ -177,6 +193,32 @@ public class OrderServiceImpl implements OrderService {
                 });
             } else {
                 log.warn("订单 {} 没有关联的乘客信息", bookingId);
+            }
+            
+            // 🏨 新增：获取酒店预定信息
+            try {
+                List<com.sky.vo.HotelBookingVO> hotelBookings = hotelBookingService.getByTourBookingIdWithDetails(bookingId);
+                if (hotelBookings != null && !hotelBookings.isEmpty()) {
+                    log.info("✅ 成功获取订单 {} 的酒店预定信息，共 {} 个酒店", bookingId, hotelBookings.size());
+                    orderVO.setHotelBookings(hotelBookings);
+                } else {
+                    log.info("ℹ️ 订单 {} 没有关联的酒店预定信息", bookingId);
+                }
+            } catch (Exception e) {
+                log.error("❌ 获取订单 {} 的酒店预定信息失败: {}", bookingId, e.getMessage(), e);
+            }
+            
+            // 🎫 新增：获取票务预订信息
+            try {
+                List<com.sky.vo.TicketBookingVO> ticketBookings = ticketBookingMapper.getByTourBookingIdWithDetails(Long.valueOf(bookingId));
+                if (ticketBookings != null && !ticketBookings.isEmpty()) {
+                    log.info("✅ 成功获取订单 {} 的票务预订信息，共 {} 个景点票务", bookingId, ticketBookings.size());
+                    orderVO.setTicketBookings(ticketBookings);
+                } else {
+                    log.info("ℹ️ 订单 {} 没有关联的票务预订信息", bookingId);
+                }
+            } catch (Exception e) {
+                log.error("❌ 获取订单 {} 的票务预订信息失败: {}", bookingId, e.getMessage(), e);
             }
             
             // 🔥 新增：获取用户在tour_schedule_order表中的具体行程选择
@@ -655,13 +697,68 @@ public class OrderServiceImpl implements OrderService {
             }
         }
         
-        // 🗑️ 检测订单状态变化：如果订单状态变为"已取消"，删除排团表数据
+        // 🔄 检测从已取消状态恢复订单
         if (result > 0 && StringUtils.hasText(orderUpdateDTO.getStatus())) {
             String newStatus = orderUpdateDTO.getStatus();
             
+            // 🆕 检测从已取消恢复到其他状态
+            if ("cancelled".equals(originalStatus) && !"cancelled".equals(newStatus)) {
+                log.warn("⚠️ 管理后台检测到订单从已取消状态恢复，订单ID: {}, 新状态: {}", bookingId, newStatus);
+                
+                // 如果原订单支付状态是已退款，警告管理员
+                if ("refunded".equals(originalPaymentStatus)) {
+                    log.warn("⚠️ 警告：订单ID {} 之前已退款，现在恢复订单可能需要重新收款", bookingId);
+                    
+                    // 创建通知提醒管理员
+                    try {
+                        String customerName = existingOrder.getContactPerson() != null ? 
+                                            existingOrder.getContactPerson() : "订单" + bookingId;
+                        notificationService.createOrderModifyNotification(
+                            Long.valueOf(bookingId),
+                            customerName,
+                            "订单从已取消状态恢复，之前已退款，请注意核实收款情况"
+                        );
+                    } catch (Exception e) {
+                        log.error("❌ 发送订单恢复通知失败: {}", e.getMessage(), e);
+                    }
+                }
+                
+                log.info("ℹ️ 订单已从已取消状态恢复为: {}, 订单ID: {}", newStatus, bookingId);
+            }
+            
+            // 🗑️ 检测订单状态变化：如果订单状态变为"已取消"，删除排团表数据 + 自动退款
             if ("cancelled".equals(newStatus) && !"cancelled".equals(originalStatus)) {
                 try {
-                    log.warn("⚠️ 管理后台检测到订单状态变为已取消，开始清理排团表数据，订单ID: {}", bookingId);
+                    log.warn("⚠️ 管理后台检测到订单状态变为已取消，订单ID: {}", bookingId);
+                    
+                    // 🆕 如果订单已支付，执行自动退款
+                    if ("paid".equals(originalPaymentStatus)) {
+                        log.info("💰 订单已支付，开始自动退款流程，订单ID: {}", bookingId);
+                        
+                        try {
+                            // 执行自动退款
+                            boolean refundSuccess = processAutomaticRefund(bookingId, existingOrder);
+                            
+                            if (refundSuccess) {
+                                log.info("✅ 自动退款成功，订单ID: {}", bookingId);
+                                
+                                // 更新订单支付状态为已退款
+                                TourBooking refundUpdate = new TourBooking();
+                                refundUpdate.setBookingId(bookingId);
+                                refundUpdate.setPaymentStatus("refunded");
+                                refundUpdate.setUpdatedAt(LocalDateTime.now());
+                                orderMapper.update(refundUpdate);
+                                
+                                log.info("✅ 订单支付状态已更新为已退款，订单ID: {}", bookingId);
+                            } else {
+                                log.error("❌ 自动退款失败，订单ID: {}", bookingId);
+                                throw new BusinessException("订单取消失败：退款处理失败");
+                            }
+                        } catch (Exception refundError) {
+                            log.error("❌ 自动退款异常，订单ID: {}, 错误: {}", bookingId, refundError.getMessage(), refundError);
+                            throw new BusinessException("订单取消失败：" + refundError.getMessage());
+                        }
+                    }
                     
                     // 删除排团表中的相关记录
                     tourScheduleOrderMapper.deleteByBookingId(bookingId);
@@ -671,9 +768,12 @@ public class OrderServiceImpl implements OrderService {
                     log.info("📝 管理后台订单状态变化日志：订单ID={}, 原状态={}, 新状态={}, 已清理排团表数据", 
                             bookingId, originalStatus, newStatus);
                             
+                } catch (BusinessException be) {
+                    // 业务异常需要抛出，阻止订单取消
+                    throw be;
                 } catch (Exception e) {
                     log.error("❌ 管理后台清理排团表数据失败（订单已取消）: 订单ID={}, 错误: {}", bookingId, e.getMessage(), e);
-                    // 不抛出异常，避免影响订单状态更新
+                    throw new BusinessException("订单取消失败：" + e.getMessage());
                 }
             }
         }
@@ -1505,5 +1605,113 @@ public class OrderServiceImpl implements OrderService {
         // 去掉"第n天: "或"第n天-"前缀
         String result = title.replaceAll("^第\\d+天[:\\-]\\s*", "");
         return result.trim();
+    }
+
+    /**
+     * 自动退款处理（订单取消时）
+     * 
+     * @param bookingId 订单ID
+     * @param orderVO 订单信息
+     * @return 是否成功
+     */
+    private boolean processAutomaticRefund(Integer bookingId, OrderVO orderVO) {
+        log.info("🔄 开始处理订单取消退款，订单ID: {}, 订单号: {}", bookingId, orderVO.getOrderNumber());
+        
+        try {
+            BigDecimal refundAmount = orderVO.getTotalPrice();
+            if (refundAmount == null || refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                log.warn("⚠️ 订单金额无效，无需退款，订单ID: {}", bookingId);
+                return true;
+            }
+            
+            // 判断订单类型：代理商订单或普通用户订单
+            if (orderVO.getAgentId() != null && orderVO.getAgentId() > 0) {
+                // 代理商订单 - 退款到代理商信用账户
+                log.info("💰 代理商订单退款，代理商ID: {}, 退款金额: {}", orderVO.getAgentId(), refundAmount);
+                
+                try {
+                    boolean creditRefundSuccess = agentCreditService.addCredit(
+                        Long.valueOf(orderVO.getAgentId()),
+                        refundAmount,
+                        String.format("订单取消自动退款：订单号 %s", orderVO.getOrderNumber())
+                    );
+                    
+                    if (!creditRefundSuccess) {
+                        log.error("❌ 代理商信用账户退款失败，代理商ID: {}", orderVO.getAgentId());
+                        return false;
+                    }
+                    
+                    // 记录退款审计日志
+                    PaymentAuditLog auditLog = PaymentAuditLog.builder()
+                            .agentId(Long.valueOf(orderVO.getAgentId()))
+                            .action("refund")
+                            .bookingId(bookingId)
+                            .orderNumber(orderVO.getOrderNumber())
+                            .amount(refundAmount)
+                            .note(String.format("订单取消自动退款（管理员操作）"))
+                            .createdAt(LocalDateTime.now())
+                            .build();
+                    
+                    paymentAuditLogMapper.insert(auditLog);
+                    log.info("✅ 代理商信用账户退款成功，代理商ID: {}, 退款金额: {}", orderVO.getAgentId(), refundAmount);
+                    
+                    // 发送退款通知给代理商
+                    try {
+                        notificationService.createAgentOrderChangeNotification(
+                            Long.valueOf(orderVO.getAgentId()),
+                            orderVO.getOperatorId(),
+                            Long.valueOf(bookingId),
+                            orderVO.getOrderNumber(),
+                            "订单取消退款",
+                            String.format("您的订单 %s 已取消，退款 ¥%.2f 已自动退回信用账户", 
+                                        orderVO.getOrderNumber(), refundAmount)
+                        );
+                    } catch (Exception ne) {
+                        log.error("❌ 发送代理商退款通知失败: {}", ne.getMessage(), ne);
+                    }
+                    
+                    return true;
+                    
+                } catch (Exception e) {
+                    log.error("❌ 代理商信用账户退款异常: {}", e.getMessage(), e);
+                    return false;
+                }
+                
+            } else if (orderVO.getUserId() != null && orderVO.getUserId() > 0) {
+                // 普通用户订单 - 暂时记录退款请求，需要人工处理
+                log.info("💰 普通用户订单退款，用户ID: {}, 退款金额: {}（需要人工处理）", 
+                        orderVO.getUserId(), refundAmount);
+                
+                try {
+                    // 创建退款申请通知
+                    String customerName = orderVO.getContactPerson() != null ? 
+                                        orderVO.getContactPerson() : "用户" + orderVO.getUserId();
+                    
+                    notificationService.createRefundRequestNotification(
+                        Long.valueOf(bookingId),
+                        customerName,
+                        refundAmount.doubleValue()
+                    );
+                    
+                    log.info("✅ 已创建普通用户退款申请通知，订单ID: {}", bookingId);
+                    
+                    // 对于普通用户，暂时返回成功，但需要人工审核
+                    // 可以考虑在这里调用第三方支付平台的退款API
+                    return true;
+                    
+                } catch (Exception e) {
+                    log.error("❌ 创建普通用户退款申请失败: {}", e.getMessage(), e);
+                    return false;
+                }
+                
+            } else {
+                log.warn("⚠️ 订单既没有代理商ID也没有用户ID，无法确定退款对象，订单ID: {}", bookingId);
+                return false;
+            }
+            
+        } catch (Exception e) {
+            log.error("❌ 自动退款处理失败，订单ID: {}, 错误: {}", bookingId, e.getMessage(), e);
+            return false;
+        }
     }
 } 

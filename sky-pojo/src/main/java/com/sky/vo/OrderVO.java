@@ -77,4 +77,17 @@ public class OrderVO {
     
     @ApiModelProperty("乘客列表")
     private List<PassengerVO> passengers;
+    
+    @ApiModelProperty("酒店预定信息列表")
+    private List<HotelBookingVO> hotelBookings;
+    
+    @ApiModelProperty("票务预订信息列表")
+    private List<TicketBookingVO> ticketBookings;
+    
+    // 🆕 预订状态标记（用于订单列表快速显示）
+    @ApiModelProperty("是否有酒店预订")
+    private Boolean hasHotelBooking;
+    
+    @ApiModelProperty("是否有票务预订")
+    private Boolean hasTicketBooking;
 } 

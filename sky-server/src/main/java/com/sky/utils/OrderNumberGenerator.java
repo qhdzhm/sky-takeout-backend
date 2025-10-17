@@ -93,7 +93,7 @@ public class OrderNumberGenerator {
     }
     
     /**
-     * 生成带代理商前缀的订单号
+     * 生成带代理商前缀的订单号（使用公司名）
      * 格式: 代理商前缀(3位) + 日期 + 4位序列号 + 2位随机数
      * 例如: ljy202503150001XX（领君游）
      * @param agentCompanyName 代理商公司名
@@ -121,6 +121,75 @@ public class OrderNumberGenerator {
         
         // 组合订单号: 代理商前缀 + 日期 + 序列号(4位) + 随机数(2位)
         return String.format("%s%s%04d%02d", agentPrefix, date, sequence, randomNum);
+    }
+    
+    /**
+     * 生成带代理商用户名前缀的订单号（推荐使用）
+     * 格式: 代理商用户名(最多3位) + 日期 + 4位序列号 + 2位随机数
+     * 例如: ray202503150001XX（用户名为ray）
+     * @param agentUsername 代理商用户名
+     * @return 订单号
+     */
+    public static String generateWithAgentUsername(String agentUsername) {
+        // 获取当前日期时间
+        LocalDateTime now = LocalDateTime.now();
+        
+        // 格式化日期
+        String date = now.format(DATE_FORMATTER);
+        
+        // 获取序列号，并重置
+        int sequence = SEQUENCE.getAndIncrement();
+        if (sequence > MAX_SEQUENCE) {
+            SEQUENCE.set(1);
+            sequence = 1;
+        }
+        
+        // 生成两位随机数
+        int randomNum = RANDOM.nextInt(100);
+        
+        // 处理用户名作为前缀（取前3位字符，转大写）
+        String agentPrefix = formatUsername(agentUsername);
+        
+        // 组合订单号: 代理商用户名前缀 + 日期 + 序列号(4位) + 随机数(2位)
+        return String.format("%s%s%04d%02d", agentPrefix, date, sequence, randomNum);
+    }
+    
+    /**
+     * 格式化用户名作为订单号前缀
+     * @param username 用户名
+     * @return 格式化后的前缀（3位大写字母）
+     */
+    private static String formatUsername(String username) {
+        if (username == null || username.trim().isEmpty()) {
+            return PREFIX; // 如果没有用户名，使用默认前缀
+        }
+        
+        String cleanUsername = username.trim();
+        StringBuilder prefix = new StringBuilder();
+        
+        // 只取字母和数字字符，最多3位
+        for (int i = 0; i < cleanUsername.length() && prefix.length() < 3; i++) {
+            char ch = cleanUsername.charAt(i);
+            if (Character.isLetterOrDigit(ch)) {
+                prefix.append(ch);
+            }
+        }
+        
+        // 如果不足3位，用默认前缀补充
+        String result = prefix.toString();
+        if (result.length() < 3) {
+            if (result.isEmpty()) {
+                result = PREFIX; // 没有提取到任何字符时使用默认前缀
+            } else {
+                // 不足3位时，在后面补充默认前缀的字母
+                String defaultSuffix = PREFIX;
+                for (int i = 0; i < defaultSuffix.length() && result.length() < 3; i++) {
+                    result += defaultSuffix.charAt(i);
+                }
+            }
+        }
+        
+        return result.toUpperCase(); // 返回大写形式
     }
     
     /**

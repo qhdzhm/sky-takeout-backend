@@ -25,6 +25,13 @@ public interface EmployeeMapper {
     Employee getByUsername(String username);
 
     /**
+     * 根据用户名查询员工（排除指定ID）
+     * 用于检查用户名是否重复
+     */
+    @Select("SELECT * FROM employees WHERE username = #{username} AND id != #{excludeId}")
+    Employee getByUsernameExcludingId(String username, Long excludeId);
+
+    /**
      * 分页查询员工
      */
     Page<Employee> pageQuery(EmployeePageQueryDTO employeePageQueryDTO);
@@ -62,6 +69,12 @@ public interface EmployeeMapper {
      * @return 影响的行数
      */
     int update(Employee employee);
+
+    /**
+     * 删除员工
+     */
+    @Select("DELETE FROM employees WHERE id = #{id}")
+    void deleteById(Long id);
 
     /**
      * 更新员工的部门和职位（同时更新role为职位名称）

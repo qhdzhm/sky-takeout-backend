@@ -10,7 +10,7 @@ spring:
   datasource:
     druid:
       driver-class-name: ${sky.datasource.driver-class-name}
-      url: jdbc:mysql://${sky.datasource.host}:${sky.datasource.port}/${sky.datasource.database}?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&zeroDateTimeBehavior=convertToNull&useSSL=false&allowPublicKeyRetrieval=true
+      url: jdbc:mysql://${sky.datasource.host}:${sky.datasource.port}/${sky.datasource.database}?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=UTF-8&zeroDateTimeBehavior=convertToNull&useSSL=false&allowPublicKeyRetrieval=true
       username: ${sky.datasource.username}
       password: ${sky.datasource.password}
 
@@ -72,15 +72,15 @@ logging:
 sky:
   jwt:
     admin-secret-key: itcast
-    admin-ttl: 900000     # 15分钟 (15 * 60 * 1000)
+    admin-ttl: 14400000     # 4小时 (4 * 60 * 60 * 1000) - 更合理的工作时长
     admin-token-name: token
 
     user-secret-key: itheima
-    user-ttl: 900000   # 15分钟 (15 * 60 * 1000) 
+    user-ttl: 7200000   # 2小时 (2 * 60 * 60 * 1000) - 用户端可以短一些
     user-token-name: authentication
     
     agent-secret-key: tasmania
-    agent-ttl: 900000   # 15分钟 (15 * 60 * 1000)
+    agent-ttl: 14400000   # 4小时 (4 * 60 * 60 * 1000) - 代理商工作时长
     agent-token-name: agent-token
     
     # Refresh Token配置

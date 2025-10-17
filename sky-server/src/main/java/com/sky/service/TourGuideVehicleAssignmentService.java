@@ -9,6 +9,7 @@ import com.sky.vo.TourGuideVehicleAssignmentVO;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 导游车辆游客分配Service接口
@@ -140,4 +141,10 @@ public interface TourGuideVehicleAssignmentService {
         public List<String> getDestinations() { return destinations; }
         public void setDestinations(List<String> destinations) { this.destinations = destinations; }
     }
+
+    /**
+     * 获取当天已分配的导游和车辆列表（用于酒店摆渡分配）
+     * 返回格式：{ activeGuides: [...], activeVehicles: [...] }
+     */
+    Map<String, Object> getActiveResourcesForShuttle(LocalDate date);
 } 

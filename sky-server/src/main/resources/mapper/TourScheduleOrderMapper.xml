@@ -201,6 +201,7 @@
         SELECT 
             tso.*,
             tgva.guide_name,
+            tgva.destination as tour_destination,
             CONCAT(
                 IFNULL(tgva.license_plate, ''),
                 CASE 
@@ -212,6 +213,13 @@
         FROM tour_schedule_order tso
         LEFT JOIN tour_guide_vehicle_assignment tgva 
             ON tso.tour_date = tgva.assignment_date
+            AND (
+                -- 🔧 修复：使用 tour_schedule_order_ids 正确关联，避免笛卡尔积
+                tgva.tour_schedule_order_ids IS NOT NULL 
+                AND JSON_CONTAINS(tgva.tour_schedule_order_ids, CAST(tso.booking_id AS JSON), '$')
+            )
+            -- 🚌 排除酒店摆渡任务的分配（摆渡是额外任务，不应显示在酒店送客表中）
+            AND (tgva.destination IS NULL OR tgva.destination NOT LIKE '%酒店摆渡%')
         WHERE tso.tour_date = #{tourDate}
         AND tso.dropoff_location LIKE CONCAT('%', #{hotelName}, '%')
         <if test="guideName != null and guideName != ''">

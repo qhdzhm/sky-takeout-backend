@@ -58,6 +58,9 @@
         <result column="user_name" property="userName"/>
         <result column="agent_name" property="agentName"/>
         <result column="operator_name" property="operatorName"/>
+        <!-- 🆕 预订状态标记 -->
+        <result column="has_hotel_booking" property="hasHotelBooking"/>
+        <result column="has_ticket_booking" property="hasTicketBooking"/>
         <!-- 乘客信息集合 -->
         <collection property="passengers" ofType="com.sky.vo.PassengerVO" select="getPassengersByBookingId" column="booking_id"/>
     </resultMap>
@@ -71,7 +74,7 @@
             tb.contact_phone, tb.hotel_level, tb.room_type, tb.hotel_room_count, tb.room_details,
             tb.special_requests, tb.itinerary_details, tb.status, tb.payment_status, tb.total_price,
             tb.selected_optional_tours, tb.created_at, tb.updated_at,
-            tb.group_type, tb.group_size_limit, tb.arrival_departure_time, tb.departure_departure_time, 
+            tb.group_type, tb.group_size_limit, tb.arrival_departure_time,
             tb.hotel_check_in_date, tb.hotel_check_out_date,
             CASE 
                 WHEN tb.tour_type = 'day_tour' THEN dt.name
@@ -90,13 +93,51 @@
             END AS tour_image,
             CONCAT(u.first_name, ' ', u.last_name) AS user_name,
             a.company_name AS agent_name,
-            ao.name AS operator_name
+            ao.name AS operator_name,
+            -- 🆕 预订状态标记（用于订单列表快速显示图标）
+            CASE WHEN hb.hotel_booking_count > 0 THEN TRUE ELSE FALSE END AS has_hotel_booking,
+            CASE WHEN tkb.ticket_booking_count > 0 THEN TRUE ELSE FALSE END AS has_ticket_booking
         FROM tour_bookings tb
         LEFT JOIN day_tours dt ON tb.tour_type = 'day_tour' AND tb.tour_id = dt.day_tour_id
         LEFT JOIN group_tours gt ON tb.tour_type = 'group_tour' AND tb.tour_id = gt.group_tour_id
         LEFT JOIN users u ON tb.user_id = u.user_id
         LEFT JOIN agents a ON tb.agent_id = a.id
         LEFT JOIN agent_operators ao ON tb.operator_id = ao.id
+        -- 🆕 LEFT JOIN 统计酒店预订数量
+        LEFT JOIN (
+            SELECT tour_booking_id, COUNT(*) AS hotel_booking_count
+            FROM hotel_bookings
+            GROUP BY tour_booking_id
+        ) hb ON tb.booking_id = hb.tour_booking_id
+        -- 🆕 LEFT JOIN 统计票务预订数量（支持批量订票：同时查询 tour_booking_id 和 related_order_ids）
+        LEFT JOIN (
+            SELECT 
+                booking_id,
+                SUM(ticket_count) AS ticket_booking_count
+            FROM (
+                -- 直接关联的票务预订
+                SELECT 
+                    tb_inner.booking_id,
+                    COUNT(tk.id) AS ticket_count
+                FROM tour_bookings tb_inner
+                LEFT JOIN ticket_bookings tk ON tb_inner.booking_id = tk.tour_booking_id
+                WHERE tk.id IS NOT NULL
+                GROUP BY tb_inner.booking_id
+                
+                UNION ALL
+                
+                -- 批量订票关联的票务预订（通过 related_order_ids JSON 字段）
+                SELECT 
+                    tb_inner.booking_id,
+                    COUNT(tk.id) AS ticket_count
+                FROM tour_bookings tb_inner
+                CROSS JOIN ticket_bookings tk
+                WHERE tk.related_order_ids IS NOT NULL
+                  AND JSON_CONTAINS(tk.related_order_ids, CAST(tb_inner.booking_id AS JSON), '$')
+                GROUP BY tb_inner.booking_id
+            ) ticket_union
+            GROUP BY booking_id
+        ) tkb ON tb.booking_id = tkb.booking_id
     </sql>
     
     <!-- 查询预订关联的乘客 -->
