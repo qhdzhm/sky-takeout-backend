@@ -18,6 +18,7 @@ import com.sky.mapper.AgentMapper;
 import com.sky.entity.Agent;
 import com.sky.dto.GroupTourDTO;
 import com.sky.entity.DayTour;
+import com.sky.entity.GroupTourDayTourRelation;
 import com.sky.service.PassengerService;
 import com.sky.service.TourBookingService;
 import com.sky.service.AgentCreditService;
@@ -234,25 +235,46 @@ public class TourBookingServiceImpl implements TourBookingService {
         // 将DTO的属性复制到实体中
         BeanUtils.copyProperties(tourBookingDTO, tourBooking);
         
-        // 🆕 处理房型数组：将房型数组转换为JSON字符串存储
-        if (tourBookingDTO.getRoomTypes() != null && !tourBookingDTO.getRoomTypes().isEmpty()) {
-            try {
-                String roomTypesJson = com.alibaba.fastjson.JSON.toJSONString(tourBookingDTO.getRoomTypes());
-                tourBooking.setRoomType(roomTypesJson);
-                log.info("✅ 房型数组转换为JSON存储: {} -> {}", tourBookingDTO.getRoomTypes(), roomTypesJson);
-            } catch (Exception e) {
-                log.warn("⚠️ 房型数组序列化失败，使用第一个房型: {}", e.getMessage());
-                // 降级处理：如果JSON序列化失败，使用第一个房型
-                tourBooking.setRoomType(tourBookingDTO.getRoomTypes().get(0));
-            }
-        } else if (tourBookingDTO.getRoomType() != null) {
-            // 如果没有房型数组但有单个房型，直接使用
-            tourBooking.setRoomType(tourBookingDTO.getRoomType());
-            log.info("使用单个房型: {}", tourBookingDTO.getRoomType());
+        // 🆕 设置includeHotel默认值（如果为null则默认为true）
+        if (tourBooking.getIncludeHotel() == null) {
+            tourBooking.setIncludeHotel(true);
+            log.info("✅ includeHotel为null，设置默认值为true");
         } else {
-            // 默认房型
-            tourBooking.setRoomType("双人间");
-            log.info("使用默认房型: 双人间");
+            log.info("✅ includeHotel已设置为: {}", tourBooking.getIncludeHotel());
+        }
+        
+        // 🆕 如果不包含酒店，清空所有酒店相关字段
+        if (Boolean.FALSE.equals(tourBooking.getIncludeHotel())) {
+            tourBooking.setHotelLevel(null);
+            tourBooking.setRoomType(null);
+            tourBooking.setHotelRoomCount(null);
+            tourBooking.setHotelCheckInDate(null);
+            tourBooking.setHotelCheckOutDate(null);
+            tourBooking.setRoomDetails(null);
+            log.info("🏨 不包含酒店，已清空所有酒店相关字段");
+        }
+        
+        // 🆕 处理房型数组：将房型数组转换为JSON字符串存储（仅在包含酒店时）
+        if (Boolean.TRUE.equals(tourBooking.getIncludeHotel())) {
+            if (tourBookingDTO.getRoomTypes() != null && !tourBookingDTO.getRoomTypes().isEmpty()) {
+                try {
+                    String roomTypesJson = com.alibaba.fastjson.JSON.toJSONString(tourBookingDTO.getRoomTypes());
+                    tourBooking.setRoomType(roomTypesJson);
+                    log.info("✅ 房型数组转换为JSON存储: {} -> {}", tourBookingDTO.getRoomTypes(), roomTypesJson);
+                } catch (Exception e) {
+                    log.warn("⚠️ 房型数组序列化失败，使用第一个房型: {}", e.getMessage());
+                    // 降级处理：如果JSON序列化失败，使用第一个房型
+                    tourBooking.setRoomType(tourBookingDTO.getRoomTypes().get(0));
+                }
+            } else if (tourBookingDTO.getRoomType() != null) {
+                // 如果没有房型数组但有单个房型，直接使用
+                tourBooking.setRoomType(tourBookingDTO.getRoomType());
+                log.info("使用单个房型: {}", tourBookingDTO.getRoomType());
+            } else {
+                // 默认房型
+                tourBooking.setRoomType("双人间");
+                log.info("使用默认房型: 双人间");
+            }
         }
         
         // 确保可选行程数据被正确设置
@@ -441,7 +463,8 @@ public class TourBookingServiceImpl implements TourBookingService {
             null,  // userId参数
             null,  // roomTypes
             null,  // childrenAges
-            tourBookingDTO.getSelectedOptionalTours()   // 使用DTO中的可选行程数据
+            tourBookingDTO.getSelectedOptionalTours(),   // 使用DTO中的可选行程数据
+            tourBooking.getIncludeHotel() != null ? tourBooking.getIncludeHotel() : true  // 是否包含酒店
         );
         
         // 获取总价
@@ -635,7 +658,7 @@ public class TourBookingServiceImpl implements TourBookingService {
                 
             // 使用统一价格计算方法
             Map<String, Object> priceResult = calculateUnifiedPrice(
-                tourId, tourType, agentId, groupSize, 0, "4星", 1, null, null, null, null
+                tourId, tourType, agentId, groupSize, 0, "4星", 1, null, null, null, null, true
             );
             BigDecimal totalPrice = BigDecimal.ZERO;
             if (priceResult != null && priceResult.get("data") != null) {
@@ -2299,12 +2322,17 @@ public class TourBookingServiceImpl implements TourBookingService {
         scheduleOrder.setDepartureLandingTime(booking.getDepartureLandingTime());
         
         // 酒店信息
+        scheduleOrder.setIncludeHotel(booking.getIncludeHotel()); // 🆕 是否包含酒店（关键字段！）
         scheduleOrder.setHotelLevel(booking.getHotelLevel());
         scheduleOrder.setRoomType(booking.getRoomType());
         scheduleOrder.setHotelRoomCount(booking.getHotelRoomCount());
         scheduleOrder.setHotelCheckInDate(booking.getHotelCheckInDate());
         scheduleOrder.setHotelCheckOutDate(booking.getHotelCheckOutDate());
         scheduleOrder.setRoomDetails(booking.getRoomDetails());
+        
+        log.info("🏨 同步酒店信息到排团表 - 订单{} 第{}天: include_hotel={}, 酒店星级={}, 房型={}, 房间数={}", 
+                booking.getBookingId(), dayNumber, booking.getIncludeHotel(), 
+                booking.getHotelLevel(), booking.getRoomType(), booking.getHotelRoomCount());
         
         // 日期信息
         scheduleOrder.setTourStartDate(booking.getTourStartDate());
@@ -2835,6 +2863,144 @@ public class TourBookingServiceImpl implements TourBookingService {
         return result;
     }
 
+    /**
+     * 🆕 不包含酒店的跟团游价格计算（使用一日游价格总和）
+     */
+    private Map<String, Object> calculatePriceWithoutHotel(Integer groupTourId, Long agentId, 
+                                                           Integer adultCount, Integer childCount, 
+                                                           String childrenAges, String selectedOptionalTours) {
+        log.info("🏨 不包含酒店价格计算: groupTourId={}, agentId={}, adultCount={}, childCount={}", 
+                groupTourId, agentId, adultCount, childCount);
+        
+        try {
+            // 1. 获取跟团游的默认行程（必选 + 可选的默认项）
+            List<GroupTourDayTourRelation> defaultItinerary = groupTourDayTourRelationMapper.getDefaultItinerary(groupTourId);
+            if (defaultItinerary == null || defaultItinerary.isEmpty()) {
+                log.error("找不到跟团游的行程配置: groupTourId={}", groupTourId);
+                return buildErrorResponse("该跟团游暂无行程配置");
+            }
+            
+            // 2. 解析用户选择的可选行程
+            Map<Integer, Integer> selectedDayTourMap = new HashMap<>();
+            if (selectedOptionalTours != null && !selectedOptionalTours.trim().isEmpty()) {
+                try {
+                    String[] selections = selectedOptionalTours.split(",");
+                    for (String selection : selections) {
+                        String[] parts = selection.trim().split(":");
+                        if (parts.length == 2) {
+                            Integer day = Integer.parseInt(parts[0].trim());
+                            Integer dayTourId = Integer.parseInt(parts[1].trim());
+                            selectedDayTourMap.put(day, dayTourId);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("解析可选行程失败: {}", e.getMessage());
+                }
+            }
+            
+            // 3. 构建最终的一日游列表（必选 + 用户选择的可选行程）
+            Map<Integer, GroupTourDayTourRelation> finalDayTours = new HashMap<>();
+            
+            // 首先添加所有必选行程
+            for (GroupTourDayTourRelation relation : defaultItinerary) {
+                if (relation.getIsOptional() == 0) {
+                    // 必选行程，直接添加
+                    finalDayTours.put(relation.getDayNumber(), relation);
+                } else {
+                    // 可选行程，检查用户是否有选择
+                    Integer dayNumber = relation.getDayNumber();
+                    if (selectedDayTourMap.containsKey(dayNumber)) {
+                        // 用户选择了其他选项，需要查询该选项的详细信息
+                        Integer selectedDayTourId = selectedDayTourMap.get(dayNumber);
+                        List<GroupTourDayTourRelation> dayOptions = groupTourDayTourRelationMapper
+                            .getOptionalByGroupTourIdAndDay(groupTourId, dayNumber);
+                        
+                        for (GroupTourDayTourRelation option : dayOptions) {
+                            if (option.getDayTourId().equals(selectedDayTourId)) {
+                                finalDayTours.put(dayNumber, option);
+                                break;
+                            }
+                        }
+                    } else {
+                        // 用户没有选择，使用默认选项
+                        if (relation.getIsDefault() == 1) {
+                            finalDayTours.put(dayNumber, relation);
+                        }
+                    }
+                }
+            }
+            
+            // 4. 计算一日游价格总和（单人基础价格）
+            BigDecimal totalDayTourPrice = BigDecimal.ZERO;
+            for (GroupTourDayTourRelation dayTour : finalDayTours.values()) {
+                BigDecimal dayTourPrice = dayTour.getDayTourPrice();
+                if (dayTourPrice != null) {
+                    totalDayTourPrice = totalDayTourPrice.add(dayTourPrice);
+                    log.info("第{}天一日游: {}, 价格: {}", dayTour.getDayNumber(), dayTour.getDayTourName(), dayTourPrice);
+                } else {
+                    log.warn("第{}天一日游价格为空: {}", dayTour.getDayNumber(), dayTour.getDayTourName());
+                }
+            }
+            
+            log.info("一日游价格总和（单人）: {}", totalDayTourPrice);
+            
+            // 5. 应用代理商折扣
+            BigDecimal discountRate = BigDecimal.ONE;
+            if (agentId != null) {
+                try {
+                    Map<String, Object> discountResult = discountService.calculateTourDiscount(
+                        groupTourId.longValue(), "group_tour", totalDayTourPrice, agentId);
+                    
+                    if (discountResult != null && discountResult.get("discountRate") != null) {
+                        discountRate = (BigDecimal) discountResult.get("discountRate");
+                        log.info("获取到代理商折扣率: {} (代理商ID: {})", discountRate, agentId);
+                    }
+                } catch (Exception e) {
+                    log.error("获取代理商折扣信息失败，使用默认折扣率: {}", e.getMessage(), e);
+                }
+            }
+            
+            BigDecimal discountedUnitPrice = totalDayTourPrice.multiply(discountRate).setScale(2, RoundingMode.HALF_UP);
+            log.info("折扣后单人价格: {}", discountedUnitPrice);
+            
+            // 6. 计算成人和儿童的总价
+            PersonPriceInfo personPrice = calculatePersonPrice(discountedUnitPrice, adultCount, childCount, childrenAges);
+            
+            // 7. 不包含酒店，住宿费用为0
+            BigDecimal totalPrice = personPrice.totalPersonPrice;
+            BigDecimal nonAgentPrice = totalPrice.divide(discountRate, 2, RoundingMode.HALF_UP);
+            
+            log.info("不包含酒店价格计算完成: 总价={}, 人员费用={}, 住宿费用=0, 非代理商价格={}", 
+                    totalPrice, personPrice.totalPersonPrice, nonAgentPrice);
+            
+            // 8. 构建返回结果
+            Map<String, Object> result = new HashMap<>();
+            result.put("code", 1);
+            result.put("msg", "计算成功（不含酒店）");
+            
+            Map<String, Object> data = new HashMap<>();
+            data.put("totalPrice", totalPrice);
+            data.put("basePrice", personPrice.totalPersonPrice);
+            data.put("extraRoomFee", BigDecimal.ZERO); // 不包含酒店，住宿费为0
+            data.put("nonAgentPrice", nonAgentPrice);
+            data.put("originalPrice", totalDayTourPrice.multiply(BigDecimal.valueOf(adultCount + childCount)));
+            data.put("discountedPrice", totalPrice);
+            data.put("includeHotel", false);
+            
+            // 如果有儿童详细信息，添加到结果中
+            if (personPrice.childrenDetails != null && !personPrice.childrenDetails.isEmpty()) {
+                data.put("childrenDetails", personPrice.childrenDetails);
+            }
+            
+            result.put("data", data);
+            return result;
+            
+        } catch (Exception e) {
+            log.error("不包含酒店价格计算失败: {}", e.getMessage(), e);
+            return buildErrorResponse("价格计算失败: " + e.getMessage());
+        }
+    }
+
     /** 
      * 统一的价格计算方法（支持所有功能）
      * 这个方法整合了所有价格计算功能，包括：
@@ -2849,9 +3015,9 @@ public class TourBookingServiceImpl implements TourBookingService {
     public Map<String, Object> calculateUnifiedPrice(Integer tourId, String tourType, Long agentId, 
                                                               Integer adultCount, Integer childCount, String hotelLevel, 
                                                    Integer roomCount, Long userId, String roomTypes, 
-                                                   String childrenAges, String selectedOptionalTours) {
-        log.info("统一价格计算: tourId={}, tourType={}, agentId={}, adultCount={}, childCount={}, hotelLevel={}, roomCount={}, userId={}, roomTypes={}, childrenAges={}, selectedOptionalTours={}", 
-                tourId, tourType, agentId, adultCount, childCount, hotelLevel, roomCount, userId, roomTypes, childrenAges, selectedOptionalTours);
+                                                   String childrenAges, String selectedOptionalTours, Boolean includeHotel) {
+        log.info("统一价格计算: tourId={}, tourType={}, agentId={}, adultCount={}, childCount={}, hotelLevel={}, roomCount={}, userId={}, roomTypes={}, childrenAges={}, selectedOptionalTours={}, includeHotel={}", 
+                tourId, tourType, agentId, adultCount, childCount, hotelLevel, roomCount, userId, roomTypes, childrenAges, selectedOptionalTours, includeHotel);
         
         // 参数验证
         if (tourId == null || tourType == null) {
@@ -2864,10 +3030,17 @@ public class TourBookingServiceImpl implements TourBookingService {
         if (childCount == null || childCount < 0) childCount = 0;
         if (roomCount == null || roomCount <= 0) roomCount = 1;
         if (hotelLevel == null || hotelLevel.trim().isEmpty()) hotelLevel = "4星";
+        if (includeHotel == null) includeHotel = true; // 默认包含酒店
         
         // 解析房间类型数组
         List<String> roomTypeList = parseRoomTypes(roomTypes, roomCount);
         log.info("解析房间类型: {}", roomTypeList);
+        
+        // 🆕 如果是跟团游且不包含酒店，使用一日游价格总和计算
+        if ("group_tour".equals(tourType) && !includeHotel) {
+            log.info("🏨 不包含酒店的跟团游，使用一日游价格计算");
+            return calculatePriceWithoutHotel(tourId, agentId, adultCount, childCount, childrenAges, selectedOptionalTours);
+        }
         
         // 获取基础价格信息（不包含可选行程）
         PriceBaseInfo baseInfo = getBasePriceInfo(tourId, tourType, null, adultCount, childCount);

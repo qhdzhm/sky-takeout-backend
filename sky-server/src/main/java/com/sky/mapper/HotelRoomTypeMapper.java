@@ -89,4 +89,11 @@ public interface HotelRoomTypeMapper {
      * @param status 状态
      */
     void updateStatus(@Param("id") Integer id, @Param("status") String status);
+
+    /**
+     * 检查房型是否有关联的预订记录
+     * @param id 房型ID
+     * @return 关联的预订记录数量
+     */
+    int countBookingsByRoomTypeId(@Param("id") Integer id);
 } 

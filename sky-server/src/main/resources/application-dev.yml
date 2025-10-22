@@ -8,7 +8,7 @@ sky:
     password: abc123
   alioss:
     endpoint: oss-cn-hongkong.aliyuncs.com
-    bucket-name: happy-tassie-hongkong
+    bucket-name: happytassieholiday
     access-key-id: ${ALIYUN_OSS_ACCESS_KEY_ID:your-access-key-id}
     access-key-secret: ${ALIYUN_OSS_ACCESS_KEY_SECRET:your-access-key-secret}
   redis:

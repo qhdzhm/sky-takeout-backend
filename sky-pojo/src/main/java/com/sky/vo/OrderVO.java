@@ -40,6 +40,10 @@ public class OrderVO {
     private String passengerContact; // 乘客联系方式
     private String contactPerson; // 联系人
     private String contactPhone; // 联系电话
+    
+    @ApiModelProperty("是否包含酒店（true: 包含酒店, false: 不包含酒店）")
+    private Boolean includeHotel; // 是否包含酒店
+    
     private String hotelLevel; // 酒店级别
     private String roomType; // 房间类型（JSON或单个房型）
     private List<String> roomTypes; // 房间类型数组（解析后的）

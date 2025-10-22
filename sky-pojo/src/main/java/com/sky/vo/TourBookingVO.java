@@ -100,6 +100,9 @@ public class TourBookingVO implements Serializable {
     @ApiModelProperty("联系电话")
     private String contactPhone;
     
+    @ApiModelProperty("是否包含酒店（true: 包含酒店, false: 不包含酒店）")
+    private Boolean includeHotel;
+    
     @ApiModelProperty("酒店等级")
     private String hotelLevel;
     

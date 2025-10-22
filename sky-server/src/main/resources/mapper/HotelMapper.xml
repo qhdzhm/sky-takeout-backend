@@ -158,4 +158,18 @@
         WHERE h.id = #{id}
     </select>
 
+    <!-- 检查酒店是否有关联的预订记录 -->
+    <select id="countBookingsByHotelId" parameterType="java.lang.Integer" resultType="java.lang.Integer">
+        SELECT COUNT(*) 
+        FROM hotel_bookings 
+        WHERE hotel_id = #{id}
+    </select>
+
+    <!-- 检查酒店是否有关联的房型 -->
+    <select id="countRoomTypesByHotelId" parameterType="java.lang.Integer" resultType="java.lang.Integer">
+        SELECT COUNT(*) 
+        FROM hotel_room_types 
+        WHERE hotel_id = #{id}
+    </select>
+
 </mapper>

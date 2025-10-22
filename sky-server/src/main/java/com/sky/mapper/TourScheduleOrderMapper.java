@@ -46,14 +46,14 @@ public interface TourScheduleOrderMapper {
      */
     @Insert("INSERT INTO tour_schedule_order (booking_id, day_number, tour_id, tour_type, tour_date, title, description, display_order, " +
             "order_number, adult_count, child_count, contact_person, contact_phone, pickup_location, dropoff_location, special_requests, luggage_count, " +
-            "hotel_level, room_type, hotel_room_count, hotel_check_in_date, hotel_check_out_date, room_details, " +
+            "hotel_level, include_hotel, room_type, hotel_room_count, hotel_check_in_date, hotel_check_out_date, room_details, " +
             "flight_number, arrival_departure_time, arrival_landing_time, return_flight_number, departure_departure_time, " +
             "departure_landing_time, tour_start_date, tour_end_date, pickup_date, dropoff_date, passenger_contact, " +
             "itinerary_details, is_first_order, from_referral, referral_code, service_type, payment_status, total_price, user_id, agent_id, operator_id, booking_date, " +
             "group_size, status, tour_name, tour_location, is_extra_schedule, schedule_type, pickup_time, dropoff_time, group_type, group_size_limit, created_at, updated_at) " +
             "VALUES (#{bookingId}, #{dayNumber}, #{tourId}, #{tourType}, #{tourDate}, #{title}, #{description}, #{displayOrder}, " +
             "#{orderNumber}, #{adultCount}, #{childCount}, #{contactPerson}, #{contactPhone}, #{pickupLocation}, #{dropoffLocation}, #{specialRequests}, #{luggageCount}, " +
-            "#{hotelLevel}, #{roomType}, #{hotelRoomCount}, #{hotelCheckInDate}, #{hotelCheckOutDate}, #{roomDetails}, " +
+            "#{hotelLevel}, #{includeHotel}, #{roomType}, #{hotelRoomCount}, #{hotelCheckInDate}, #{hotelCheckOutDate}, #{roomDetails}, " +
             "#{flightNumber}, #{arrivalDepartureTime}, #{arrivalLandingTime}, #{returnFlightNumber}, #{departureDepartureTime}, " +
             "#{departureLandingTime}, #{tourStartDate}, #{tourEndDate}, #{pickupDate}, #{dropoffDate}, #{passengerContact}, " +
             "#{itineraryDetails}, #{isFirstOrder}, #{fromReferral}, #{referralCode}, #{serviceType}, #{paymentStatus}, #{totalPrice}, #{userId}, #{agentId}, #{operatorId}, #{bookingDate}, " +

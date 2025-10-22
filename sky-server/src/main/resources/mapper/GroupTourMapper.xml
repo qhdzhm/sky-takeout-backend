@@ -6,7 +6,8 @@
     <select id="pageQuery" resultType="com.sky.dto.GroupTourDTO">
         SELECT 
             gt.group_tour_id AS id, 
-            gt.title AS name, 
+            gt.title AS name,
+            gt.short_title AS shortDescription,
             gt.description, 
             gt.price, 
             gt.discounted_price AS discountedPrice,
@@ -72,6 +73,8 @@
         UPDATE group_tours
         <set>
             <if test="name != null">title = #{name},</if>
+            <if test="shortDescription != null">short_description = #{shortDescription},</if>
+            <if test="overviewImage != null">overview_image = #{overviewImage},</if>
             <if test="description != null">description = #{description},</if>
             <if test="price != null">price = #{price},</if>
             <if test="duration != null">duration = #{duration},</if>

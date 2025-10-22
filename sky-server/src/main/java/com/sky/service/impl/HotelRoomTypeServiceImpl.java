@@ -1,6 +1,7 @@
 package com.sky.service.impl;
 
 import com.sky.entity.HotelRoomType;
+import com.sky.exception.BusinessException;
 import com.sky.mapper.HotelRoomTypeMapper;
 import com.sky.service.HotelRoomTypeService;
 import lombok.extern.slf4j.Slf4j;
@@ -64,6 +65,15 @@ public class HotelRoomTypeServiceImpl implements HotelRoomTypeService {
     @Override
     public void deleteRoomType(Long id) {
         log.info("删除房型：{}", id);
+        
+        // 检查是否有关联的预订记录
+        int bookingCount = hotelRoomTypeMapper.countBookingsByRoomTypeId(id.intValue());
+        if (bookingCount > 0) {
+            log.warn("无法删除房型 ID: {}，存在 {} 条关联的预订记录", id, bookingCount);
+            throw new BusinessException("无法删除该房型，因为存在 " + bookingCount + " 条关联的预订记录。请先取消或删除所有相关预订，或将房型状态设置为'不活跃'。");
+        }
+        
         hotelRoomTypeMapper.deleteById(id.intValue());
+        log.info("成功删除房型：{}", id);
     }
 } 

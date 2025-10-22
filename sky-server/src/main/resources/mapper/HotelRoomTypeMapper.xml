@@ -81,4 +81,11 @@
         DELETE FROM hotel_room_types WHERE id = #{id}
     </delete>
 
+    <!-- 检查房型是否有关联的预订记录 -->
+    <select id="countBookingsByRoomTypeId" parameterType="java.lang.Integer" resultType="java.lang.Integer">
+        SELECT COUNT(*) 
+        FROM hotel_bookings 
+        WHERE room_type_id = #{id}
+    </select>
+
 </mapper> 

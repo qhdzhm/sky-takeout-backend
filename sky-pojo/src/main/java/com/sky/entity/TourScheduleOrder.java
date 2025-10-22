@@ -205,6 +205,11 @@ public class TourScheduleOrder implements Serializable {
     private String contactPhone;
     
     /**
+     * 是否包含酒店（1=包含，0=不包含）
+     */
+    private Boolean includeHotel;
+    
+    /**
      * 酒店等级
      */
     private String hotelLevel;

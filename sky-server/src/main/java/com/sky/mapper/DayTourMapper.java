@@ -35,9 +35,9 @@ public interface DayTourMapper {
      * 新增
      * @param dayTour
      */
-    @Insert("insert into day_tours(name, location, description, price, duration, image_url, banner_image, " +
+    @Insert("insert into day_tours(name, location, short_description, overview_image, description, price, duration, image_url, banner_image, " +
             "category, is_active, created_at, updated_at, region_id, departure_address, guide_fee, guide_id, cost_price) " +
-            "values(#{name}, #{location}, #{description}, #{price}, #{duration}, #{imageUrl}, #{bannerImage}, " +
+            "values(#{name}, #{location}, #{shortDescription}, #{overviewImage}, #{description}, #{price}, #{duration}, #{imageUrl}, #{bannerImage}, " +
             "#{category}, #{isActive}, #{createdAt}, #{updatedAt}, #{regionId}, #{departureAddress}, #{guideFee}, " +
             "#{guideId}, #{costPrice})")
     @Options(useGeneratedKeys = true, keyProperty = "dayTourId", keyColumn = "day_tour_id")

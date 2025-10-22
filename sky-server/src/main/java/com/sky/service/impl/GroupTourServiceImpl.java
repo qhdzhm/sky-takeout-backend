@@ -80,6 +80,10 @@ public class GroupTourServiceImpl implements GroupTourService {
                 }
             }
             groupTour.setSuitableFor(suitableFor);
+            
+            // 查询包含项
+            List<String> inclusions = groupTourMapper.getInclusions(groupTour.getId());
+            groupTour.setInclusions(inclusions);
         }
         
         return new PageResult(groupTours.getTotal(), groupTours.getResult());
@@ -146,8 +150,8 @@ public class GroupTourServiceImpl implements GroupTourService {
             List<Map<String, Object>> images = groupTourMapper.getImages(id);
             groupTour.setImages(images);
             
-            // 查询行程
-            List<Map<String, Object>> itinerary = groupTourMapper.getItinerary(id);
+            // 查询行程 - 使用包含一日游location的方法
+            List<Map<String, Object>> itinerary = getGroupTourItinerary(id);
             groupTour.setItinerary(itinerary);
             
             // 确保没有null值，以避免前端显示问题
@@ -696,76 +700,117 @@ public class GroupTourServiceImpl implements GroupTourService {
         log.info("保存新的团队游：{}", groupTourDTO);
         
         try {
+            // 🆕 从duration解析days和nights（如果未设置）
+            if (groupTourDTO.getDuration() != null && (groupTourDTO.getDays() == null || groupTourDTO.getNights() == null)) {
+                parseDurationToDaysAndNights(groupTourDTO);
+            }
+            
             // 插入团队游基本信息
-            Integer groupTourId = groupTourMapper.insert(groupTourDTO);
-            if (groupTourId == null || groupTourId <= 0) {
+            int affectedRows = groupTourMapper.insert(groupTourDTO);
+            if (affectedRows <= 0) {
                 throw new RuntimeException("插入团队游失败");
             }
             
-            // 设置ID
-            groupTourDTO.setId(groupTourId);
+            // 获取自增主键（通过@Options注解自动设置到DTO的id属性中）
+            Integer groupTourId = groupTourDTO.getId();
+            if (groupTourId == null || groupTourId <= 0) {
+                throw new RuntimeException("获取团队游ID失败");
+            }
+            
+            log.info("✅ 团队游基本信息插入成功，ID：{}", groupTourId);
             
             // 处理主题信息
             List<Integer> themeIds = groupTourDTO.getThemeIds();
+            log.info("📌 准备保存主题，主题IDs: {}", themeIds);
             if (themeIds != null && !themeIds.isEmpty()) {
                 for (Integer themeId : themeIds) {
+                    log.info("  插入主题关联：groupTourId={}, themeId={}", groupTourId, themeId);
                     groupTourMapper.insertTourTheme(groupTourId, themeId);
                 }
+                log.info("✅ 主题保存完成，共{}个", themeIds.size());
             }
             
             // 处理适合人群信息
             List<Integer> suitableIds = groupTourDTO.getSuitableIds();
+            log.info("📌 准备保存适合人群，适合人群IDs: {}", suitableIds);
             if (suitableIds != null && !suitableIds.isEmpty()) {
                 for (Integer suitableId : suitableIds) {
+                    log.info("  插入适合人群关联：groupTourId={}, suitableId={}", groupTourId, suitableId);
                     tourMapper.insertTourSuitable(groupTourId, suitableId, "group_tour");
                 }
+                log.info("✅ 适合人群保存完成，共{}个", suitableIds.size());
             }
             
             // 处理亮点信息
-            if (groupTourDTO.getHighlights() != null) {
-                for (String highlight : groupTourDTO.getHighlights()) {
+            List<String> highlights = groupTourDTO.getHighlights();
+            log.info("📌 准备保存亮点，亮点列表: {}", highlights);
+            if (highlights != null && !highlights.isEmpty()) {
+                for (String highlight : highlights) {
                     if (highlight != null && !highlight.trim().isEmpty()) {
+                        log.info("  插入亮点：groupTourId={}, highlight={}", groupTourId, highlight);
                         groupTourMapper.insertHighlight(groupTourId, highlight);
                     }
                 }
+                log.info("✅ 亮点保存完成，共{}个", highlights.size());
             }
             
             // 处理包含项目
-            if (groupTourDTO.getInclusions() != null) {
-                for (String inclusion : groupTourDTO.getInclusions()) {
+            List<String> inclusions = groupTourDTO.getInclusions();
+            log.info("📌 准备保存包含项目，包含项目列表: {}", inclusions);
+            if (inclusions != null && !inclusions.isEmpty()) {
+                for (String inclusion : inclusions) {
                     if (inclusion != null && !inclusion.trim().isEmpty()) {
+                        log.info("  插入包含项目：groupTourId={}, inclusion={}", groupTourId, inclusion);
                         groupTourMapper.insertInclusion(groupTourId, inclusion);
                     }
                 }
+                log.info("✅ 包含项目保存完成，共{}个", inclusions.size());
             }
             
             // 处理不包含项目
-            if (groupTourDTO.getExclusions() != null) {
-                for (String exclusion : groupTourDTO.getExclusions()) {
+            List<String> exclusions = groupTourDTO.getExclusions();
+            log.info("📌 准备保存不包含项目，不包含项目列表: {}", exclusions);
+            if (exclusions != null && !exclusions.isEmpty()) {
+                for (String exclusion : exclusions) {
                     if (exclusion != null && !exclusion.trim().isEmpty()) {
+                        log.info("  插入不包含项目：groupTourId={}, exclusion={}", groupTourId, exclusion);
                         groupTourMapper.insertExclusion(groupTourId, exclusion);
                     }
                 }
+                log.info("✅ 不包含项目保存完成，共{}个", exclusions.size());
             }
             
             // 处理贴士
-            if (groupTourDTO.getTips() != null) {
-                for (String tip : groupTourDTO.getTips()) {
+            List<String> tips = groupTourDTO.getTips();
+            log.info("📌 准备保存旅行提示，提示列表: {}", tips);
+            if (tips != null && !tips.isEmpty()) {
+                for (String tip : tips) {
                     if (tip != null && !tip.trim().isEmpty()) {
+                        log.info("  插入旅行提示：groupTourId={}, tip={}", groupTourId, tip);
                         groupTourMapper.insertTip(groupTourId, tip);
                     }
                 }
+                log.info("✅ 旅行提示保存完成，共{}个", tips.size());
             }
             
             // 处理常见问题
-            if (groupTourDTO.getFaqs() != null) {
-                for (Map<String, Object> faq : groupTourDTO.getFaqs()) {
+            List<Map<String, Object>> faqs = groupTourDTO.getFaqs();
+            log.info("📌 准备保存常见问题，FAQ列表: {}", faqs);
+            if (faqs != null && !faqs.isEmpty()) {
+                for (Map<String, Object> faq : faqs) {
                     String question = (String) faq.get("question");
                     String answer = (String) faq.get("answer");
+                    log.info("  FAQ项：question={}, answer={}", question, answer);
                     if (question != null && !question.trim().isEmpty() && answer != null && !answer.trim().isEmpty()) {
+                        log.info("  插入常见问题：groupTourId={}, question={}", groupTourId, question);
                         groupTourMapper.insertFaq(groupTourId, question, answer);
+                    } else {
+                        log.warn("  ⚠️ FAQ项为空，跳过：question={}, answer={}", question, answer);
                     }
                 }
+                log.info("✅ 常见问题保存完成，共{}个", faqs.size());
+            } else {
+                log.info("ℹ️ 没有常见问题需要保存");
             }
             
             // 处理行程安排
@@ -872,6 +917,49 @@ public class GroupTourServiceImpl implements GroupTourService {
         } catch (Exception e) {
             log.error("更新团体游产品展示图片失败：{}", e.getMessage(), e);
             throw new RuntimeException("更新团体游产品展示图片失败", e);
+        }
+    }
+    
+    /**
+     * 从duration字符串解析出days和nights
+     * 支持格式：5天4晚、5天、3天2晚等
+     */
+    private void parseDurationToDaysAndNights(GroupTourDTO groupTourDTO) {
+        String duration = groupTourDTO.getDuration();
+        if (duration == null || duration.isEmpty()) {
+            // 设置默认值
+            groupTourDTO.setDays(1);
+            groupTourDTO.setNights(0);
+            return;
+        }
+        
+        try {
+            // 解析天数：匹配"X天"
+            java.util.regex.Pattern dayPattern = java.util.regex.Pattern.compile("(\\d+)天");
+            java.util.regex.Matcher dayMatcher = dayPattern.matcher(duration);
+            int days = 1;
+            if (dayMatcher.find()) {
+                days = Integer.parseInt(dayMatcher.group(1));
+            }
+            
+            // 解析晚数：匹配"X晚"
+            java.util.regex.Pattern nightPattern = java.util.regex.Pattern.compile("(\\d+)晚");
+            java.util.regex.Matcher nightMatcher = nightPattern.matcher(duration);
+            int nights = 0;
+            if (nightMatcher.find()) {
+                nights = Integer.parseInt(nightMatcher.group(1));
+            } else {
+                // 如果没有指定晚数，默认为天数-1（但不能小于0）
+                nights = Math.max(0, days - 1);
+            }
+            
+            groupTourDTO.setDays(days);
+            groupTourDTO.setNights(nights);
+            log.info("从duration [{}] 解析出: days={}, nights={}", duration, days, nights);
+        } catch (Exception e) {
+            log.warn("解析duration失败：{}，使用默认值", duration, e);
+            groupTourDTO.setDays(1);
+            groupTourDTO.setNights(0);
         }
     }
 } 

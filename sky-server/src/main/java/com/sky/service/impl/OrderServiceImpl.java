@@ -1376,12 +1376,17 @@ public class OrderServiceImpl implements OrderService {
         scheduleOrder.setDepartureLandingTime(booking.getDepartureLandingTime());
         
         // 酒店信息
+        scheduleOrder.setIncludeHotel(booking.getIncludeHotel()); // 🆕 是否包含酒店（关键字段！）
         scheduleOrder.setHotelLevel(booking.getHotelLevel());
         scheduleOrder.setRoomType(booking.getRoomType());
         scheduleOrder.setHotelRoomCount(booking.getHotelRoomCount());
         scheduleOrder.setHotelCheckInDate(booking.getHotelCheckInDate());
         scheduleOrder.setHotelCheckOutDate(booking.getHotelCheckOutDate());
         scheduleOrder.setRoomDetails(booking.getRoomDetails());
+        
+        log.info("🏨 同步酒店信息到排团表 - 订单{} 第{}天: include_hotel={}, 酒店星级={}, 房型={}, 房间数={}", 
+                booking.getBookingId(), dayNumber, booking.getIncludeHotel(), 
+                booking.getHotelLevel(), booking.getRoomType(), booking.getHotelRoomCount());
         
         // 日期信息
         scheduleOrder.setTourStartDate(booking.getTourStartDate());

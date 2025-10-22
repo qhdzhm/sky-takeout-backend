@@ -21,12 +21,19 @@ public class GroupTourDTO {
     private Integer id;
     private String name;
     private String description;
+    private String shortDescription; // 简短描述（用于标题下方）
+    private String overviewImage; // 概述配图URL
     private BigDecimal price;
     // 折扣价格，应用代理商折扣后的价格
     private BigDecimal discountedPrice;
     /** 时长（天） */
     private String duration;
+    /** 天数 */
+    private Integer days;
+    /** 晚数 */
+    private Integer nights;
     private String location;
+    private String category;
     private LocalDate startDate;
     private LocalDate endDate;
     private Integer minPeople;

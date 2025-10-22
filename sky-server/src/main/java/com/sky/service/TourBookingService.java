@@ -98,7 +98,7 @@ public interface TourBookingService {
     Map<String, Object> calculateUnifiedPrice(Integer tourId, String tourType, Long agentId, 
                                             Integer adultCount, Integer childCount, String hotelLevel, 
                                             Integer roomCount, Long userId, String roomTypes, 
-                                            String childrenAges, String selectedOptionalTours);
+                                            String childrenAges, String selectedOptionalTours, Boolean includeHotel);
 
     /**
      * 根据ID获取一日游信息

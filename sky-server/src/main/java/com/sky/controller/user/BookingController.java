@@ -297,6 +297,7 @@ public class BookingController {
             @RequestParam(required = false) Long agentId,
             @RequestParam Integer adultCount,
             @RequestParam(required = false, defaultValue = "0") Integer childCount,
+            @RequestParam(required = false, defaultValue = "true") Boolean includeHotel,
             @RequestParam(required = false, defaultValue = "4星") String hotelLevel,
             @RequestParam(required = false, defaultValue = "1") Integer roomCount,
             @RequestParam(required = false) Long userId,
@@ -333,8 +334,8 @@ public class BookingController {
             agentId = null; // 确保游客没有代理商折扣
         }
         
-        log.info("计算旅游订单价格: tourId={}, tourType={}, agentId={}, adultCount={}, childCount={}, hotelLevel={}, roomCount={}, userId={}, childrenAges={}, roomType={}, roomTypes={}, selectedOptionalTours={}", 
-                tourId, tourType, agentId, adultCount, childCount, hotelLevel, roomCount, userId, childrenAges, roomType, roomTypes, selectedOptionalTours);
+        log.info("计算旅游订单价格: tourId={}, tourType={}, agentId={}, adultCount={}, childCount={}, includeHotel={}, hotelLevel={}, roomCount={}, userId={}, childrenAges={}, roomType={}, roomTypes={}, selectedOptionalTours={}", 
+                tourId, tourType, agentId, adultCount, childCount, includeHotel, hotelLevel, roomCount, userId, childrenAges, roomType, roomTypes, selectedOptionalTours);
         
         try {
             log.info("使用统一价格计算方法");
@@ -348,7 +349,7 @@ public class BookingController {
             // 使用统一的价格计算方法
             Map<String, Object> data = tourBookingService.calculateUnifiedPrice(
                     tourId, tourType, agentId, adultCount, childCount, hotelLevel, roomCount, userId, 
-                    finalRoomTypes, childrenAges, selectedOptionalTours);
+                    finalRoomTypes, childrenAges, selectedOptionalTours, includeHotel);
             
             log.info("统一价格计算完成: {}", data);
             return Result.success(data);

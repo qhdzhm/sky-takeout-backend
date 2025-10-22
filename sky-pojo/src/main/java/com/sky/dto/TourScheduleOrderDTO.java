@@ -117,6 +117,11 @@ public class TourScheduleOrderDTO implements Serializable {
     private Integer luggageCount;
     
     /**
+     * 是否包含酒店（true: 包含酒店, false: 不包含酒店）
+     */
+    private Boolean includeHotel;
+    
+    /**
      * 酒店等级
      */
     private String hotelLevel;

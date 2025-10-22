@@ -26,6 +26,7 @@
         <result column="guide_remarks" property="guideRemarks"/>
         <result column="luggage_count" property="luggageCount"/>
         <result column="hotel_level" property="hotelLevel"/>
+        <result column="include_hotel" property="includeHotel"/>
         <result column="room_type" property="roomType"/>
         <result column="hotel_room_count" property="hotelRoomCount"/>
         <result column="hotel_check_in_date" property="hotelCheckInDate"/>
@@ -76,7 +77,7 @@
             booking_id, day_number, tour_id, tour_type, tour_date, title, description, display_order, 
             created_at, updated_at, order_number, adult_count, child_count, contact_person, 
             contact_phone, pickup_location, dropoff_location, special_requests, guide_remarks, luggage_count, 
-            hotel_level, room_type, hotel_room_count, hotel_check_in_date, hotel_check_out_date, 
+            hotel_level, include_hotel, room_type, hotel_room_count, hotel_check_in_date, hotel_check_out_date, 
             room_details, flight_number, arrival_departure_time, arrival_landing_time, 
             return_flight_number, departure_departure_time, departure_landing_time, 
             tour_start_date, tour_end_date, pickup_date, dropoff_date, passenger_contact, 
@@ -92,7 +93,7 @@
                 #{item.createdAt}, #{item.updatedAt}, #{item.orderNumber}, #{item.adultCount}, 
                 #{item.childCount}, #{item.contactPerson}, #{item.contactPhone}, 
                 #{item.pickupLocation}, #{item.dropoffLocation}, #{item.specialRequests}, #{item.guideRemarks}, 
-                #{item.luggageCount}, #{item.hotelLevel}, #{item.roomType}, #{item.hotelRoomCount}, 
+                #{item.luggageCount}, #{item.hotelLevel}, #{item.includeHotel}, #{item.roomType}, #{item.hotelRoomCount}, 
                 #{item.hotelCheckInDate}, #{item.hotelCheckOutDate}, #{item.roomDetails}, 
                 #{item.flightNumber}, #{item.arrivalDepartureTime}, #{item.arrivalLandingTime}, 
                 #{item.returnFlightNumber}, #{item.departureDepartureTime}, #{item.departureLandingTime}, 
@@ -113,7 +114,7 @@
             id, booking_id, day_number, tour_id, tour_type, tour_date, title, description, display_order,
             created_at, updated_at, order_number, adult_count, child_count, contact_person, 
             contact_phone, pickup_location, dropoff_location, special_requests, guide_remarks, luggage_count,
-            hotel_level, room_type, hotel_room_count, hotel_check_in_date, hotel_check_out_date,
+            hotel_level, include_hotel, room_type, hotel_room_count, hotel_check_in_date, hotel_check_out_date,
             room_details, hotel_booking_number, flight_number, arrival_departure_time, arrival_landing_time,
             return_flight_number, departure_departure_time, departure_landing_time,
             tour_start_date, tour_end_date, pickup_date, dropoff_date, passenger_contact,
@@ -132,7 +133,7 @@
             id, booking_id, day_number, tour_id, tour_type, tour_date, title, description, display_order,
             created_at, updated_at, order_number, adult_count, child_count, contact_person, 
             contact_phone, pickup_location, dropoff_location, special_requests, guide_remarks, luggage_count,
-            hotel_level, room_type, hotel_room_count, hotel_check_in_date, hotel_check_out_date,
+            hotel_level, include_hotel, room_type, hotel_room_count, hotel_check_in_date, hotel_check_out_date,
             room_details, hotel_booking_number, flight_number, arrival_departure_time, arrival_landing_time,
             return_flight_number, departure_departure_time, departure_landing_time,
             tour_start_date, tour_end_date, pickup_date, dropoff_date, passenger_contact,

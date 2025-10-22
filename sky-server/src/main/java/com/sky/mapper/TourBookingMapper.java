@@ -28,7 +28,7 @@ public interface TourBookingMapper {
             "booking_date, flight_number, arrival_departure_time, arrival_landing_time, " +
             "return_flight_number, departure_departure_time, departure_landing_time, " +
             "tour_start_date, tour_end_date, pickup_date, dropoff_date, pickup_location, dropoff_location, " +
-            "service_type, group_size, adult_count, child_count, luggage_count, passenger_contact, " +
+            "service_type, group_size, adult_count, child_count, include_hotel, luggage_count, passenger_contact, " +
             "contact_person, contact_phone, hotel_level, room_type, hotel_room_count, " +
             "hotel_check_in_date, hotel_check_out_date, room_details, special_requests, " +
             "itinerary_details, status, payment_status, total_price, created_at, updated_at, " +

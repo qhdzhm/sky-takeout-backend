@@ -338,6 +338,13 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
             }
             
             // ============ 酒店信息 ============
+            // 🆕 始终强制同步 include_hotel 字段（以订单表为准）
+            entity.setIncludeHotel(originalBooking.getIncludeHotel());
+            log.info("🏨 强制同步 include_hotel 字段 - 订单{}: {} -> {}", 
+                    originalBooking.getOrderNumber(), 
+                    entity.getIncludeHotel(), 
+                    originalBooking.getIncludeHotel());
+            
             // 强制补充所有null值，不管前端是否传递
             if (entity.getHotelLevel() == null || entity.getHotelLevel().isEmpty()) {
                 entity.setHotelLevel(originalBooking.getHotelLevel());

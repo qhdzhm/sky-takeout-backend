@@ -45,18 +45,22 @@ public class TourBookingDTO implements Serializable {
     private String flightNumber;
     
     @ApiModelProperty("到达航班起飞时间")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime arrivalDepartureTime;
     
     @ApiModelProperty("到达航班降落时间")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime arrivalLandingTime;
     
     @ApiModelProperty("返程航班号")
     private String returnFlightNumber;
     
     @ApiModelProperty("返程航班起飞时间")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime departureDepartureTime;
     
     @ApiModelProperty("返程航班降落时间")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime departureLandingTime;
     
     @ApiModelProperty("行程开始日期")
@@ -100,6 +104,9 @@ public class TourBookingDTO implements Serializable {
     
     @ApiModelProperty("联系电话")
     private String contactPhone;
+    
+    @ApiModelProperty("是否包含酒店（true: 包含酒店, false: 不包含酒店）")
+    private Boolean includeHotel;
     
     @ApiModelProperty("酒店等级")
     private String hotelLevel;

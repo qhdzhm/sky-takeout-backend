@@ -32,6 +32,12 @@ public class DayTour implements Serializable {
     /** 描述 */
     private String description;
     
+    /** 简短描述（用于标题下方） */
+    private String shortDescription;
+    
+    /** 概述配图URL */
+    private String overviewImage;
+    
     /** 价格 */
     private BigDecimal price;
     

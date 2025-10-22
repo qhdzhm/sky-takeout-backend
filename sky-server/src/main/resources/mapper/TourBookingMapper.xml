@@ -33,6 +33,7 @@
         <result column="contact_person" property="contactPerson"/>
         <result column="contact_phone" property="contactPhone"/>
         <result column="hotel_level" property="hotelLevel"/>
+        <result column="include_hotel" property="includeHotel"/>
         <result column="room_type" property="roomType"/>
         <result column="hotel_room_count" property="hotelRoomCount"/>
         <result column="hotel_check_in_date" property="hotelCheckInDate"/>
@@ -106,7 +107,7 @@
             tour_start_date, tour_end_date, 
             pickup_date, dropoff_date, pickup_location, dropoff_location, service_type, 
             group_size, adult_count, child_count, luggage_count, passenger_contact, 
-            contact_person, contact_phone, hotel_level, room_type, hotel_room_count, 
+            contact_person, contact_phone, hotel_level, include_hotel, room_type, hotel_room_count, 
             hotel_check_in_date, hotel_check_out_date, room_details,
             special_requests, itinerary_details, status, payment_status, total_price,
             created_at, updated_at, selected_optional_tours
@@ -117,7 +118,7 @@
             #{tourStartDate}, #{tourEndDate}, 
             #{pickupDate}, #{dropoffDate}, #{pickupLocation}, #{dropoffLocation}, #{serviceType}, 
             #{groupSize}, #{adultCount}, #{childCount}, #{luggageCount}, #{passengerContact}, 
-            #{contactPerson}, #{contactPhone}, #{hotelLevel}, #{roomType}, #{hotelRoomCount}, 
+            #{contactPerson}, #{contactPhone}, #{hotelLevel}, #{includeHotel}, #{roomType}, #{hotelRoomCount}, 
             #{hotelCheckInDate}, #{hotelCheckOutDate}, #{roomDetails}, 
             #{specialRequests}, #{itineraryDetails}, #{status}, #{paymentStatus}, #{totalPrice},
             #{createdAt}, #{updatedAt}, #{selectedOptionalTours}
@@ -139,6 +140,7 @@
             
             <!-- 住宿信息 - 管理后台可修改 -->
             <if test="hotelLevel != null">hotel_level = #{hotelLevel},</if>
+            <if test="includeHotel != null">include_hotel = #{includeHotel},</if>
             <if test="roomType != null">room_type = #{roomType},</if>
             <if test="hotelRoomCount != null">hotel_room_count = #{hotelRoomCount},</if>
             <if test="hotelCheckInDate != null">hotel_check_in_date = #{hotelCheckInDate},</if>
@@ -227,6 +229,7 @@
         <result column="group_size" property="groupSize"/>
         <result column="adult_count" property="adultCount"/>
         <result column="child_count" property="childCount"/>
+        <result column="include_hotel" property="includeHotel"/>
         <result column="hotel_room_count" property="hotelRoomCount"/>
         <result column="hotel_check_in_date" property="hotelCheckInDate"/>
         <result column="hotel_check_out_date" property="hotelCheckOutDate"/>
@@ -245,7 +248,7 @@
         tour_start_date, tour_end_date, 
         pickup_date, dropoff_date, pickup_location, dropoff_location, 
         group_size, adult_count, child_count, 
-        hotel_room_count, hotel_check_in_date, hotel_check_out_date, room_details,
+        include_hotel, hotel_room_count, hotel_check_in_date, hotel_check_out_date, room_details,
         total_price, payment_status, special_requests, 
         created_at, updated_at
     </sql>

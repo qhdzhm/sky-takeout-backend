@@ -9,6 +9,8 @@
             dt.day_tour_id as id,
             dt.name, 
             dt.location, 
+            dt.short_description as shortDescription,
+            dt.overview_image as overviewImage,
             dt.description, 
             dt.price, 
             dt.duration, 
@@ -109,6 +111,8 @@
         <set>
             <if test="name != null">name = #{name},</if>
             <if test="location != null">location = #{location},</if>
+            <if test="shortDescription != null">short_description = #{shortDescription},</if>
+            <if test="overviewImage != null">overview_image = #{overviewImage},</if>
             <if test="description != null">description = #{description},</if>
             <if test="price != null">price = #{price},</if>
             <if test="duration != null">duration = #{duration},</if>

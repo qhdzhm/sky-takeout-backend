@@ -43,7 +43,7 @@ public interface GroupTourMapper {
      * @param id 跟团游ID
      * @return 跟团游信息
      */
-    @Select("SELECT group_tour_id AS id, title AS name, description, price, discounted_price AS discountedPrice, " +
+    @Select("SELECT group_tour_id AS id, title AS name, short_title AS shortDescription, overview_image AS overviewImage, description, price, discounted_price AS discountedPrice, " +
             "duration, days, nights, rating, reviews_count AS reviewsCount, tour_code AS tourCode, " +
             "departure_info AS departureInfo, group_size AS groupSize, language, " +
             "image_url AS coverImage, banner_image AS bannerImage, product_showcase_image AS productShowcaseImage, is_active AS isActive, location, category, " +
@@ -395,9 +395,9 @@ public interface GroupTourMapper {
      * @return 插入后的团队游ID
      */
     @Insert("INSERT INTO group_tours (title, short_title, description, price, discounted_price, " +
-            "duration, days, nights, image_url, banner_image, is_active, location, category, departure_address) " +
-            "VALUES (#{name}, #{shortTitle}, #{description}, #{price}, #{discountedPrice}, " +
-            "#{duration}, #{days}, #{nights}, #{coverImage}, #{bannerImage}, 1, #{location}, #{category}, #{departureAddress})")
+            "duration, days, nights, image_url, is_active, location, category, departure_address) " +
+            "VALUES (#{name}, #{shortDescription}, #{description}, #{price}, #{discountedPrice}, " +
+            "#{duration}, #{days}, #{nights}, #{coverImage}, 1, #{location}, #{category}, #{departureAddress})")
     @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "group_tour_id")
     Integer insert(GroupTourDTO groupTourDTO);
 

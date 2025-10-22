@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * 跟团游实体
@@ -27,6 +28,12 @@ public class GroupTour implements Serializable {
     
     /** 描述 */
     private String description;
+    
+    /** 简短描述（用于标题下方） */
+    private String shortDescription;
+    
+    /** 概述配图URL */
+    private String overviewImage;
     
     /** 价格 */
     private BigDecimal price;
@@ -66,4 +73,7 @@ public class GroupTour implements Serializable {
     
     /** 地区名称（非数据库字段，关联查询） */
     private String regionName;
+    
+    /** 包含项列表（非数据库字段，关联查询） */
+    private List<String> inclusions;
 } 
