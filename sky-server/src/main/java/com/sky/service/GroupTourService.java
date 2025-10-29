@@ -171,6 +171,13 @@ public interface GroupTourService {
     void enableOrDisableGroupTour(Integer status, Integer id);
     
     /**
+     * 更新团队游用户端显示状态
+     * @param id 团队游ID
+     * @param showOnUserSite 是否在用户端显示（1=显示, 0=隐藏）
+     */
+    void updateUserSiteVisibility(Integer id, Integer showOnUserSite);
+    
+    /**
      * 更新产品展示图片
      * @param groupTourId 团体游ID
      * @param imageUrl 图片URL

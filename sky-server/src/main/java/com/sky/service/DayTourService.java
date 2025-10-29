@@ -54,6 +54,13 @@ public interface DayTourService {
     void startOrStop(Integer status, Integer id);
 
     /**
+     * 更新一日游用户端显示状态
+     * @param id 一日游ID
+     * @param showOnUserSite 是否在用户端显示（1=显示, 0=隐藏）
+     */
+    void updateUserSiteVisibility(Integer id, Integer showOnUserSite);
+
+    /**
      * 获取一日游亮点
      * @param dayTourId
      * @return

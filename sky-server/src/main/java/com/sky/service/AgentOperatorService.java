@@ -55,4 +55,18 @@ public interface AgentOperatorService {
      * @param id 操作员ID
      */
     void delete(Long id);
+    
+    /**
+     * 操作员修改密码
+     * @param operatorId 操作员ID
+     * @param passwordChangeDTO 密码修改信息
+     */
+    void changePassword(Long operatorId, com.sky.dto.PasswordChangeDTO passwordChangeDTO);
+    
+    /**
+     * 重置操作员密码（管理员操作）
+     * @param operatorId 操作员ID
+     * @param newPassword 新密码
+     */
+    void resetPassword(Long operatorId, String newPassword);
 } 

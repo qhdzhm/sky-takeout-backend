@@ -51,13 +51,16 @@ public class GroupTourServiceImpl implements GroupTourService {
         Integer minDays = params.get("minDays") != null ? Integer.parseInt(params.get("minDays").toString()) : null;
         Integer maxDays = params.get("maxDays") != null ? Integer.parseInt(params.get("maxDays").toString()) : null;
         
+        // 从参数中获取是否需要过滤用户端显示状态，如果没有指定则不过滤（管理后台）
+        Integer showOnUserSite = params.get("showOnUserSite") != null ? Integer.parseInt(params.get("showOnUserSite").toString()) : null;
+        
         // 分页参数
         int page = params.get("page") != null ? Integer.parseInt(params.get("page").toString()) : 1;
         int pageSize = params.get("pageSize") != null ? Integer.parseInt(params.get("pageSize").toString()) : 50;
         
         // 分页查询
         PageHelper.startPage(page, pageSize);
-        Page<GroupTourDTO> groupTours = (Page<GroupTourDTO>) groupTourMapper.pageQuery(title, location, category, minPrice, maxPrice, minDays, maxDays);
+        Page<GroupTourDTO> groupTours = (Page<GroupTourDTO>) groupTourMapper.pageQuery(title, location, category, minPrice, maxPrice, minDays, maxDays, showOnUserSite);
         
         // 处理主题和适合人群
         for (GroupTourDTO groupTour : groupTours) {
@@ -901,6 +904,22 @@ public class GroupTourServiceImpl implements GroupTourService {
         } catch (Exception e) {
             log.error("团队游状态更新失败，错误：{}", e.getMessage(), e);
             throw new RuntimeException("团队游状态更新失败", e);
+        }
+    }
+    
+    /**
+     * 更新团队游用户端显示状态
+     */
+    @Override
+    public void updateUserSiteVisibility(Integer id, Integer showOnUserSite) {
+        log.info("更新团队游用户端显示状态，ID：{}，showOnUserSite：{}", id, showOnUserSite);
+        
+        try {
+            groupTourMapper.updateUserSiteVisibility(id, showOnUserSite);
+            log.info("团队游用户端显示状态更新成功，ID：{}，showOnUserSite：{}", id, showOnUserSite);
+        } catch (Exception e) {
+            log.error("团队游用户端显示状态更新失败，错误：{}", e.getMessage(), e);
+            throw new RuntimeException("团队游用户端显示状态更新失败", e);
         }
     }
     

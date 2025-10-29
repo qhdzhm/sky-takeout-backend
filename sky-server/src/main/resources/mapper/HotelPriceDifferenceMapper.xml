@@ -9,8 +9,6 @@
         <result column="is_base_level" property="isBaseLevel"/>
         <result column="description" property="description"/>
         <result column="daily_single_room_supplement" property="dailySingleRoomSupplement"/>
-        <result column="hotel_room_price" property="hotelRoomPrice"/>
-        <result column="triple_bed_room_price" property="tripleBedRoomPrice"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
@@ -18,8 +16,7 @@
     <select id="selectAll" resultMap="BaseResultMap">
         SELECT 
             id, hotel_level, price_difference, is_base_level, description, 
-            daily_single_room_supplement, hotel_room_price, triple_bed_room_price, 
-            created_at, updated_at
+            daily_single_room_supplement, created_at, updated_at
         FROM 
             hotel_price_differences
         ORDER BY 
@@ -29,8 +26,7 @@
     <select id="selectByLevel" resultMap="BaseResultMap">
         SELECT 
             id, hotel_level, price_difference, is_base_level, description, 
-            daily_single_room_supplement, hotel_room_price, triple_bed_room_price, 
-            created_at, updated_at
+            daily_single_room_supplement, created_at, updated_at
         FROM 
             hotel_price_differences
         WHERE 
@@ -41,12 +37,48 @@
     <select id="selectBaseLevel" resultMap="BaseResultMap">
         SELECT 
             id, hotel_level, price_difference, is_base_level, description, 
-            daily_single_room_supplement, hotel_room_price, triple_bed_room_price, 
-            created_at, updated_at
+            daily_single_room_supplement, created_at, updated_at
         FROM 
             hotel_price_differences
         WHERE 
             is_base_level = 1
         LIMIT 1
     </select>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT 
+            id, hotel_level, price_difference, is_base_level, description, 
+            daily_single_room_supplement, created_at, updated_at
+        FROM 
+            hotel_price_differences
+        WHERE 
+            id = #{id}
+    </select>
+
+    <insert id="insert" parameterType="com.sky.entity.HotelPriceDifference" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO hotel_price_differences
+        (hotel_level, price_difference, is_base_level, description, 
+         daily_single_room_supplement, created_at, updated_at)
+        VALUES
+        (#{hotelLevel}, #{priceDifference}, #{isBaseLevel}, #{description}, 
+         #{dailySingleRoomSupplement}, NOW(), NOW())
+    </insert>
+
+    <update id="update" parameterType="com.sky.entity.HotelPriceDifference">
+        UPDATE hotel_price_differences
+        SET 
+            hotel_level = #{hotelLevel},
+            price_difference = #{priceDifference},
+            is_base_level = #{isBaseLevel},
+            description = #{description},
+            daily_single_room_supplement = #{dailySingleRoomSupplement},
+            updated_at = NOW()
+        WHERE 
+            id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM hotel_price_differences
+        WHERE id = #{id}
+    </delete>
 </mapper> 

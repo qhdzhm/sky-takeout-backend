@@ -133,10 +133,15 @@ public interface HotelBookingService {
      * @param hotelSpecialist 酒店专员
      * @param checkInDate 入住日期开始
      * @param checkOutDate 入住日期结束
+     * @param bookingReference 预订号
+     * @param hotelName 酒店名称
+     * @param createdAtStart 下单时间开始
+     * @param createdAtEnd 下单时间结束
      * @return 分页结果
      */
     PageResult pageQuery(Integer page, Integer pageSize, String status, String guestName, String guestPhone,
-                         Integer hotelId, String hotelSpecialist, LocalDate checkInDate, LocalDate checkOutDate);
+                         Integer hotelId, String hotelSpecialist, LocalDate checkInDate, LocalDate checkOutDate,
+                         String bookingReference, String hotelName, LocalDate createdAtStart, LocalDate createdAtEnd);
 
     /**
      * 根据代理商ID查询酒店预订列表

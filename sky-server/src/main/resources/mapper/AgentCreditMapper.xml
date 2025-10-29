@@ -15,6 +15,7 @@
         <result column="last_settlement_date" property="lastSettlementDate"/>
         <result column="overdraft_count" property="overdraftCount"/>
         <result column="is_frozen" property="isFrozen"/>
+        <result column="version" property="version"/>
         <result column="last_updated" property="lastUpdated"/>
         <result column="created_at" property="createdAt"/>
     </resultMap>
@@ -22,7 +23,7 @@
     <sql id="AgentCredit_Column_List">
         id, agent_id, total_credit, used_credit, available_credit, deposit_balance,
         credit_rating, interest_rate, billing_cycle_day, last_settlement_date,
-        overdraft_count, is_frozen, last_updated, created_at
+        overdraft_count, is_frozen, version, last_updated, created_at
     </sql>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
@@ -36,6 +37,7 @@
          #{overdraftCount}, #{isFrozen}, #{lastUpdated}, #{createdAt})
     </insert>
 
+    <!-- 普通更新（不带版本号检查，用于非关键操作） -->
     <update id="update">
         update agent_credit
         <set>
@@ -69,6 +71,9 @@
             <if test="isFrozen != null">
                 is_frozen = #{isFrozen},
             </if>
+            <if test="version != null">
+                version = #{version},
+            </if>
             <if test="lastUpdated != null">
                 last_updated = #{lastUpdated},
             </if>
@@ -77,6 +82,49 @@
             </if>
         </set>
         where id = #{id}
+    </update>
+    
+    <!-- 带乐观锁的更新（用于支付等关键操作，防止并发冲突） -->
+    <update id="updateWithVersion">
+        update agent_credit
+        <set>
+            <if test="totalCredit != null">
+                total_credit = #{totalCredit},
+            </if>
+            <if test="usedCredit != null">
+                used_credit = #{usedCredit},
+            </if>
+            <if test="availableCredit != null">
+                available_credit = #{availableCredit},
+            </if>
+            <if test="depositBalance != null">
+                deposit_balance = #{depositBalance},
+            </if>
+            <if test="creditRating != null">
+                credit_rating = #{creditRating},
+            </if>
+            <if test="interestRate != null">
+                interest_rate = #{interestRate},
+            </if>
+            <if test="billingCycleDay != null">
+                billing_cycle_day = #{billingCycleDay},
+            </if>
+            <if test="lastSettlementDate != null">
+                last_settlement_date = #{lastSettlementDate},
+            </if>
+            <if test="overdraftCount != null">
+                overdraft_count = #{overdraftCount},
+            </if>
+            <if test="isFrozen != null">
+                is_frozen = #{isFrozen},
+            </if>
+            <!-- 版本号自增 -->
+            version = version + 1,
+            <if test="lastUpdated != null">
+                last_updated = #{lastUpdated},
+            </if>
+        </set>
+        where id = #{id} AND version = #{version}
     </update>
 
     <update id="updateTotalCredit">

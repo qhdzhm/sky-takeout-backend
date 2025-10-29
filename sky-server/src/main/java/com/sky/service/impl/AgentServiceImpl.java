@@ -177,7 +177,14 @@ public class AgentServiceImpl implements AgentService {
         Agent agent = new Agent();
         BeanUtils.copyProperties(agentDTO, agent);
         
-        // 3. 更新代理商
+        // 3. 特殊处理：如果更新了discountRate且discountLevelId在DTO中是null
+        //    说明要从折扣等级切换到统一折扣，需要清除discountLevelId
+        if (agentDTO.getDiscountRate() != null && agentDTO.getDiscountLevelId() == null) {
+            // 先清除折扣等级ID
+            agentMapper.updateDiscountLevel(agentDTO.getId(), null);
+        }
+        
+        // 4. 更新代理商
         agentMapper.update(agent);
     }
 
@@ -246,10 +253,19 @@ public class AgentServiceImpl implements AgentService {
             throw new BusinessException("代理商不存在");
         }
         
-        // 2. 加密密码
+        // 2. 验证新密码不能为空
+        if(agentPasswordResetDTO.getNewPassword() == null || agentPasswordResetDTO.getNewPassword().trim().isEmpty()) {
+            throw new BusinessException("新密码不能为空");
+        }
+        
+        if(agentPasswordResetDTO.getNewPassword().length() < 6) {
+            throw new BusinessException("密码长度不能少于6位");
+        }
+        
+        // 3. 加密密码
         String encryptedPassword = DigestUtils.md5DigestAsHex(agentPasswordResetDTO.getNewPassword().getBytes());
         
-        // 3. 更新密码
+        // 4. 更新密码
         agentMapper.resetPassword(agentPasswordResetDTO.getId(), encryptedPassword);
     }
 
@@ -343,6 +359,7 @@ public class AgentServiceImpl implements AgentService {
         
         // 2. 更新折扣等级ID
         agentMapper.updateDiscountLevel(agentId, discountLevelId);
+        log.info("代理商折扣等级已更新，具体产品折扣需在产品折扣配置表(product_agent_discount)中设置");
     }
     
     /**

@@ -122,5 +122,36 @@
         WHERE u.status = 1
         AND (tb.created_at BETWEEN #{start} AND #{end} OR u.updated_at BETWEEN #{start} AND #{end})
     </select>
+    
+    <!-- 更新用户信息（动态SQL） -->
+    <update id="updateUser">
+        UPDATE users
+        <set>
+            <if test="username != null">username = #{username},</if>
+            <if test="password != null">password = #{password},</if>
+            <if test="phone != null">phone = #{phone},</if>
+            <if test="email != null">email = #{email},</if>
+            <if test="role != null">role = #{role},</if>
+            <if test="userType != null">user_type = #{userType},</if>
+            <if test="agentId != null">agent_id = #{agentId},</if>
+            <if test="firstName != null">first_name = #{firstName},</if>
+            <if test="lastName != null">last_name = #{lastName},</if>
+            <if test="openid != null">wx_openid = #{openid},</if>
+            <if test="unionid != null">wx_unionid = #{unionid},</if>
+            <if test="wxNickname != null">wx_nickname = #{wxNickname},</if>
+            <if test="wxAvatar != null">wx_avatar = #{wxAvatar},</if>
+            <if test="wxLastLogin != null">wx_last_login = #{wxLastLogin},</if>
+            <if test="googleId != null">google_id = #{googleId},</if>
+            <if test="googleEmail != null">google_email = #{googleEmail},</if>
+            <if test="googleName != null">google_name = #{googleName},</if>
+            <if test="googleAvatar != null">google_avatar = #{googleAvatar},</if>
+            <if test="googleLastLogin != null">google_last_login = #{googleLastLogin},</if>
+            <if test="inviteCode != null">invite_code = #{inviteCode},</if>
+            <if test="referredBy != null">referred_by = #{referredBy},</if>
+            <if test="status != null">status = #{status},</if>
+            updated_at = now()
+        </set>
+        WHERE user_id = #{id}
+    </update>
 
 </mapper>

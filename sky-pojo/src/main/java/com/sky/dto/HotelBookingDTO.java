@@ -65,6 +65,15 @@ public class HotelBookingDTO implements Serializable {
     @ApiModelProperty("房间单价")
     private BigDecimal roomRate;
 
+    @ApiModelProperty("总金额")
+    private BigDecimal totalAmount;
+
+    @ApiModelProperty("住宿天数")
+    private Integer nights;
+
+    @ApiModelProperty("总客人数")
+    private Integer totalGuests;
+
     @ApiModelProperty("预订状态")
     private String bookingStatus;
 

@@ -643,14 +643,16 @@ public class HotelBookingServiceImpl implements HotelBookingService {
 
     @Override
     public PageResult pageQuery(Integer page, Integer pageSize, String status, String guestName, String guestPhone,
-                               Integer hotelId, String hotelSpecialist, LocalDate checkInDate, LocalDate checkOutDate) {
+                               Integer hotelId, String hotelSpecialist, LocalDate checkInDate, LocalDate checkOutDate,
+                               String bookingReference, String hotelName, LocalDate createdAtStart, LocalDate createdAtEnd) {
         log.info("分页查询酒店预订列表");
         
         // 设置分页参数
         PageHelper.startPage(page, pageSize);
         
         // 执行查询
-        Page<HotelBookingVO> pageResult = (Page<HotelBookingVO>) hotelBookingMapper.pageQuery(status, guestName, guestPhone, hotelId, hotelSpecialist, checkInDate, checkOutDate);
+        Page<HotelBookingVO> pageResult = (Page<HotelBookingVO>) hotelBookingMapper.pageQuery(status, guestName, guestPhone, 
+                hotelId, hotelSpecialist, checkInDate, checkOutDate, bookingReference, hotelName, createdAtStart, createdAtEnd);
         
         // 返回分页结果
         return new PageResult(pageResult.getTotal(), pageResult.getResult());

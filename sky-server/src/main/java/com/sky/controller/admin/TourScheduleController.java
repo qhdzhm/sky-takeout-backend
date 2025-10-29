@@ -203,6 +203,32 @@ public class TourScheduleController {
     }
 
     /**
+     * 更新特殊要求（备注）
+     */
+    @PutMapping("/{scheduleId}/special-requests")
+    @ApiOperation("更新特殊要求")
+    public Result<String> updateSpecialRequests(
+            @ApiParam(name = "scheduleId", value = "行程排序ID", required = true) @PathVariable Integer scheduleId,
+            @ApiParam(name = "specialRequests", value = "特殊要求", required = true) @RequestBody String specialRequests) {
+        
+        log.info("更新特殊要求，行程ID：{}，特殊要求：{}", scheduleId, specialRequests);
+        
+        try {
+            boolean success = tourScheduleOrderService.updateSpecialRequests(scheduleId, specialRequests);
+            if (success) {
+                log.info("特殊要求更新成功，行程ID：{}", scheduleId);
+                return Result.success("特殊要求更新成功");
+            } else {
+                log.warn("特殊要求更新失败，行程ID：{}", scheduleId);
+                return Result.error("特殊要求更新失败，请检查行程是否存在");
+            }
+        } catch (Exception e) {
+            log.error("更新特殊要求失败，行程ID：{}，错误：{}", scheduleId, e.getMessage(), e);
+            return Result.error("更新特殊要求失败：" + e.getMessage());
+        }
+    }
+
+    /**
      * 根据酒店名称和日期统计住在该酒店的所有客人
      */
     @GetMapping("/hotel-statistics")

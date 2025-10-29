@@ -76,6 +76,10 @@ public interface HotelBookingMapper {
      * @param hotelSpecialist 酒店专员
      * @param checkInDate 入住日期开始
      * @param checkOutDate 入住日期结束
+     * @param bookingReference 预订号
+     * @param hotelName 酒店名称
+     * @param createdAtStart 下单时间开始
+     * @param createdAtEnd 下单时间结束
      * @return 酒店预订详细信息列表
      */
     List<HotelBookingVO> pageQuery(@Param("status") String status,
@@ -84,7 +88,11 @@ public interface HotelBookingMapper {
                                    @Param("hotelId") Integer hotelId,
                                    @Param("hotelSpecialist") String hotelSpecialist,
                                    @Param("checkInDate") LocalDate checkInDate,
-                                   @Param("checkOutDate") LocalDate checkOutDate);
+                                   @Param("checkOutDate") LocalDate checkOutDate,
+                                   @Param("bookingReference") String bookingReference,
+                                   @Param("hotelName") String hotelName,
+                                   @Param("createdAtStart") LocalDate createdAtStart,
+                                   @Param("createdAtEnd") LocalDate createdAtEnd);
 
     /**
      * 根据ID查询酒店预订详细信息（包含关联信息）

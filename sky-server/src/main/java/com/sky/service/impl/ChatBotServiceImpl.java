@@ -577,11 +577,13 @@ public class ChatBotServiceImpl implements ChatBotService {
             // 解析订单信息
             OrderInfo orderInfo = parseOrderInfo(request.getMessage());
             
-            // 智能产品匹配
-            GroupTourDTO product = findMatchingProduct(orderInfo.getServiceType());
+            // 智能产品匹配（返回匹配结果对象，包含单个产品或多个候选产品）
+            ProductMatchResult matchResult = findMatchingProductWithOptions(orderInfo.getServiceType());
             
-            if (product != null) {
-                log.info("找到匹配的产品: ID={}, 名称={}", product.getId(), product.getName());
+            if (matchResult.isUniqueMatch()) {
+                // 找到唯一匹配的产品，直接跳转
+                GroupTourDTO product = matchResult.getUniqueProduct();
+                log.info("找到唯一匹配的产品: ID={}, 名称={}", product.getId(), product.getName());
                 
                 // 生成订单URL参数
                 String orderParams = generateOrderParams(orderInfo, product);
@@ -593,7 +595,6 @@ public class ChatBotServiceImpl implements ChatBotService {
                 
                 if (isAgent) {
                     // 中介用户（操作员或中介主号）跳转到中介订单页面
-                    // 确保URL参数中包含tourId
                     String agentOrderParams = "tourId=" + product.getId() + "&" + orderParams;
                     redirectUrl = "/agent-booking/group-tours/" + product.getId() + "?" + agentOrderParams;
                     String userTypeName = (userType == 2) ? "操作员" : (userType == 3) ? "中介主号" : "中介用户";
@@ -629,10 +630,19 @@ public class ChatBotServiceImpl implements ChatBotService {
                     JSON.toJSONString(orderInfo),
                     redirectUrl
                 );
+            } else if (matchResult.hasMultipleOptions()) {
+                // 找到多个匹配的产品，让用户选择
+                List<GroupTourDTO> candidates = matchResult.getCandidateProducts();
+                log.info("找到 {} 个匹配的产品，需要用户选择", candidates.size());
+                String responseMessage = buildProductSelectionMessage(orderInfo.getServiceType(), candidates);
+                
+                saveChatMessage(request, responseMessage, 1, JSON.toJSONString(orderInfo));
+                return ChatResponse.success(responseMessage);
             } else {
-                // 未找到匹配产品，提供相似产品选择
-                List<GroupTourDTO> similarProducts = findSimilarProducts(orderInfo.getServiceType());
-                String responseMessage = buildProductSelectionMessage(orderInfo.getServiceType(), similarProducts);
+                // 未找到任何匹配产品，显示所有可用产品
+                List<GroupTourDTO> allProducts = groupTourMapper.findAllDisplayedOnUserSite();
+                log.warn("未找到匹配产品，显示所有 {} 个可用产品", allProducts.size());
+                String responseMessage = buildProductSelectionMessage(orderInfo.getServiceType(), allProducts);
                 
                 saveChatMessage(request, responseMessage, 1, JSON.toJSONString(orderInfo));
                 return ChatResponse.success(responseMessage);
@@ -645,26 +655,187 @@ public class ChatBotServiceImpl implements ChatBotService {
     }
     
     /**
-     * 智能产品匹配
+     * 产品匹配结果类（内部类）
      */
-    private GroupTourDTO findMatchingProduct(String serviceType) {
-        if (serviceType == null || serviceType.isEmpty()) {
-            return null;
+    private static class ProductMatchResult {
+        private GroupTourDTO uniqueProduct;
+        private List<GroupTourDTO> candidateProducts;
+        
+        public static ProductMatchResult uniqueMatch(GroupTourDTO product) {
+            ProductMatchResult result = new ProductMatchResult();
+            result.uniqueProduct = product;
+            return result;
         }
         
-        // 1. 先尝试完全匹配
+        public static ProductMatchResult multipleOptions(List<GroupTourDTO> products) {
+            ProductMatchResult result = new ProductMatchResult();
+            result.candidateProducts = products;
+            return result;
+        }
+        
+        public static ProductMatchResult noMatch() {
+            return new ProductMatchResult();
+        }
+        
+        public boolean isUniqueMatch() {
+            return uniqueProduct != null;
+        }
+        
+        public boolean hasMultipleOptions() {
+            return candidateProducts != null && candidateProducts.size() > 1;
+        }
+        
+        public GroupTourDTO getUniqueProduct() {
+            return uniqueProduct;
+        }
+        
+        public List<GroupTourDTO> getCandidateProducts() {
+            return candidateProducts;
+        }
+    }
+    
+    /**
+     * 智能产品匹配（返回匹配结果，包括单个或多个候选）
+     */
+    private ProductMatchResult findMatchingProductWithOptions(String serviceType) {
+        if (serviceType == null || serviceType.isEmpty()) {
+            return ProductMatchResult.noMatch();
+        }
+        
+        log.info("开始智能产品匹配，输入服务类型: {}", serviceType);
+        
+        // 1. 先尝试完全匹配产品名称或产品代码
         GroupTourDTO product = groupTourMapper.findByNameLike(serviceType);
         if (product != null) {
-            return product;
+            log.info("完全匹配成功: {} (ID: {})", product.getName(), product.getId());
+            return ProductMatchResult.uniqueMatch(product);
         }
         
         // 2. 提取关键词进行智能匹配
         String[] keywords = extractKeywords(serviceType);
         if (keywords.length > 0) {
+            log.info("使用关键词进行匹配: {}", java.util.Arrays.toString(keywords));
             List<GroupTourDTO> products = groupTourMapper.findByKeywords(keywords);
             if (!products.isEmpty()) {
-                return products.get(0); // 返回最匹配的产品
+                if (products.size() == 1) {
+                    // 唯一匹配
+                    log.info("关键词匹配成功，找到唯一产品: {} (ID: {})", products.get(0).getName(), products.get(0).getId());
+                    return ProductMatchResult.uniqueMatch(products.get(0));
+                } else {
+                    // 多个匹配，需要用户选择
+                    log.info("关键词匹配找到 {} 个相似产品，需要用户选择", products.size());
+                    return ProductMatchResult.multipleOptions(products);
+                }
+            } else {
+                log.info("关键词匹配失败，没有找到相似产品");
             }
+        } else {
+            log.warn("未能提取到有效关键词");
+        }
+        
+        // 3. 如果还是找不到，尝试更宽松的匹配 - 只用天数匹配
+        java.util.regex.Pattern dayPattern = java.util.regex.Pattern.compile("(\\d+)\\s*(?:日|天)");
+        java.util.regex.Matcher dayMatcher = dayPattern.matcher(serviceType.toLowerCase());
+        if (dayMatcher.find()) {
+            String dayNum = dayMatcher.group(1);
+            String[] dayKeyword = {dayNum + "日"};
+            log.info("尝试仅使用天数关键词匹配: {}", dayNum + "日");
+            List<GroupTourDTO> dayProducts = groupTourMapper.findByKeywords(dayKeyword);
+            if (!dayProducts.isEmpty()) {
+                if (dayProducts.size() == 1) {
+                    log.info("天数关键词匹配成功，找到唯一产品: {} (ID: {})", dayProducts.get(0).getName(), dayProducts.get(0).getId());
+                    return ProductMatchResult.uniqueMatch(dayProducts.get(0));
+                } else {
+                    log.info("天数关键词匹配找到 {} 个相似产品，需要用户选择", dayProducts.size());
+                    return ProductMatchResult.multipleOptions(dayProducts);
+                }
+            }
+        }
+        
+        // 4. 最后尝试：让AI根据订单描述智能选择产品
+        log.info("前面的匹配方法都失败，尝试使用AI智能选择产品");
+        GroupTourDTO aiSelectedProduct = findProductByAI(serviceType);
+        if (aiSelectedProduct != null) {
+            log.info("AI智能选择成功: {} (ID: {})", aiSelectedProduct.getName(), aiSelectedProduct.getId());
+            return ProductMatchResult.uniqueMatch(aiSelectedProduct);
+        }
+        
+        log.warn("所有匹配尝试均失败，无法找到匹配的产品");
+        return ProductMatchResult.noMatch();
+    }
+    
+    /**
+     * 使用AI根据订单描述智能选择最合适的产品
+     */
+    private GroupTourDTO findProductByAI(String serviceType) {
+        // 如果Qwen未配置，直接返回null
+        if (qwenApiKey == null || qwenApiKey.isEmpty()) {
+            log.warn("Qwen API未配置，无法使用AI智能选择");
+            return null;
+        }
+        
+        try {
+            // 只获取在用户端显示的产品（show_on_user_site=1 AND is_active=1）
+            List<GroupTourDTO> displayedProducts = groupTourMapper.findAllDisplayedOnUserSite();
+            if (displayedProducts.isEmpty()) {
+                log.warn("没有找到任何在用户端显示的产品");
+                return null;
+            }
+            
+            log.info("从数据库获取到 {} 个在用户端显示的产品", displayedProducts.size());
+            
+            // 构建产品列表JSON
+            StringBuilder productsJson = new StringBuilder();
+            productsJson.append("[\n");
+            for (int i = 0; i < displayedProducts.size(); i++) {
+                GroupTourDTO p = displayedProducts.get(i);
+                productsJson.append(String.format("  {\"id\": %d, \"name\": \"%s\", \"duration\": \"%s\", \"price\": %.2f}",
+                    p.getId(), p.getName(), p.getDuration(), p.getPrice()));
+                if (i < displayedProducts.size() - 1) {
+                    productsJson.append(",");
+                }
+                productsJson.append("\n");
+            }
+            productsJson.append("]");
+            
+            // 构建AI提示词
+            String aiPrompt = String.format(
+                "你是一个旅游产品匹配专家。用户输入了一个服务类型描述：\"%s\"\n\n" +
+                "以下是所有可用的跟团游产品列表（共%d个产品）：\n%s\n\n" +
+                "请分析用户输入的描述，选择最匹配的产品。考虑因素包括：\n" +
+                "1. 天数是否匹配（最重要）\n" +
+                "2. 地区是否匹配（南部、北部、南北等）\n" +
+                "3. 目的地是否匹配（霍巴特、布鲁尼、亚瑟港、酒杯湾、摇篮山等）\n" +
+                "4. 特色是否匹配（精品小团等）\n\n" +
+                "请直接返回最匹配产品的ID（只返回数字，不要其他内容）。\n" +
+                "如果无法确定匹配的产品，返回：-1",
+                serviceType, displayedProducts.size(), productsJson.toString()
+            );
+            
+            log.info("发送AI智能选择请求，候选产品数量: {}", displayedProducts.size());
+            String aiResponse = callQwenAI(aiPrompt);
+            
+            // 解析AI响应
+            try {
+                int productId = Integer.parseInt(aiResponse.trim());
+                if (productId > 0) {
+                    // 在产品列表中查找匹配的产品
+                    for (GroupTourDTO p : displayedProducts) {
+                        if (p.getId().equals(productId)) {
+                            log.info("AI成功选择产品: {} (ID: {})", p.getName(), p.getId());
+                            return p;
+                        }
+                    }
+                    log.warn("AI返回的产品ID {} 在显示产品列表中不存在", productId);
+                } else {
+                    log.info("AI无法确定匹配的产品");
+                }
+            } catch (NumberFormatException e) {
+                log.warn("AI返回的响应无法解析为产品ID: {}", aiResponse);
+            }
+            
+        } catch (Exception e) {
+            log.error("AI智能选择产品失败: {}", e.getMessage(), e);
         }
         
         return null;
@@ -692,56 +863,129 @@ public class ChatBotServiceImpl implements ChatBotService {
     }
     
     /**
-     * 提取关键词（改进版）
+     * 提取关键词（优化版 - 支持更灵活的模糊匹配）
      */
     private String[] extractKeywords(String serviceType) {
         List<String> keywords = new ArrayList<>();
         
         // 先进行文本标准化
         String normalizedText = normalizeText(serviceType);
+        String originalLower = serviceType.toLowerCase();
         
         // 地区关键词（同义词映射）
-        if (normalizedText.contains("塔州") || normalizedText.contains("塔斯马尼亚") || normalizedText.contains("tasmania")) {
-            keywords.add("塔斯马尼亚");
+        if (originalLower.contains("塔州") || originalLower.contains("塔斯马尼亚") || originalLower.contains("tasmania") || originalLower.contains("塔塔")) {
+            // 不添加塔斯马尼亚作为关键词，因为大部分产品都是塔斯马尼亚的
         }
         
-        // 方位关键词
-        if (normalizedText.contains("南部") || normalizedText.contains("南")) {
-            keywords.add("南部");
-        } else if (normalizedText.contains("北部") || normalizedText.contains("北")) {
-            keywords.add("北部");
-        } else if (normalizedText.contains("东部") || normalizedText.contains("东")) {
+        // 方位关键词 - 重要：先判断"南北"，避免错误匹配
+        // 如果包含"南北"，只添加"南北"关键词，不添加"南部"或"北部"
+        if (originalLower.contains("南北")) {
+            keywords.add("南北");
+            log.info("识别到南北线路关键词");
+        } else {
+            // 只有不包含"南北"时，才判断"南部"或"北部"
+            if (originalLower.contains("南部") || (originalLower.contains("南") && !originalLower.contains("波诺朗"))) {
+                keywords.add("南部");
+            }
+            if (originalLower.contains("北部") || originalLower.contains("北")) {
+                keywords.add("北部");
+            }
+        }
+        
+        // 东西部关键词
+        if (originalLower.contains("东部") || (originalLower.contains("东") && !originalLower.contains("威灵顿"))) {
             keywords.add("东部");
-        } else if (normalizedText.contains("西部") || normalizedText.contains("西")) {
+        }
+        if (originalLower.contains("西部") || originalLower.contains("西")) {
             keywords.add("西部");
         }
         
-        // 天数关键词（支持中文数字和阿拉伯数字）
-        if (normalizedText.contains("1日") || normalizedText.contains("一日") || normalizedText.contains("1天")) {
-            keywords.add("1日");
-        } else if (normalizedText.contains("2日") || normalizedText.contains("二日") || normalizedText.contains("2天") || normalizedText.contains("两日")) {
-            keywords.add("2日");
-        } else if (normalizedText.contains("3日") || normalizedText.contains("三日") || normalizedText.contains("3天")) {
-            keywords.add("3日");
-        } else if (normalizedText.contains("4日") || normalizedText.contains("四日") || normalizedText.contains("4天")) {
-            keywords.add("4日");
-        } else if (normalizedText.contains("5日") || normalizedText.contains("五日") || normalizedText.contains("5天")) {
-            keywords.add("5日");
-        } else if (normalizedText.contains("6日") || normalizedText.contains("六日") || normalizedText.contains("6天")) {
-            keywords.add("6日");
-        } else if (normalizedText.contains("7日") || normalizedText.contains("七日") || normalizedText.contains("7天")) {
-            keywords.add("7日");
+        // 天数关键词（支持中文数字和阿拉伯数字）- 更灵活的匹配
+        // 使用正则表达式提取数字
+        java.util.regex.Pattern dayPattern = java.util.regex.Pattern.compile("(\\d+)\\s*(?:日|天)");
+        java.util.regex.Matcher dayMatcher = dayPattern.matcher(originalLower);
+        if (dayMatcher.find()) {
+            String dayNum = dayMatcher.group(1);
+            keywords.add(dayNum + "日");
+            log.info("提取到天数关键词: {}日", dayNum);
+        } else {
+            // 中文数字匹配
+            if (originalLower.contains("一日") || originalLower.contains("一天")) {
+                keywords.add("1日");
+            } else if (originalLower.contains("二日") || originalLower.contains("二天") || originalLower.contains("两日") || originalLower.contains("两天")) {
+                keywords.add("2日");
+            } else if (originalLower.contains("三日") || originalLower.contains("三天")) {
+                keywords.add("3日");
+            } else if (originalLower.contains("四日") || originalLower.contains("四天")) {
+                keywords.add("4日");
+            } else if (originalLower.contains("五日") || originalLower.contains("五天")) {
+                keywords.add("5日");
+            } else if (originalLower.contains("六日") || originalLower.contains("六天")) {
+                keywords.add("6日");
+            } else if (originalLower.contains("七日") || originalLower.contains("七天")) {
+                keywords.add("7日");
+            }
         }
         
         // 特色关键词
-        if (normalizedText.contains("环岛")) {
+        if (originalLower.contains("环岛")) {
             keywords.add("环岛");
         }
-        if (normalizedText.contains("精华")) {
+        if (originalLower.contains("精华")) {
             keywords.add("精华");
         }
-        if (normalizedText.contains("全景")) {
+        if (originalLower.contains("全景")) {
             keywords.add("全景");
+        }
+        if (originalLower.contains("精品")) {
+            keywords.add("精品");
+        }
+        if (originalLower.contains("小团")) {
+            keywords.add("小团");
+        }
+        
+        // 目的地关键词
+        if (originalLower.contains("霍巴特")) {
+            keywords.add("霍巴特");
+        }
+        if (originalLower.contains("朗塞") || originalLower.contains("朗赛")) {
+            keywords.add("朗塞");
+        }
+        if (originalLower.contains("布鲁尼")) {
+            keywords.add("布鲁尼");
+        }
+        if (originalLower.contains("亚瑟港")) {
+            keywords.add("亚瑟港");
+        }
+        if (originalLower.contains("酒杯湾")) {
+            keywords.add("酒杯湾");
+        }
+        if (originalLower.contains("摇篮山")) {
+            keywords.add("摇篮山");
+        }
+        if (originalLower.contains("费尔德")) {
+            keywords.add("费尔德");
+        }
+        if (originalLower.contains("塔斯曼")) {
+            keywords.add("塔斯曼");
+        }
+        if (originalLower.contains("波诺朗")) {
+            keywords.add("波诺朗");
+        }
+        
+        // 如果没有提取到任何关键词，尝试直接使用产品名部分进行搜索
+        if (keywords.isEmpty()) {
+            // 去除常见的无意义词汇
+            String cleanedText = serviceType
+                .replace("服务类型：", "")
+                .replace("服务类型:", "")
+                .replace("跟团游", "")
+                .replace("跟团", "")
+                .replace("团游", "")
+                .replaceAll("\\s+", "");
+            if (!cleanedText.isEmpty() && cleanedText.length() >= 2) {
+                keywords.add(cleanedText);
+            }
         }
         
         log.info("原始服务类型: {}, 提取的关键词: {}", serviceType, keywords);
@@ -2199,7 +2443,9 @@ public class ChatBotServiceImpl implements ChatBotService {
                     "    \"departureLocation\": \"出发地点(原文描述)\"\n" +
                     "  },\n" +
                     "  \"hotelInfo\": {\n" +
-                    "    \"roomType\": \"房型(保持原文表述)\",\n" +
+                    "    \"roomType\": \"房型(保持原文表述，如果是单一房型)\",\n" +
+                    "    \"hotelRoomCount\": 房间数量(数字),\n" +
+                    "    \"roomTypes\": [\"房型1\", \"房型2\", ...],\n" +
                     "    \"hotelLevel\": \"酒店级别(保持原文)\",\n" +
                     "    \"specialRequests\": \"特殊要求(原文)\"\n" +
                     "  },\n" +
@@ -2234,6 +2480,20 @@ public class ChatBotServiceImpl implements ChatBotService {
                     "4. **准确性**: 数量字段必须是数字类型，电话号码要去除空格\n" +
                     "5. **航班号**: 统一转换为大写格式\n" +
                     "6. **文本清理**: 所有文本要去除前后空格，但保持内容原样\n\n" +
+                    "## 🏨 **房型识别规则（重要）**：\n" +
+                    "1. **复杂房型配置**: 如果提到多种房型（如\"一个三人间一个双床\"、\"2间双人间1间三人间\"），则：\n" +
+                    "   - hotelRoomCount: 总房间数（如2、3等）\n" +
+                    "   - roomTypes: 房型数组，按顺序列出（如[\"三人间\", \"双人间\"]）\n" +
+                    "   - roomType: 留空或填写第一个房型\n" +
+                    "2. **单一房型**: 如果只提到一种房型（如\"三人间\"、\"2间双人间\"），则：\n" +
+                    "   - hotelRoomCount: 房间数量\n" +
+                    "   - roomType: 该房型名称\n" +
+                    "   - roomTypes: 生成对应数量的数组（如[\"双人间\", \"双人间\"]）\n" +
+                    "3. **房型标准化**: 保持原文表述，但常见的有：单人间、双人间、标准双人间、三人间、大床房等\n" +
+                    "4. **数量提取**: \n" +
+                    "   - \"5人要一个三人间一个双床\" → hotelRoomCount=2, roomTypes=[\"三人间\", \"双人间\"]\n" +
+                    "   - \"三个人，要一间三人间\" → hotelRoomCount=1, roomTypes=[\"三人间\"]\n" +
+                    "   - \"2间双人间\" → hotelRoomCount=2, roomTypes=[\"双人间\", \"双人间\"]\n\n" +
                     "请仔细分析并严格按照原文提取所有可用信息：\n\n" +
                     "=== 订单信息开始 ===\n" + message + "\n=== 订单信息结束 ===";
             
@@ -2378,9 +2638,50 @@ public class ChatBotServiceImpl implements ChatBotService {
                 if (result.containsKey("hotelInfo")) {
                     JSONObject hotelInfo = result.getJSONObject("hotelInfo");
                     
+                    // 房型（单一）
                     if (hotelInfo.containsKey("roomType") && hotelInfo.getString("roomType") != null) {
-                        builder.roomType(hotelInfo.getString("roomType").trim());
+                        String roomTypeStr = hotelInfo.getString("roomType").trim();
+                        if (!roomTypeStr.isEmpty()) {
+                            builder.roomType(roomTypeStr);
+                        }
                     }
+                    
+                    // 房间数量
+                    if (hotelInfo.containsKey("hotelRoomCount")) {
+                        try {
+                            Integer roomCount = hotelInfo.getInteger("hotelRoomCount");
+                            if (roomCount != null && roomCount > 0) {
+                                builder.hotelRoomCount(roomCount);
+                                log.info("AI解析到房间数量: {}", roomCount);
+                            }
+                        } catch (Exception e) {
+                            log.warn("解析房间数量失败: {}", e.getMessage());
+                        }
+                    }
+                    
+                    // 房型配置数组
+                    if (hotelInfo.containsKey("roomTypes")) {
+                        try {
+                            JSONArray roomTypesArray = hotelInfo.getJSONArray("roomTypes");
+                            if (roomTypesArray != null && !roomTypesArray.isEmpty()) {
+                                List<String> roomTypesList = new ArrayList<>();
+                                for (int i = 0; i < roomTypesArray.size(); i++) {
+                                    String roomTypeItem = roomTypesArray.getString(i);
+                                    if (roomTypeItem != null && !roomTypeItem.trim().isEmpty()) {
+                                        roomTypesList.add(roomTypeItem.trim());
+                                    }
+                                }
+                                if (!roomTypesList.isEmpty()) {
+                                    builder.roomTypes(roomTypesList);
+                                    log.info("AI解析到房型配置: {}", roomTypesList);
+                                }
+                            }
+                        } catch (Exception e) {
+                            log.warn("解析房型配置数组失败: {}", e.getMessage());
+                        }
+                    }
+                    
+                    // 酒店级别
                     if (hotelInfo.containsKey("hotelLevel") && hotelInfo.getString("hotelLevel") != null) {
                         builder.hotelLevel(hotelInfo.getString("hotelLevel").trim());
                     }
@@ -2506,6 +2807,8 @@ public class ChatBotServiceImpl implements ChatBotService {
         builder.groupSize(aiResult.getGroupSize() != null ? aiResult.getGroupSize() : traditionalResult.getGroupSize());
         builder.luggage(aiResult.getLuggage() != null ? aiResult.getLuggage() : traditionalResult.getLuggage());
         builder.roomType(aiResult.getRoomType() != null ? aiResult.getRoomType() : traditionalResult.getRoomType());
+        builder.hotelRoomCount(aiResult.getHotelRoomCount() != null ? aiResult.getHotelRoomCount() : traditionalResult.getHotelRoomCount());
+        builder.roomTypes(aiResult.getRoomTypes() != null ? aiResult.getRoomTypes() : traditionalResult.getRoomTypes());
         builder.hotelLevel(aiResult.getHotelLevel() != null ? aiResult.getHotelLevel() : traditionalResult.getHotelLevel());
         builder.arrivalFlight(aiResult.getArrivalFlight() != null ? aiResult.getArrivalFlight() : traditionalResult.getArrivalFlight());
         builder.departureFlight(aiResult.getDepartureFlight() != null ? aiResult.getDepartureFlight() : traditionalResult.getDepartureFlight());
@@ -2538,17 +2841,17 @@ public class ChatBotServiceImpl implements ChatBotService {
     private OrderInfo parseOrderInfoTraditional(String message) {
         OrderInfo.OrderInfoBuilder builder = OrderInfo.builder();
         
-        // 使用正则表达式提取信息
+        // 使用正则表达式提取信息（支持全角和半角冒号）
         // 支持多种服务类型字段名
-        extractField(message, "服务类型：(.+?)\\n", builder::serviceType);
-        extractField(message, "目的地：(.+?)\\n", builder::serviceType);
-        extractField(message, "出发地点：(.+?)\\n", builder::departure);
-        extractField(message, "服务车型：(.+?)\\n", builder::vehicleType);
-        extractField(message, "房型：(.+?)\\n", builder::roomType);
-        extractField(message, "酒店级别：(.+?)\\n", builder::hotelLevel);
+        extractField(message, "服务类型[：:](.+?)\\n", builder::serviceType);
+        extractField(message, "目的地[：:](.+?)\\n", builder::serviceType);
+        extractField(message, "出发地点[：:](.+?)\\n", builder::departure);
+        extractField(message, "服务车型[：:](.+?)\\n", builder::vehicleType);
+        extractField(message, "房型[：:](.+?)\\n", builder::roomType);
+        extractField(message, "酒店级别[：:](.+?)\\n", builder::hotelLevel);
         
-        // 解析日期范围
-        Pattern datePattern = Pattern.compile("(?:参团日期|预计到达日期).*?：(.+?)\\n");
+        // 解析日期范围（支持全角和半角冒号）
+        Pattern datePattern = Pattern.compile("(?:参团日期|预计到达日期).*?[：:](.+?)\\n");
         Matcher dateMatcher = datePattern.matcher(message);
         if (dateMatcher.find()) {
             String dateRange = dateMatcher.group(1).trim();
@@ -2561,15 +2864,15 @@ public class ChatBotServiceImpl implements ChatBotService {
         // 解析航班信息
         extractFlightInfo(message, builder);
         
-        // 解析人数
-        Pattern groupPattern = Pattern.compile("跟团人数：(\\d+)");
+        // 解析人数（支持全角和半角冒号）
+        Pattern groupPattern = Pattern.compile("跟团人数[：:](\\d+)");
         Matcher groupMatcher = groupPattern.matcher(message);
         if (groupMatcher.find()) {
             builder.groupSize(Integer.parseInt(groupMatcher.group(1)));
         }
         
-        // 解析行李数
-        Pattern luggagePattern = Pattern.compile("行李数：(\\d+)");
+        // 解析行李数（支持全角和半角冒号）
+        Pattern luggagePattern = Pattern.compile("行李数[：:](\\d+)");
         Matcher luggageMatcher = luggagePattern.matcher(message);
         if (luggageMatcher.find()) {
             builder.luggage(Integer.parseInt(luggageMatcher.group(1)));
@@ -2625,8 +2928,8 @@ public class ChatBotServiceImpl implements ChatBotService {
      * 解析航班信息
      */
     private void extractFlightInfo(String message, OrderInfo.OrderInfoBuilder builder) {
-        // 解析抵达时间
-        Pattern arrivalTimePattern = Pattern.compile("抵达时间\\s*:(.+?)\\n");
+        // 解析抵达时间（支持全角和半角冒号）
+        Pattern arrivalTimePattern = Pattern.compile("抵达时间\\s*[：:](.+?)\\n");
         Matcher arrivalTimeMatcher = arrivalTimePattern.matcher(message);
         if (arrivalTimeMatcher.find()) {
             String arrivalTime = arrivalTimeMatcher.group(1).trim();
@@ -3166,10 +3469,31 @@ public class ChatBotServiceImpl implements ChatBotService {
                 }
             }
             
-            // 住宿信息
-            if (orderInfo.getRoomType() != null && !orderInfo.getRoomType().trim().isEmpty()) {
+            // 住宿信息 - 房间数量
+            if (orderInfo.getHotelRoomCount() != null && orderInfo.getHotelRoomCount() > 0) {
+                params.append("hotelRoomCount=").append(orderInfo.getHotelRoomCount()).append("&");
+                log.info("添加房间数量参数: {}", orderInfo.getHotelRoomCount());
+            }
+            
+            // 住宿信息 - 房型配置数组
+            if (orderInfo.getRoomTypes() != null && !orderInfo.getRoomTypes().isEmpty()) {
+                try {
+                    for (int i = 0; i < orderInfo.getRoomTypes().size(); i++) {
+                        String roomType = orderInfo.getRoomTypes().get(i);
+                        if (roomType != null && !roomType.trim().isEmpty()) {
+                            params.append("roomType").append(i).append("=")
+                                  .append(java.net.URLEncoder.encode(roomType.trim(), "UTF-8")).append("&");
+                        }
+                    }
+                    log.info("添加房型配置数组参数: {}", orderInfo.getRoomTypes());
+                } catch (java.io.UnsupportedEncodingException e) {
+                    log.warn("URL编码房型配置失败: {}", e.getMessage());
+                }
+            } else if (orderInfo.getRoomType() != null && !orderInfo.getRoomType().trim().isEmpty()) {
+                // 如果没有房型数组，使用单个房型
                 try {
                     params.append("roomType=").append(java.net.URLEncoder.encode(orderInfo.getRoomType().trim(), "UTF-8")).append("&");
+                    log.info("添加单个房型参数: {}", orderInfo.getRoomType());
                 } catch (java.io.UnsupportedEncodingException e) {
                     params.append("roomType=").append(orderInfo.getRoomType().trim()).append("&");
                 }

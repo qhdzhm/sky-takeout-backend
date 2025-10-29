@@ -33,7 +33,7 @@ public class UserGroupTourController {
     private DiscountService discountService;
 
     /**
-     * 获取所有跟团游产品
+     * 获取所有跟团游产品（用户端）
      * @param params 查询参数
      * @return 分页结果
      */
@@ -41,6 +41,9 @@ public class UserGroupTourController {
     @ApiOperation("获取所有跟团游产品")
     public Result<PageResult> getAllGroupTours(@RequestParam Map<String, Object> params) {
         log.info("获取所有跟团游产品，参数：{}", params);
+        
+        // 用户端只显示 show_on_user_site=1 的产品
+        params.put("showOnUserSite", 1);
         
         // 获取代理商ID（如果是代理商用户）
         Long agentId = getAgentIdFromRequest(params);

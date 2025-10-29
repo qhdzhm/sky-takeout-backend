@@ -150,13 +150,49 @@ public class AgentCreditServiceImpl implements AgentCreditService {
     @Override
     @Transactional
     public CreditPaymentResultVO payWithCredit(Long agentId, CreditPaymentDTO paymentDTO) {
+        // 最大重试次数（乐观锁冲突时重试）
+        int maxRetries = 3;
+        int retryCount = 0;
+        
+        while (retryCount <= maxRetries) {
+            try {
+                // 执行支付逻辑
+                return executePaymentWithOptimisticLock(agentId, paymentDTO, retryCount);
+            } catch (BusinessException e) {
+                // 如果是乐观锁冲突，重试
+                if (e.getMessage().contains("并发冲突") && retryCount < maxRetries) {
+                    retryCount++;
+                    log.warn("⚠️ 信用支付并发冲突，第{}次重试 - 代理商ID: {}, 订单ID: {}", 
+                            retryCount, agentId, paymentDTO.getBookingId());
+                    // 短暂等待后重试（避免立即重试导致的冲突）
+                    try {
+                        Thread.sleep(50 * retryCount); // 递增等待时间：50ms, 100ms, 150ms
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new BusinessException("支付处理被中断");
+                    }
+                } else {
+                    // 其他业务异常或重试次数用完，直接抛出
+                    throw e;
+                }
+            }
+        }
+        
+        // 如果所有重试都失败
+        throw new BusinessException("支付失败，系统繁忙请稍后重试");
+    }
+    
+    /**
+     * 执行带乐观锁的支付逻辑（内部方法）
+     */
+    private CreditPaymentResultVO executePaymentWithOptimisticLock(Long agentId, CreditPaymentDTO paymentDTO, int retryCount) {
         // 获取代理商信息
         Agent agent = agentMapper.getById(agentId);
         if (agent == null) {
             throw new BusinessException("代理商信息不存在");
         }
         
-        // 检查信用额度是否足够
+        // 读取最新的信用额度信息（每次重试都重新读取）
         AgentCredit agentCredit = agentCreditMapper.getByAgentId(agentId);
         if (agentCredit == null) {
             throw new BusinessException("代理商信用额度信息不存在");
@@ -167,6 +203,13 @@ public class AgentCreditServiceImpl implements AgentCreditService {
             throw new BusinessException(CreditConstants.ERROR_ACCOUNT_FROZEN);
         }
         
+        // 保存原始版本号，用于乐观锁检查
+        Integer originalVersion = agentCredit.getVersion();
+        if (originalVersion == null) {
+            originalVersion = 0;
+            agentCredit.setVersion(0);
+        }
+        
         BigDecimal amount = paymentDTO.getAmount();
         // 计算总可用额度：信用额度 + 预存余额
         BigDecimal totalAvailable = agentCredit.getTotalCredit()
@@ -174,12 +217,14 @@ public class AgentCreditServiceImpl implements AgentCreditService {
             .add(agentCredit.getDepositBalance());
             
         if (totalAvailable.compareTo(amount) < 0) {
-            throw new BusinessException("可用额度不足，请充值后再支付");
+            throw new BusinessException("可用额度不足，当前可用: " + totalAvailable + "元，需要: " + amount + "元");
         }
         
-        // 生成交易编号
-        String transactionNo = "TX" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) 
-                + String.format("%04d", (int)(Math.random() * 10000));
+        // 生成唯一交易编号（使用UUID + 时间戳，保证全局唯一）
+        String transactionNo = generateUniqueTransactionNo(agentId);
+        
+        log.info("🔐 开始信用支付 - 代理商ID: {}, 订单ID: {}, 金额: {}, 交易号: {}, 版本号: {}, 重试次数: {}", 
+                agentId, paymentDTO.getBookingId(), amount, transactionNo, originalVersion, retryCount);
         
         // 记录交易前余额/后余额（总可用=信用+押金-已用）
         BigDecimal balanceBefore = totalAvailable;
@@ -211,11 +256,9 @@ public class AgentCreditServiceImpl implements AgentCreditService {
             
         agentCredit.setLastUpdated(LocalDateTime.now());
         
-        // 记录交易
-        // 获取当前实际操作人ID（可能是agent、operator或user）
+        // 先记录交易（即使后续更新失败也有记录）
         Long currentOperatorId = BaseContext.getCurrentId();
         if (currentOperatorId == null) {
-            // 如果无法获取当前操作人ID，则使用agentId作为fallback
             currentOperatorId = agentId;
         }
         
@@ -234,8 +277,17 @@ public class AgentCreditServiceImpl implements AgentCreditService {
         
         creditTransactionMapper.insert(transaction);
         
-        // 更新信用额度
-        agentCreditMapper.update(agentCredit);
+        // 使用乐观锁更新信用额度（关键步骤）
+        int updatedRows = agentCreditMapper.updateWithVersion(agentCredit);
+        
+        if (updatedRows == 0) {
+            // 版本号不匹配，说明有并发冲突
+            log.warn("❌ 乐观锁冲突 - 代理商ID: {}, 当前版本号: {}, 期望更新失败", agentId, originalVersion);
+            throw new BusinessException("并发冲突，正在重试");
+        }
+        
+        log.info("✅ 信用支付成功 - 代理商ID: {}, 交易号: {}, 金额: {}, 余额: {} -> {}", 
+                agentId, transactionNo, amount, balanceBefore, balanceAfter);
         
         // 返回支付结果
         return CreditPaymentResultVO.builder()
@@ -247,6 +299,30 @@ public class AgentCreditServiceImpl implements AgentCreditService {
                 .balanceAfter(transaction.getBalanceAfter())
                 .paymentStatus("paid")
                 .build();
+    }
+    
+    /**
+     * 生成唯一交易编号
+     * 格式: 账号名(前5位) + UUID(前16位)
+     * 示例: LJY00-1234567890ABCDEF
+     */
+    private String generateUniqueTransactionNo(Long agentId) {
+        // 获取代理商信息
+        Agent agent = agentMapper.getById(agentId);
+        String agentName = agent != null && agent.getUsername() != null 
+            ? agent.getUsername() : String.valueOf(agentId);
+        
+        // 账号名标准化：只取前5位，不足补0
+        String agentPrefix = (agentName.length() >= 5) 
+            ? agentName.substring(0, 5).toUpperCase() 
+            : String.format("%-5s", agentName.toUpperCase()).replace(' ', '0');
+        
+        // 生成UUID并取前16位（保证唯一性）
+        String uuid = java.util.UUID.randomUUID().toString().replace("-", "").toUpperCase();
+        String uuidPart = uuid.substring(0, 16);
+        
+        // 格式: LJY00-1234567890ABCDEF (总长度22位)
+        return agentPrefix + "-" + uuidPart;
     }
 
     /**

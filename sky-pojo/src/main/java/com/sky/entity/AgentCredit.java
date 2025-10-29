@@ -81,6 +81,11 @@ public class AgentCredit implements Serializable {
     private Boolean isFrozen;
     
     /**
+     * 版本号（用于乐观锁并发控制）
+     */
+    private Integer version;
+    
+    /**
      * 最后更新时间
      */
     private LocalDateTime lastUpdated;

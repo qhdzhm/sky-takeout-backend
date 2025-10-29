@@ -76,4 +76,7 @@ public class GroupTour implements Serializable {
     
     /** 包含项列表（非数据库字段，关联查询） */
     private List<String> inclusions;
+    
+    /** 小团差价（每人每天） */
+    private BigDecimal smallGroupPriceDifference;
 } 

@@ -776,6 +776,55 @@ public class TourScheduleOrderServiceImpl implements TourScheduleOrderService {
     }
 
     @Override
+    public boolean updateSpecialRequests(Integer scheduleId, String specialRequests) {
+        log.info("开始更新特殊要求，行程ID：{}，特殊要求：{}", scheduleId, specialRequests);
+        
+        try {
+            // 1. 先获取当前schedule的booking_id
+            TourScheduleOrder schedule = tourScheduleOrderMapper.getById(scheduleId);
+            if (schedule == null) {
+                log.warn("⚠️ 未找到行程ID：{}，无法更新特殊要求", scheduleId);
+                return false;
+            }
+            
+            Integer bookingId = schedule.getBookingId();
+            if (bookingId == null) {
+                log.warn("⚠️ 行程ID：{} 没有关联订单，无法更新特殊要求", scheduleId);
+                return false;
+            }
+            
+            log.info("📋 找到订单ID：{}，准备更新该订单的所有行程记录", bookingId);
+            
+            // 2. 🔧 更新tour_booking表 - 主订单表
+            try {
+                int bookingUpdated = tourBookingMapper.updateSpecialRequestsByBookingId(bookingId, specialRequests);
+                if (bookingUpdated > 0) {
+                    log.info("✅ 同步更新tour_booking表成功，订单ID：{}，影响行数：{}", bookingId, bookingUpdated);
+                } else {
+                    log.warn("⚠️ tour_booking表更新失败，订单ID：{}", bookingId);
+                }
+            } catch (Exception e) {
+                log.error("❌ 同步更新tour_booking表失败，订单ID：{}，错误：{}", bookingId, e.getMessage());
+            }
+            
+            // 3. 🔧 更新同一订单的所有tour_schedule_order记录（多天行程）
+            int scheduleUpdatedRows = tourScheduleOrderMapper.updateSpecialRequestsByBookingId(bookingId, specialRequests);
+            
+            if (scheduleUpdatedRows > 0) {
+                log.info("✅ tour_schedule_order表特殊要求更新成功，订单ID：{}，影响行数：{}（覆盖所有天数）", bookingId, scheduleUpdatedRows);
+                return true;
+            } else {
+                log.warn("⚠️ tour_schedule_order表更新失败，订单ID：{}", bookingId);
+                return false;
+            }
+            
+        } catch (Exception e) {
+            log.error("更新特殊要求时发生异常，行程ID：{}，错误：{}", scheduleId, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    @Override
     public HotelCustomerStatisticsVO getHotelCustomerStatistics(String hotelName, LocalDate tourDate) {
         log.info("开始统计酒店客人信息，酒店名称：{}，日期：{}", hotelName, tourDate);
         

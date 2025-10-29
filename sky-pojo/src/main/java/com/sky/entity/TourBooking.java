@@ -191,6 +191,14 @@ public class TourBooking implements Serializable {
     // 团型价格（如有调整）
     private BigDecimal groupTypePrice;
     
+    // ====== 小团管理字段 ======
+    
+    // 是否为小团（0：否，1：是）
+    private Boolean isSmallGroup;
+    
+    // 小团额外费用总计
+    private BigDecimal smallGroupExtraFee;
+    
     // ====== 关联查询字段（非数据库字段） ======
     
     // 分配的操作员姓名

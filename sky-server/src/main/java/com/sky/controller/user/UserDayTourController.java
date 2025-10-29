@@ -35,7 +35,7 @@ public class UserDayTourController {
     private DiscountService discountService;
 
     /**
-     * 获取所有一日游
+     * 获取所有一日游（用户端）
      * @param params 查询参数
      * @return 分页结果
      */
@@ -43,6 +43,10 @@ public class UserDayTourController {
     @ApiOperation("获取所有一日游")
     public Result<PageResult> getDayTours(@RequestParam Map<String, Object> params) {
         log.info("获取所有一日游，参数：{}", params);
+        
+        // 用户端只显示 show_on_user_site=1 的产品
+        params.put("showOnUserSite", 1);
+        
         PageResult pageResult = dayTourService.getAllDayTours(params);
         return Result.success(pageResult);
     }

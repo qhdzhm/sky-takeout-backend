@@ -88,6 +88,18 @@ public class TourBookingVO implements Serializable {
     @ApiModelProperty("团队规模")
     private Integer groupSize;
     
+    @ApiModelProperty("成人数量")
+    private Integer adultCount;
+    
+    @ApiModelProperty("儿童数量")
+    private Integer childCount;
+    
+    @ApiModelProperty("团型(standard:普通团, small_12:12人团, small_14:14人团, luxury:精品团)")
+    private String groupType;
+    
+    @ApiModelProperty("团型人数限制")
+    private Integer groupSizeLimit;
+    
     @ApiModelProperty("行李数量")
     private Integer luggageCount;
     

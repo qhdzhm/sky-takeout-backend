@@ -132,58 +132,38 @@ public class DiscountServiceImpl implements DiscountService {
                 return result;
             }
             
-            // 尝试使用新的产品级别折扣系统
-            try {
-                BigDecimal productDiscountRate = enhancedDiscountService.getAgentProductDiscountRate(agentId, tourType, tourId);
-                if (productDiscountRate != null) {
-                    log.info("使用产品级别折扣率: {}", productDiscountRate);
-                    
-                    // 使用新的折扣计算方式
-                    Map<String, Object> enhancedResult = enhancedDiscountService.calculateProductDiscount(
-                            tourType, tourId, originalPrice, agentId, null);
-                    
-                    // 将新结果映射到原有结果格式以保持兼容性
-                    result.put("discountedPrice", enhancedResult.get("discountedPrice"));
-                    result.put("discountRate", enhancedResult.get("discountRate"));
-                    result.put("savedAmount", enhancedResult.get("savedAmount"));
-                    result.put("levelCode", enhancedResult.get("levelCode"));
-                    result.put("enhancedMode", true); // 标记使用了增强模式
-                    
-                    log.info("使用产品级别折扣计算完成");
-                    return result;
-                }
-            } catch (Exception e) {
-                log.warn("产品级别折扣计算失败，回退到统一折扣模式", e);
+            // 查询产品级别折扣配置
+            BigDecimal productDiscountRate = enhancedDiscountService.getAgentProductDiscountRate(agentId, tourType, tourId);
+            
+            if (productDiscountRate != null) {
+                // 找到产品折扣配置，使用配置的折扣率
+                log.info("使用产品级别折扣率: {}", productDiscountRate);
+                
+                Map<String, Object> enhancedResult = enhancedDiscountService.calculateProductDiscount(
+                        tourType, tourId, originalPrice, agentId, null);
+                
+                result.put("discountedPrice", enhancedResult.get("discountedPrice"));
+                result.put("discountRate", enhancedResult.get("discountRate"));
+                result.put("savedAmount", enhancedResult.get("savedAmount"));
+                result.put("levelCode", enhancedResult.get("levelCode"));
+                result.put("enhancedMode", true);
+                
+                log.info("使用产品级别折扣计算完成");
+                return result;
+            } else {
+                // 未找到产品折扣配置，使用原价（不打折）
+                log.info("未找到产品折扣配置，使用原价（不打折）");
+                
+                result.put("discountedPrice", originalPrice);
+                result.put("discountRate", BigDecimal.ONE);
+                result.put("savedAmount", BigDecimal.ZERO);
+                result.put("enhancedMode", false);
+                
+                log.info("使用原价 - ID: {}, 类型: {}, 原价: {}, 折扣价: {}, 折扣率: 1.00", 
+                        tourId, tourType, originalPrice, originalPrice);
+                
+                return result;
             }
-            
-            // 回退到原有的统一折扣率逻辑
-            log.info("使用传统统一折扣率模式");
-            
-            // 获取代理商折扣率
-            BigDecimal discountRate = getAgentDiscountRate(agentId);
-            
-            // 计算折扣价格
-            BigDecimal discountedPrice = originalPrice.multiply(discountRate).setScale(2, RoundingMode.HALF_UP);
-            
-            // 计算节省金额
-            BigDecimal savedAmount = originalPrice.subtract(discountedPrice).setScale(2, RoundingMode.HALF_UP);
-            
-            result.put("discountedPrice", discountedPrice);
-            result.put("discountRate", discountRate);
-            result.put("savedAmount", savedAmount);
-            result.put("enhancedMode", false); // 标记使用了传统模式
-            
-            // 保存折扣计算历史
-            try {
-                saveDiscountHistory(tourId, tourType, agentId, originalPrice, discountedPrice, discountRate);
-            } catch (Exception e) {
-                log.warn("保存折扣计算历史失败", e);
-            }
-            
-            log.info("旅游产品折扣计算完成 - ID: {}, 类型: {}, 原价: {}, 折扣价: {}, 折扣率: {}, 节省: {}", 
-                    tourId, tourType, originalPrice, discountedPrice, discountRate, savedAmount);
-            
-            return result;
         } catch (Exception e) {
             log.error("计算旅游产品折扣价格异常", e);
             result.put("discountedPrice", originalPrice);

@@ -90,6 +90,14 @@ public interface TourScheduleOrderService {
     boolean updateGuideRemarks(Integer scheduleId, String guideRemarks);
 
     /**
+     * 更新特殊要求（备注）
+     * @param scheduleId 行程排序ID
+     * @param specialRequests 特殊要求
+     * @return 更新结果
+     */
+    boolean updateSpecialRequests(Integer scheduleId, String specialRequests);
+
+    /**
      * 根据酒店名称和日期统计住在该酒店的所有客人
      * @param hotelName 酒店名称
      * @param tourDate 旅游日期

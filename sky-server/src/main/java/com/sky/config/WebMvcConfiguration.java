@@ -62,7 +62,8 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
                 .addPathPatterns("/orders/**")  // 代理商也可以访问订单API
                 .addPathPatterns("/user/bookings/**")  // 代理商也可以访问用户订单API
                 .addPathPatterns("/user/payments/**")   // 代理商也可以访问支付API
-                .excludePathPatterns("/agent/login");  // 仅排除代理商登录，其余均需鉴权
+                .excludePathPatterns("/agent/login")  // 排除代理商登录
+                .excludePathPatterns("/user/bookings/tour/calculate-price");  // 允许游客计算价格
 
         // 普通用户接口拦截器
         registry.addInterceptor(jwtTokenUserInterceptor)
@@ -79,6 +80,9 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
                 .excludePathPatterns("/chatbot/health")       // ChatBot健康检查不需要认证
                 // 微信登录相关接口
                 .excludePathPatterns("/user/wechat/qrcode-url")
+                // Google 登录相关接口
+                .excludePathPatterns("/user/google/verify")    // Google 登录验证
+                .excludePathPatterns("/user/google/auth-url")  // 获取 Google 授权 URL
                 // 旅游相关API不需要身份验证
                 .excludePathPatterns("/user/day-tours")
                 .excludePathPatterns("/user/day-tours/*")
@@ -97,6 +101,7 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
                 .excludePathPatterns("/regions")
                 // 酒店价格和价格计算API也不需要身份验证
                 .excludePathPatterns("/user/bookings/hotel-prices")
+                .excludePathPatterns("/user/bookings/tour/calculate-price")  // 允许游客计算价格
                 // 订单接口必须鉴权；仅价格计算允许游客模式（在拦截器内放行）
                 // 静态资源和Swagger文档
                 .excludePathPatterns("/")

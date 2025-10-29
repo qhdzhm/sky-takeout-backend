@@ -98,6 +98,9 @@ public class DayTour implements Serializable {
     /** 成本价格 */
     private BigDecimal costPrice;
     
+    /** 小团差价（每人） */
+    private BigDecimal smallGroupPriceDifference;
+    
     /** 地区名称（非数据库字段，关联查询） */
     private String regionName;
     

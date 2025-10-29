@@ -243,6 +243,14 @@ public class DayTourServiceImpl implements DayTourService {
     }
 
     /**
+     * 更新一日游用户端显示状态
+     */
+    @Override
+    public void updateUserSiteVisibility(Integer id, Integer showOnUserSite) {
+        dayTourMapper.updateUserSiteVisibility(id, showOnUserSite);
+    }
+
+    /**
      * 获取一日游亮点
      */
     @Override
@@ -443,6 +451,11 @@ public class DayTourServiceImpl implements DayTourService {
         }
         if (maxPrice != null) {
             queryDTO.setMaxPrice(maxPrice);
+        }
+        
+        // 从参数中获取是否需要过滤用户端显示状态，如果没有指定则不过滤（管理后台）
+        if (params.get("showOnUserSite") != null) {
+            queryDTO.setShowOnUserSite(Integer.parseInt(params.get("showOnUserSite").toString()));
         }
         
         // 分页查询

@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.TourBookingPriceSnapshotMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.sky.entity.TourBookingPriceSnapshot">
+        <id column="id" property="id"/>
+        <result column="booking_id" property="bookingId"/>
+        <result column="base_unit_price" property="baseUnitPrice"/>
+        <result column="discount_rate" property="discountRate"/>
+        <result column="discounted_unit_price" property="discountedUnitPrice"/>
+        <result column="adult_count" property="adultCount"/>
+        <result column="adult_unit_price" property="adultUnitPrice"/>
+        <result column="adult_total_price" property="adultTotalPrice"/>
+        <result column="child_count" property="childCount"/>
+        <result column="children_ages" property="childrenAges"/>
+        <result column="children_details" property="childrenDetails"/>
+        <result column="child_total_price" property="childTotalPrice"/>
+        <result column="hotel_level" property="hotelLevel"/>
+        <result column="hotel_price_diff_total" property="hotelPriceDiffTotal"/>
+        <result column="room_count" property="roomCount"/>
+        <result column="room_types" property="roomTypes"/>
+        <result column="room_fees" property="roomFees"/>
+        <result column="single_room_supplement" property="singleRoomSupplement"/>
+        <result column="accommodation_nights" property="accommodationNights"/>
+        <result column="optional_tours" property="optionalTours"/>
+        <result column="optional_tours_price" property="optionalToursPrice"/>
+        <result column="total_price" property="totalPrice"/>
+        <result column="non_agent_price" property="nonAgentPrice"/>
+        <result column="price_config_snapshot" property="priceConfigSnapshot"/>
+        <result column="calculation_date" property="calculationDate"/>
+        <result column="tour_start_date" property="tourStartDate"/>
+        <result column="tour_end_date" property="tourEndDate"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <!-- 插入价格快照 -->
+    <insert id="insert" parameterType="com.sky.entity.TourBookingPriceSnapshot" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tour_booking_price_snapshots (
+            booking_id,
+            base_unit_price,
+            discount_rate,
+            discounted_unit_price,
+            adult_count,
+            adult_unit_price,
+            adult_total_price,
+            child_count,
+            children_ages,
+            children_details,
+            child_total_price,
+            hotel_level,
+            hotel_price_diff_total,
+            room_count,
+            room_types,
+            room_fees,
+            single_room_supplement,
+            accommodation_nights,
+            optional_tours,
+            optional_tours_price,
+            total_price,
+            non_agent_price,
+            price_config_snapshot,
+            calculation_date,
+            tour_start_date,
+            tour_end_date
+        ) VALUES (
+            #{bookingId},
+            #{baseUnitPrice},
+            #{discountRate},
+            #{discountedUnitPrice},
+            #{adultCount},
+            #{adultUnitPrice},
+            #{adultTotalPrice},
+            #{childCount},
+            #{childrenAges},
+            #{childrenDetails},
+            #{childTotalPrice},
+            #{hotelLevel},
+            #{hotelPriceDiffTotal},
+            #{roomCount},
+            #{roomTypes},
+            #{roomFees},
+            #{singleRoomSupplement},
+            #{accommodationNights},
+            #{optionalTours},
+            #{optionalToursPrice},
+            #{totalPrice},
+            #{nonAgentPrice},
+            #{priceConfigSnapshot},
+            #{calculationDate},
+            #{tourStartDate},
+            #{tourEndDate}
+        )
+    </insert>
+
+    <!-- 根据订单ID查询价格快照 -->
+    <select id="selectByBookingId" resultMap="BaseResultMap">
+        SELECT *
+        FROM tour_booking_price_snapshots
+        WHERE booking_id = #{bookingId}
+        LIMIT 1
+    </select>
+
+    <!-- 根据ID查询价格快照 -->
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT *
+        FROM tour_booking_price_snapshots
+        WHERE id = #{id}
+    </select>
+
+</mapper>
+
+
+
+
+
+
+

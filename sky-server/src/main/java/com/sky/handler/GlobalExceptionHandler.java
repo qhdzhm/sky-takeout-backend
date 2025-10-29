@@ -3,6 +3,7 @@ package com.sky.handler;
 import com.sky.constant.MessageConstant;
 import com.sky.exception.BaseException;
 import com.sky.exception.BusinessException;
+import com.sky.exception.PriceChangedException;
 import com.sky.result.Result;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -54,6 +55,17 @@ public class GlobalExceptionHandler {
             // 如果是警告类型的异常，返回特殊的状态码和消息
             return Result.warningConfirm(ex.getMessage());
         }
+        return Result.error(ex.getMessage());
+    }
+
+    /**
+     * 🔒 P0安全修复：捕获价格变动异常
+     * 当订单创建时价格与前端计算不一致时触发
+     */
+    @ExceptionHandler
+    @ResponseBody
+    public Result exceptionHandler(PriceChangedException ex) {
+        log.error("🔒 价格变动异常：{}", ex.getMessage());
         return Result.error(ex.getMessage());
     }
 

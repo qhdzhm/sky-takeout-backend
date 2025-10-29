@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.HotelDailyPriceMapper">
+
+    <resultMap id="BaseResultMap" type="com.sky.entity.HotelDailyPrice">
+        <id column="id" property="id"/>
+        <result column="hotel_level" property="hotelLevel"/>
+        <result column="price_date" property="priceDate"/>
+        <result column="price_difference" property="priceDifference"/>
+        <result column="daily_single_room_supplement" property="dailySingleRoomSupplement"/>
+        <result column="notes" property="notes"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <!-- 根据酒店星级和日期范围查询 -->
+    <select id="selectByLevelAndDateRange" resultMap="BaseResultMap">
+        SELECT 
+            id, hotel_level, price_date, price_difference, 
+            daily_single_room_supplement, notes, created_at, updated_at
+        FROM 
+            hotel_daily_prices
+        WHERE 
+            hotel_level = #{hotelLevel}
+        <if test="startDate != null">
+            AND price_date &gt;= #{startDate}
+        </if>
+        <if test="endDate != null">
+            AND price_date &lt;= #{endDate}
+        </if>
+        ORDER BY 
+            price_date ASC
+    </select>
+
+    <!-- 根据日期范围查询所有星级 -->
+    <select id="selectByDateRange" resultMap="BaseResultMap">
+        SELECT 
+            id, hotel_level, price_date, price_difference, 
+            daily_single_room_supplement, notes, created_at, updated_at
+        FROM 
+            hotel_daily_prices
+        WHERE 1=1
+        <if test="startDate != null">
+            AND price_date &gt;= #{startDate}
+        </if>
+        <if test="endDate != null">
+            AND price_date &lt;= #{endDate}
+        </if>
+        ORDER BY 
+            price_date ASC, hotel_level ASC
+    </select>
+
+    <!-- 根据星级和日期查询 -->
+    <select id="selectByLevelAndDate" resultMap="BaseResultMap">
+        SELECT 
+            id, hotel_level, price_date, price_difference, 
+            daily_single_room_supplement, notes, created_at, updated_at
+        FROM 
+            hotel_daily_prices
+        WHERE 
+            hotel_level = #{hotelLevel}
+            AND price_date = #{priceDate}
+        LIMIT 1
+    </select>
+
+    <!-- 插入 -->
+    <insert id="insert" parameterType="com.sky.entity.HotelDailyPrice" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO hotel_daily_prices
+        (hotel_level, price_date, price_difference, daily_single_room_supplement, notes, created_at, updated_at)
+        VALUES
+        (#{hotelLevel}, #{priceDate}, #{priceDifference}, #{dailySingleRoomSupplement}, #{notes}, NOW(), NOW())
+    </insert>
+
+    <!-- 更新 -->
+    <update id="update" parameterType="com.sky.entity.HotelDailyPrice">
+        UPDATE hotel_daily_prices
+        SET 
+            price_difference = #{priceDifference},
+            daily_single_room_supplement = #{dailySingleRoomSupplement},
+            notes = #{notes},
+            updated_at = NOW()
+        WHERE 
+            hotel_level = #{hotelLevel}
+            AND price_date = #{priceDate}
+    </update>
+
+    <!-- 根据ID删除 -->
+    <delete id="deleteById">
+        DELETE FROM hotel_daily_prices
+        WHERE id = #{id}
+    </delete>
+
+    <!-- 根据星级和日期删除 -->
+    <delete id="deleteByLevelAndDate">
+        DELETE FROM hotel_daily_prices
+        WHERE hotel_level = #{hotelLevel} AND price_date = #{priceDate}
+    </delete>
+
+    <!-- 批量插入 -->
+    <insert id="batchInsert" parameterType="java.util.List">
+        INSERT INTO hotel_daily_prices
+        (hotel_level, price_date, price_difference, daily_single_room_supplement, notes, created_at, updated_at)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.hotelLevel}, #{item.priceDate}, #{item.priceDifference}, 
+             #{item.dailySingleRoomSupplement}, #{item.notes}, NOW(), NOW())
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            price_difference = VALUES(price_difference),
+            daily_single_room_supplement = VALUES(daily_single_room_supplement),
+            notes = VALUES(notes),
+            updated_at = NOW()
+    </insert>
+</mapper>
+
+
+
+
+
+
+

@@ -60,4 +60,11 @@ public class GroupTourDTO {
     private List<String> tips;
     private List<Map<String, Object>> faqs;
     private List<Map<String, Object>> images;
+    
+    // 状态字段
+    private Integer isActive; // 是否激活 (0-禁用, 1-启用)
+    private Integer showOnUserSite; // 是否在用户端显示 (0-隐藏, 1-显示)
+    
+    // 小团差价
+    private BigDecimal smallGroupPriceDifference; // 小团每人每天差价
 } 

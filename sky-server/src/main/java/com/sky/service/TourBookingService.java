@@ -8,6 +8,7 @@ import com.sky.dto.GroupTourDTO;
 import com.sky.vo.TourBookingVO;
 import com.sky.vo.PriceDetailVO;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Map;
 
 /**
@@ -93,12 +94,17 @@ public interface TourBookingService {
      * @param roomTypes 房间类型数组（JSON字符串格式，如：["大床房","双人间"]，单房型可传单个字符串）
      * @param childrenAges 儿童年龄数组（逗号分隔，如："3,5,8"）
      * @param selectedOptionalTours 用户选择的可选项目（JSON字符串，如：{"1":25,"2":26}）
+     * @param includeHotel 是否包含酒店
+     * @param startDate 行程出发日期（可选，用于计算每日酒店价格）
+     * @param endDate 行程返回日期（可选，住宿夜数 = endDate - startDate）
+     * @param isSmallGroup 是否小团（可选，用于计算小团差价）
      * @return 统一的价格计算结果
      */
     Map<String, Object> calculateUnifiedPrice(Integer tourId, String tourType, Long agentId, 
                                             Integer adultCount, Integer childCount, String hotelLevel, 
                                             Integer roomCount, Long userId, String roomTypes, 
-                                            String childrenAges, String selectedOptionalTours, Boolean includeHotel);
+                                            String childrenAges, String selectedOptionalTours, Boolean includeHotel,
+                                            LocalDate startDate, LocalDate endDate, Boolean isSmallGroup);
 
     /**
      * 根据ID获取一日游信息
@@ -178,4 +184,25 @@ public interface TourBookingService {
      * @return 是否成功
      */
     Boolean restoreOrder(Integer bookingId, Integer userId);
+    
+    // ==================== 🔒 安全功能 ====================
+    
+    /**
+     * 🔒 P0安全功能：验证价格一致性
+     * 在订单创建时重新计算价格，确保与前端传来的价格一致
+     * 
+     * @param bookingDTO 订单DTO（包含前端计算的价格）
+     * @return 重新计算的价格
+     * @throws com.sky.exception.PriceChangedException 如果价格不一致
+     */
+    BigDecimal validateAndRecalculatePrice(TourBookingDTO bookingDTO);
+    
+    /**
+     * 🔒 P1安全功能：保存价格快照
+     * 在订单创建时保存完整的价格计算明细，便于追溯和纠纷处理
+     * 
+     * @param bookingId 订单ID
+     * @param priceResult 价格计算结果
+     */
+    void savePriceSnapshot(Integer bookingId, Map<String, Object> priceResult);
 } 

@@ -1,0 +1,121 @@
+========================================
+优惠券和推荐系统 SQL 文件清单
+========================================
+创建日期: 2025-10-28
+状态: 已完成 ✅
+
+----------------------------------------
+核心SQL文件（按执行顺序）
+----------------------------------------
+
+✅ 00_execute_all_coupon_and_referral_setup.sql
+   - 统一执行脚本（推荐使用）
+   - 自动按顺序执行所有SQL
+
+✅ 01_add_referral_fields_to_users.sql
+   - 为 users 表添加 invite_code 和 referred_by 字段
+   - 创建索引提升查询性能
+
+✅ 02_create_coupon_templates_table.sql
+   - 创建优惠券模板表
+   - 包含2个初始模板：
+     * REFERRAL_REWARD_50 (推荐奖励$50返现券)
+     * NEW_USER_50 (新人立减$50券)
+
+✅ 03_create_user_coupons_table.sql
+   - 创建用户优惠券表
+   - 用户实际拥有的优惠券实例
+
+✅ 04_create_coupon_usage_records_table.sql
+   - 创建优惠券使用记录表
+   - 记录每次使用的详细信息
+
+✅ 05_create_referral_records_table.sql
+   - 创建推荐记录表
+   - 跟踪推荐关系和返利状态
+
+✅ 06_create_coupon_grant_logs_table.sql
+   - 创建优惠券发放日志表
+   - 记录所有发放行为
+
+----------------------------------------
+辅助文件
+----------------------------------------
+
+✅ 07_test_data_sample.sql
+   - 测试数据和验证查询
+   - 包含统计报表SQL
+
+✅ 优惠券和推荐系统SQL说明.md
+   - 详细使用说明
+   - 执行指南
+   - 表结构说明
+
+----------------------------------------
+执行方式
+----------------------------------------
+
+方式1: 统一执行（推荐）
+  mysql -u root -p happy_tassie_travel < 00_execute_all_coupon_and_referral_setup.sql
+
+方式2: 逐个执行
+  mysql -u root -p happy_tassie_travel < 01_add_referral_fields_to_users.sql
+  mysql -u root -p happy_tassie_travel < 02_create_coupon_templates_table.sql
+  mysql -u root -p happy_tassie_travel < 03_create_user_coupons_table.sql
+  mysql -u root -p happy_tassie_travel < 04_create_coupon_usage_records_table.sql
+  mysql -u root -p happy_tassie_travel < 05_create_referral_records_table.sql
+  mysql -u root -p happy_tassie_travel < 06_create_coupon_grant_logs_table.sql
+
+----------------------------------------
+创建的表
+----------------------------------------
+
+1. users (修改)
+   - 新增 invite_code
+   - 新增 referred_by
+
+2. coupon_templates (新建)
+   - 优惠券模板表
+
+3. user_coupons (新建)
+   - 用户优惠券表
+
+4. coupon_usage_records (新建)
+   - 优惠券使用记录表
+
+5. referral_records (新建)
+   - 推荐记录表
+
+6. coupon_grant_logs (新建)
+   - 优惠券发放日志表
+
+----------------------------------------
+验证命令
+----------------------------------------
+
+-- 查看所有优惠券相关表
+SHOW TABLES LIKE '%coupon%';
+
+-- 查看推荐相关表
+SHOW TABLES LIKE '%referral%';
+
+-- 查看 users 表新增字段
+DESC users;
+
+-- 查看优惠券模板初始数据
+SELECT * FROM coupon_templates;
+
+----------------------------------------
+下一步
+----------------------------------------
+
+1. 执行SQL创建表结构
+2. 验证表创建成功
+3. 开始后端代码开发（Entity/Mapper/Service/Controller）
+4. 开始前端页面开发
+
+========================================
+
+
+
+

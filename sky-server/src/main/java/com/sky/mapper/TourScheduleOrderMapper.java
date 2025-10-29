@@ -259,6 +259,15 @@ public interface TourScheduleOrderMapper {
     int updateGuideRemarksByBookingId(Integer bookingId, String guideRemarks);
 
     /**
+     * 根据ID更新特殊要求
+     * @param id 记录ID
+     * @param specialRequests 特殊要求
+     * @return 更新的记录数
+     */
+    @Update("UPDATE tour_schedule_order SET special_requests=#{specialRequests}, updated_at=NOW() WHERE id=#{id}")
+    int updateSpecialRequestsById(Integer id, String specialRequests);
+
+    /**
      * 更新第一天的接机地点为航班号
      * @param bookingId 订单ID
      * @param flightNumber 航班号

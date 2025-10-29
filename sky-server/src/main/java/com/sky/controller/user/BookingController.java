@@ -5,8 +5,13 @@ import com.sky.dto.EmailConfirmationDTO;
 import com.sky.dto.EmailInvoiceDTO;
 import com.sky.dto.GroupTourDTO;
 import com.sky.dto.PaymentDTO;
+import com.sky.dto.PriceCalculationDTO;
 import com.sky.dto.TourBookingDTO;
+import com.sky.exception.PriceChangedException;
+import javax.validation.Valid;
+import java.math.BigDecimal;
 import java.util.concurrent.CompletableFuture;
+import com.alibaba.fastjson.JSON;
 import com.sky.entity.DayTour;
 import com.sky.entity.HotelPriceDifference;
 import com.sky.entity.TourBooking;
@@ -18,6 +23,8 @@ import com.sky.service.EmailService;
 import com.sky.service.HotelPriceService;
 import com.sky.service.TourBookingService;
 import com.sky.vo.PassengerVO;
+import org.springframework.format.annotation.DateTimeFormat;
+import java.time.LocalDate;
 import com.sky.vo.PriceDetailVO;
 import com.sky.vo.TourBookingVO;
 import com.sky.context.BaseContext;
@@ -234,8 +241,57 @@ public class BookingController {
             log.error("⚠️ 获取用户信息失败，使用游客模式", e);
         }
         
+        // 🔒 P0安全功能：验证价格一致性（防止价格变动攻击）
+        try {
+            log.info("🔒 开始验证订单价格一致性");
+            BigDecimal validatedPrice = tourBookingService.validateAndRecalculatePrice(tourBookingDTO);
+            tourBookingDTO.setTotalPrice(validatedPrice);
+            log.info("✅ 价格验证通过: {}", validatedPrice);
+        } catch (PriceChangedException e) {
+            // 价格变动，返回错误提示用户刷新
+            log.error("❌ 价格变动: {}", e.getMessage());
+            return Result.error(e.getMessage());
+        } catch (Exception e) {
+            log.error("❌ 价格验证失败", e);
+            return Result.error("价格验证失败，请重试");
+        }
+        
         // 调用订单服务创建订单
         Integer bookingId = tourBookingService.save(tourBookingDTO);
+        
+        if (bookingId != null) {
+            // 🔒 P1安全功能：保存价格快照（异步，不影响响应速度）
+            try {
+                // 转换roomTypes为JSON字符串
+                String roomTypesJson = null;
+                if (tourBookingDTO.getRoomTypes() != null && !tourBookingDTO.getRoomTypes().isEmpty()) {
+                    roomTypesJson = com.alibaba.fastjson.JSON.toJSONString(tourBookingDTO.getRoomTypes());
+                }
+                
+                // 重新计算价格获取完整数据用于快照
+                Map<String, Object> priceResult = tourBookingService.calculateUnifiedPrice(
+                    tourBookingDTO.getTourId(),
+                    tourBookingDTO.getTourType(),
+                    tourBookingDTO.getAgentId() != null ? tourBookingDTO.getAgentId().longValue() : null,
+                    tourBookingDTO.getAdultCount(),
+                    tourBookingDTO.getChildCount(),
+                    tourBookingDTO.getHotelLevel(),
+                    tourBookingDTO.getHotelRoomCount(),
+                    tourBookingDTO.getUserId() != null ? tourBookingDTO.getUserId().longValue() : null,
+                    roomTypesJson,
+                    null, // childrenAges
+                    tourBookingDTO.getSelectedOptionalTours(),
+                    tourBookingDTO.getIncludeHotel() != null && tourBookingDTO.getIncludeHotel(),
+                    tourBookingDTO.getTourStartDate(),
+                    tourBookingDTO.getTourEndDate(),
+                    tourBookingDTO.getIsSmallGroup()  // 是否小团
+                );
+                tourBookingService.savePriceSnapshot(bookingId, priceResult);
+            } catch (Exception e) {
+                // 快照保存失败不影响订单创建
+                log.error("⚠️ 保存价格快照失败: bookingId={}", bookingId, e);
+            }
+        }
         
         if (bookingId != null) {
             TourBookingVO bookingVO = tourBookingService.getById(bookingId);
@@ -288,42 +344,46 @@ public class BookingController {
     
     /**
      * 计算旅游订单价格（统一接口，支持可选项目和多房间类型）
+     * 
+     * @param tourId 产品ID
+     * @param tourType 产品类型 (day_tour/group_tour)
+     * @param agentId 代理商ID (可选)
+     * @param adultCount 成人数量
+     * @param childCount 儿童数量
+     * @param includeHotel 是否包含酒店
+     * @param hotelLevel 酒店星级
+     * @param roomCount 房间数量
+     * @param userId 用户ID (可选)
+     * @param childrenAges 儿童年龄 (逗号分隔，如 "3,5,8")
+     * @param roomType 房间类型 (单个)
+     * @param roomTypes 房间类型数组 (优先使用此参数)
+     * @param selectedOptionalTours 可选行程 (JSON)
+     * @param startDate 行程出发日期 (用于计算每日酒店价格，格式: yyyy-MM-dd)
+     * @param endDate 行程返回日期 (住宿夜数 = endDate - startDate，格式: yyyy-MM-dd)
+     * @return 价格计算结果
      */
     @PostMapping("/tour/calculate-price")
     @ApiOperation("计算旅游订单价格")
-    public Result<Map<String, Object>> calculateTourPrice(
-            @RequestParam Integer tourId,
-            @RequestParam String tourType,
-            @RequestParam(required = false) Long agentId,
-            @RequestParam Integer adultCount,
-            @RequestParam(required = false, defaultValue = "0") Integer childCount,
-            @RequestParam(required = false, defaultValue = "true") Boolean includeHotel,
-            @RequestParam(required = false, defaultValue = "4星") String hotelLevel,
-            @RequestParam(required = false, defaultValue = "1") Integer roomCount,
-            @RequestParam(required = false) Long userId,
-            @RequestParam(required = false) String childrenAges,
-            @RequestParam(required = false) String roomType,
-            @RequestParam(required = false) String roomTypes,
-            @RequestParam(required = false) String selectedOptionalTours) {
+    public Result<Map<String, Object>> calculateTourPrice(@Valid @RequestBody PriceCalculationDTO dto) {
         
-        // 自动从BaseContext获取代理商ID，如果有的话（支持游客模式）
+        // 🔒 P2安全修复：强制使用已认证的代理商ID，防止折扣绕过
         try {
             Long currentAgentId = BaseContext.getCurrentAgentId();
             
             // 先尝试从BaseContext.getCurrentAgentId()获取
             if (currentAgentId != null) {
-                // 如果从登录Token中获取到了代理商ID，优先使用这个ID
-                agentId = currentAgentId;
-                log.info("从Token中获取代理商ID: {}", agentId);
+                // 如果从登录Token中获取到了代理商ID，强制使用这个ID（忽略前端传入）
+                dto.setAgentId(currentAgentId);
+                log.info("从Token中获取代理商ID: {}", dto.getAgentId());
             } 
             // 再尝试通过用户类型和当前ID推断
-            else if (agentId == null) {
+            else if (dto.getAgentId() == null) {
                 String userType = BaseContext.getCurrentUserType();
                 Long currentId = BaseContext.getCurrentId();
                 
                 if ("agent".equals(userType) && currentId != null) {
-                    agentId = currentId;
-                    log.info("从用户类型和当前ID推断代理商ID: {}", agentId);
+                    dto.setAgentId(currentId);
+                    log.info("从用户类型和当前ID推断代理商ID: {}", dto.getAgentId());
                 } else {
                     log.info("当前用户非代理商，不应用折扣。用户类型: {}, 当前ID: {}", userType, currentId);
                 }
@@ -331,25 +391,31 @@ public class BookingController {
         } catch (Exception e) {
             // 游客模式：BaseContext可能没有用户信息，这是正常的
             log.info("游客模式价格计算，无用户认证信息: {}", e.getMessage());
-            agentId = null; // 确保游客没有代理商折扣
+            dto.setAgentId(null); // 确保游客没有代理商折扣
         }
         
-        log.info("计算旅游订单价格: tourId={}, tourType={}, agentId={}, adultCount={}, childCount={}, includeHotel={}, hotelLevel={}, roomCount={}, userId={}, childrenAges={}, roomType={}, roomTypes={}, selectedOptionalTours={}", 
-                tourId, tourType, agentId, adultCount, childCount, includeHotel, hotelLevel, roomCount, userId, childrenAges, roomType, roomTypes, selectedOptionalTours);
+        log.info("计算旅游订单价格: tourId={}, tourType={}, agentId={}, adultCount={}, childCount={}, includeHotel={}, hotelLevel={}, roomCount={}, userId={}, childrenAges={}, roomType={}, roomTypes={}, selectedOptionalTours={}, startDate={}, endDate={}", 
+                dto.getTourId(), dto.getTourType(), dto.getAgentId(), dto.getAdultCount(), dto.getChildCount(), 
+                dto.getIncludeHotel(), dto.getHotelLevel(), dto.getRoomCount(), dto.getUserId(), 
+                dto.getChildrenAges(), dto.getRoomType(), dto.getRoomTypes(), dto.getSelectedOptionalTours(), 
+                dto.getStartDate(), dto.getEndDate());
         
         try {
-            log.info("使用统一价格计算方法");
+            log.info("使用统一价格计算方法（支持按日期计算）");
             
             // 处理房间类型参数：如果传递了单个roomType，转换为roomTypes格式
-            String finalRoomTypes = roomTypes;
-            if ((finalRoomTypes == null || finalRoomTypes.trim().isEmpty()) && roomType != null && !roomType.trim().isEmpty()) {
-                finalRoomTypes = roomType; // 单个房型
+            String finalRoomTypes = dto.getRoomTypes();
+            if ((finalRoomTypes == null || finalRoomTypes.trim().isEmpty()) && 
+                dto.getRoomType() != null && !dto.getRoomType().trim().isEmpty()) {
+                finalRoomTypes = dto.getRoomType(); // 单个房型
             }
             
-            // 使用统一的价格计算方法
+            // 使用统一的价格计算方法（支持日期参数和小团选项）
             Map<String, Object> data = tourBookingService.calculateUnifiedPrice(
-                    tourId, tourType, agentId, adultCount, childCount, hotelLevel, roomCount, userId, 
-                    finalRoomTypes, childrenAges, selectedOptionalTours, includeHotel);
+                    dto.getTourId(), dto.getTourType(), dto.getAgentId(), dto.getAdultCount(), 
+                    dto.getChildCount(), dto.getHotelLevel(), dto.getRoomCount(), dto.getUserId(), 
+                    finalRoomTypes, dto.getChildrenAges(), dto.getSelectedOptionalTours(), 
+                    dto.getIncludeHotel(), dto.getStartDate(), dto.getEndDate(), dto.getIsSmallGroup());
             
             log.info("统一价格计算完成: {}", data);
             return Result.success(data);

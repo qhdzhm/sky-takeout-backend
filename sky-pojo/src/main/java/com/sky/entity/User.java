@@ -25,6 +25,21 @@ public class User implements Serializable {
     //微信用户统一标识
     private String unionid;
     
+    //Google用户唯一标识
+    private String googleId;
+    
+    //Google账号邮箱
+    private String googleEmail;
+    
+    //Google账号名称
+    private String googleName;
+    
+    //Google头像
+    private String googleAvatar;
+    
+    //最后Google登录时间
+    private LocalDateTime googleLastLogin;
+    
     //微信昵称
     private String wxNickname;
     
@@ -116,5 +131,46 @@ public class User implements Serializable {
      */
     public void setName(String name) {
         this.name = name;
+    }
+    
+    // Google 字段的 getter/setter 方法（手动添加以确保编译成功）
+    public String getGoogleId() {
+        return googleId;
+    }
+    
+    public void setGoogleId(String googleId) {
+        this.googleId = googleId;
+    }
+    
+    public String getGoogleEmail() {
+        return googleEmail;
+    }
+    
+    public void setGoogleEmail(String googleEmail) {
+        this.googleEmail = googleEmail;
+    }
+    
+    public String getGoogleName() {
+        return googleName;
+    }
+    
+    public void setGoogleName(String googleName) {
+        this.googleName = googleName;
+    }
+    
+    public String getGoogleAvatar() {
+        return googleAvatar;
+    }
+    
+    public void setGoogleAvatar(String googleAvatar) {
+        this.googleAvatar = googleAvatar;
+    }
+    
+    public LocalDateTime getGoogleLastLogin() {
+        return googleLastLogin;
+    }
+    
+    public void setGoogleLastLogin(LocalDateTime googleLastLogin) {
+        this.googleLastLogin = googleLastLogin;
     }
 }

@@ -64,6 +64,14 @@ public interface DayTourMapper {
     @Update("update day_tours set is_active = #{status} where day_tour_id = #{id}")
     void updateStatus(Integer id, Integer status);
 
+    /**
+     * 更新用户端显示状态
+     * @param id 一日游ID
+     * @param showOnUserSite 是否在用户端显示（1=显示, 0=隐藏）
+     */
+    @Update("update day_tours set show_on_user_site = #{showOnUserSite} where day_tour_id = #{id}")
+    void updateUserSiteVisibility(Integer id, Integer showOnUserSite);
+
     // ===== Dashboard统计相关方法 =====
     
     /**

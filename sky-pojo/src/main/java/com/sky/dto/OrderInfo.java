@@ -47,9 +47,19 @@ public class OrderInfo {
     private List<CustomerInfo> customers;
     
     /**
-     * 房型
+     * 房型（单个房型，用于简单场景）
      */
     private String roomType;
+    
+    /**
+     * 房间数量
+     */
+    private Integer hotelRoomCount;
+    
+    /**
+     * 房型配置数组（用于复杂场景，如多种房型组合）
+     */
+    private List<String> roomTypes;
     
     /**
      * 酒店级别

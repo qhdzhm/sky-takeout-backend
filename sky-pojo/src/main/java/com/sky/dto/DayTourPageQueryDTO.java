@@ -62,6 +62,11 @@ public class DayTourPageQueryDTO implements Serializable {
     private Integer isActive;
     
     /**
+     * 是否在用户端显示 0-隐藏 1-显示
+     */
+    private Integer showOnUserSite;
+    
+    /**
      * 排序字段
      */
     private String orderBy;

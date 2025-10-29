@@ -82,73 +82,99 @@ public class HotelPriceServiceImpl implements HotelPriceService {
     }
     
     @Override
-    public BigDecimal getHotelRoomPriceByLevel(String hotelLevel) {
-        if (hotelLevel == null || hotelLevel.trim().isEmpty()) {
-            // 如果未提供酒店等级，返回基准等级的房间价格（0）
+    public BigDecimal calculateRoomPriceByTypeAndLevel(String hotelLevel, String roomType) {
+        BigDecimal singleRoomSupplement = getDailySingleRoomSupplementByLevel(hotelLevel);
+        
+        if (singleRoomSupplement.compareTo(BigDecimal.ZERO) == 0) {
+            log.warn("单房差为0，房间价格计算返回0");
             return BigDecimal.ZERO;
         }
         
-        // 处理3.5星映射为3星
-        String mappedLevel = mapHotelLevel(hotelLevel);
-        HotelPriceDifference hotelPrice = hotelPriceDifferenceMapper.selectByLevel(mappedLevel);
+        // 根据房型确定乘数
+        int multiplier = 2; // 默认双人间
         
-        if (hotelPrice == null) {
-            log.warn("未找到酒店等级{}的房间价格信息，使用默认值0", mappedLevel);
-            return BigDecimal.ZERO;
+        if (roomType != null) {
+            String lowerRoomType = roomType.toLowerCase();
+            // 三人间相关的房型
+            if (lowerRoomType.contains("三人间") || lowerRoomType.contains("三床") || 
+                lowerRoomType.contains("家庭") || lowerRoomType.contains("triple") || 
+                lowerRoomType.contains("family")) {
+                multiplier = 3;
+                log.info("识别为三人间，使用乘数3: {}", roomType);
+            }
+            // 单人间相关的房型
+            else if (lowerRoomType.contains("单人间") || lowerRoomType.contains("单床") || 
+                     lowerRoomType.contains("single")) {
+                multiplier = 1;
+                log.info("识别为单人间，使用乘数1: {}", roomType);
+            }
+            // 双人间相关的房型（默认）
+            else {
+                log.info("识别为双人间，使用乘数2: {}", roomType);
+            }
         }
         
-        return hotelPrice.getHotelRoomPrice() != null ? 
-               hotelPrice.getHotelRoomPrice() : BigDecimal.ZERO;
+        BigDecimal roomPrice = singleRoomSupplement.multiply(BigDecimal.valueOf(multiplier));
+        log.info("房间价格计算: {}星酒店, 房型={}, 单房差={}, 乘数={}, 房价={}", 
+                 hotelLevel, roomType, singleRoomSupplement, multiplier, roomPrice);
+        
+        return roomPrice;
     }
     
     @Override
-    public BigDecimal getTripleBedRoomPriceByLevel(String hotelLevel) {
-        if (hotelLevel == null || hotelLevel.trim().isEmpty()) {
-            // 如果未提供酒店等级，返回基准等级的三床房价格（0）
-            return BigDecimal.ZERO;
-        }
+    public BigDecimal getDoubleRoomPriceByLevel(String hotelLevel) {
+        BigDecimal singleRoomSupplement = getDailySingleRoomSupplementByLevel(hotelLevel);
+        BigDecimal doubleRoomPrice = singleRoomSupplement.multiply(BigDecimal.valueOf(2));
         
-        // 处理3.5星映射为3星
-        String mappedLevel = mapHotelLevel(hotelLevel);
-        HotelPriceDifference hotelPrice = hotelPriceDifferenceMapper.selectByLevel(mappedLevel);
+        log.info("双床房价格计算: {}星酒店, 单房差={}, 双床房价格={} (单房差×2)", 
+                 hotelLevel, singleRoomSupplement, doubleRoomPrice);
         
-        if (hotelPrice == null) {
-            log.warn("未找到酒店等级{}的三床房价格信息，使用默认值0", mappedLevel);
-            return BigDecimal.ZERO;
-        }
+        return doubleRoomPrice;
+    }
+    
+    @Override
+    public BigDecimal getTripleRoomPriceByLevel(String hotelLevel) {
+        BigDecimal singleRoomSupplement = getDailySingleRoomSupplementByLevel(hotelLevel);
+        BigDecimal tripleRoomPrice = singleRoomSupplement.multiply(BigDecimal.valueOf(3));
         
-        return hotelPrice.getTripleBedRoomPrice() != null ? 
-               hotelPrice.getTripleBedRoomPrice() : BigDecimal.ZERO;
+        log.info("三人房价格计算: {}星酒店, 单房差={}, 三人房价格={} (单房差×3)", 
+                 hotelLevel, singleRoomSupplement, tripleRoomPrice);
+        
+        return tripleRoomPrice;
     }
     
     @Override
     public BigDecimal getTripleBedRoomPriceDifferenceByLevel(String hotelLevel) {
-        if (hotelLevel == null || hotelLevel.trim().isEmpty()) {
-            // 如果未提供酒店等级，返回默认差价0
-            return BigDecimal.ZERO;
-        }
+        // 三人房差价 = 三人房价格 - 双床房价格
+        // = (单房差 × 3) - (单房差 × 2)
+        // = 单房差 × 1
+        BigDecimal singleRoomSupplement = getDailySingleRoomSupplementByLevel(hotelLevel);
         
-        // 处理3.5星映射为3星
-        String mappedLevel = mapHotelLevel(hotelLevel);
-        HotelPriceDifference hotelPrice = hotelPriceDifferenceMapper.selectByLevel(mappedLevel);
+        log.info("酒店等级{}三人房差价: {} (单房差×1)", hotelLevel, singleRoomSupplement);
         
-        if (hotelPrice == null) {
-            log.warn("未找到酒店等级{}的价格信息，三人房差价使用默认值0", mappedLevel);
-            return BigDecimal.ZERO;
-        }
-        
-        // 获取三人房价格和双床房价格
-        BigDecimal tripleBedPrice = hotelPrice.getTripleBedRoomPrice() != null ? 
-                                    hotelPrice.getTripleBedRoomPrice() : BigDecimal.ZERO;
-        BigDecimal doubleBedPrice = hotelPrice.getHotelRoomPrice() != null ? 
-                                    hotelPrice.getHotelRoomPrice() : BigDecimal.ZERO;
-        
-        // 计算差价
-        BigDecimal difference = tripleBedPrice.subtract(doubleBedPrice);
-        
-        log.info("酒店等级{}三人房差价计算: 三人房价格{}（元/晚） - 双床房价格{}（元/晚） = {}（元/晚）", 
-                 mappedLevel, tripleBedPrice, doubleBedPrice, difference);
-        
-        return difference;
+        return singleRoomSupplement;
+    }
+    
+    @Override
+    public HotelPriceDifference getById(Integer id) {
+        return hotelPriceDifferenceMapper.selectById(id);
+    }
+    
+    @Override
+    public boolean add(HotelPriceDifference hotelPriceDifference) {
+        int result = hotelPriceDifferenceMapper.insert(hotelPriceDifference);
+        return result > 0;
+    }
+    
+    @Override
+    public boolean update(HotelPriceDifference hotelPriceDifference) {
+        int result = hotelPriceDifferenceMapper.update(hotelPriceDifference);
+        return result > 0;
+    }
+    
+    @Override
+    public boolean delete(Integer id) {
+        int result = hotelPriceDifferenceMapper.deleteById(id);
+        return result > 0;
     }
 } 

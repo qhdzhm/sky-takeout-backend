@@ -54,6 +54,11 @@ Thumbs.db
 # 🔐 敏感信息保护（重要！）
 # ===========================================
 
+# Secrets backup file
+SECRETS_BACKUP.txt
+secrets.txt
+**/SECRETS_*.txt
+
 # Environment variables
 .env
 .env.*

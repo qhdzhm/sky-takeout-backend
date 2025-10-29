@@ -51,13 +51,13 @@
         INSERT INTO hotel_bookings (
             booking_reference, hotel_booking_number, tour_booking_id, schedule_order_id, assignment_id, hotel_id,
             room_type_id, guest_name, guest_phone, guest_email, check_in_date, check_out_date,
-            room_count, adult_count, child_count, room_rate, booking_status, payment_status,
-            special_requests, booking_source, booked_by, notes
+            room_count, adult_count, child_count, room_rate, total_amount, booking_status, payment_status,
+            special_requests, booking_source, booked_by, hotel_specialist, notes, created_at, updated_at
         ) VALUES (
             #{bookingReference}, #{hotelBookingNumber}, #{tourBookingId}, #{scheduleOrderId}, #{assignmentId}, #{hotelId},
             #{roomTypeId}, #{guestName}, #{guestPhone}, #{guestEmail}, #{checkInDate}, #{checkOutDate},
-            #{roomCount}, #{adultCount}, #{childCount}, #{roomRate}, #{bookingStatus}, #{paymentStatus},
-            #{specialRequests}, #{bookingSource}, #{bookedBy}, #{notes}
+            #{roomCount}, #{adultCount}, #{childCount}, #{roomRate}, #{totalAmount}, #{bookingStatus}, #{paymentStatus},
+            #{specialRequests}, #{bookingSource}, #{bookedBy}, #{hotelSpecialist}, #{notes}, #{createdAt}, #{updatedAt}
         )
     </insert>
 
@@ -66,14 +66,14 @@
         INSERT INTO hotel_bookings (
             booking_reference, tour_booking_id, schedule_order_id, assignment_id, hotel_id,
             room_type_id, guest_name, guest_phone, guest_email, check_in_date, check_out_date,
-            room_count, adult_count, child_count, room_rate, booking_status, payment_status,
+            room_count, adult_count, child_count, room_rate, total_amount, booking_status, payment_status,
             special_requests, booking_source, booked_by, notes
         ) VALUES
         <foreach collection="list" item="item" separator=",">
             (
                 #{item.bookingReference}, #{item.tourBookingId}, #{item.scheduleOrderId}, #{item.assignmentId}, #{item.hotelId},
                 #{item.roomTypeId}, #{item.guestName}, #{item.guestPhone}, #{item.guestEmail}, #{item.checkInDate}, #{item.checkOutDate},
-                #{item.roomCount}, #{item.adultCount}, #{item.childCount}, #{item.roomRate}, #{item.bookingStatus}, #{item.paymentStatus},
+                #{item.roomCount}, #{item.adultCount}, #{item.childCount}, #{item.roomRate}, #{item.totalAmount}, #{item.bookingStatus}, #{item.paymentStatus},
                 #{item.specialRequests}, #{item.bookingSource}, #{item.bookedBy}, #{item.notes}
             )
         </foreach>
@@ -206,6 +206,18 @@
             <if test="hotelSpecialist != null and hotelSpecialist != ''">
                 AND hb.hotel_specialist = #{hotelSpecialist}
             </if>
+            <if test="bookingReference != null and bookingReference != ''">
+                AND hb.booking_reference LIKE CONCAT('%', #{bookingReference}, '%')
+            </if>
+            <if test="hotelName != null and hotelName != ''">
+                AND h.hotel_name LIKE CONCAT('%', #{hotelName}, '%')
+            </if>
+            <if test="createdAtStart != null">
+                AND DATE(hb.created_at) &gt;= #{createdAtStart}
+            </if>
+            <if test="createdAtEnd != null">
+                AND DATE(hb.created_at) &lt;= #{createdAtEnd}
+            </if>
         </where>
         ORDER BY hb.created_at DESC
     </select>
@@ -225,12 +237,16 @@
             <if test="adultCount != null">adult_count = #{adultCount},</if>
             <if test="childCount != null">child_count = #{childCount},</if>
             <if test="roomRate != null">room_rate = #{roomRate},</if>
+            <if test="totalAmount != null">total_amount = #{totalAmount},</if>
             <if test="bookingStatus != null">booking_status = #{bookingStatus},</if>
             <if test="paymentStatus != null">payment_status = #{paymentStatus},</if>
             <if test="specialRequests != null">special_requests = #{specialRequests},</if>
             <if test="bookingSource != null">booking_source = #{bookingSource},</if>
+            <if test="hotelSpecialist != null">hotel_specialist = #{hotelSpecialist},</if>
+            <if test="hotelBookingNumber != null">hotel_booking_number = #{hotelBookingNumber},</if>
             <if test="bookedBy != null">booked_by = #{bookedBy},</if>
-            <if test="notes != null">notes = #{notes}</if>
+            <if test="notes != null">notes = #{notes},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt}</if>
         </set>
         WHERE id = #{id}
     </update>

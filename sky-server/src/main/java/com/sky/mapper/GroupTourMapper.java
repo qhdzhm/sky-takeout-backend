@@ -28,6 +28,7 @@ public interface GroupTourMapper {
      * @param maxPrice 最高价格
      * @param minDays 最少天数
      * @param maxDays 最多天数
+     * @param showOnUserSite 是否在用户端显示
      * @return 跟团游列表
      */
     List<GroupTourDTO> pageQuery(@Param("title") String title,
@@ -36,7 +37,8 @@ public interface GroupTourMapper {
                                 @Param("minPrice") Double minPrice,
                                 @Param("maxPrice") Double maxPrice,
                                 @Param("minDays") Integer minDays,
-                                @Param("maxDays") Integer maxDays);
+                                @Param("maxDays") Integer maxDays,
+                                @Param("showOnUserSite") Integer showOnUserSite);
 
     /**
      * 根据ID查询跟团游
@@ -47,7 +49,7 @@ public interface GroupTourMapper {
             "duration, days, nights, rating, reviews_count AS reviewsCount, tour_code AS tourCode, " +
             "departure_info AS departureInfo, group_size AS groupSize, language, " +
             "image_url AS coverImage, banner_image AS bannerImage, product_showcase_image AS productShowcaseImage, is_active AS isActive, location, category, " +
-            "departure_address AS departureAddress, guide_fee AS guideFee, guide_id AS guideId " +
+            "departure_address AS departureAddress, guide_fee AS guideFee, guide_id AS guideId, small_group_price_difference AS smallGroupPriceDifference " +
             "FROM group_tours WHERE group_tour_id = #{id}")
     GroupTourDTO getById(Integer id);
 
@@ -410,6 +412,14 @@ public interface GroupTourMapper {
     void updateStatus(@Param("id") Integer id, @Param("status") Integer status);
     
     /**
+     * 更新团队游用户端显示状态
+     * @param id 团队游ID
+     * @param showOnUserSite 是否在用户端显示（1=显示, 0=隐藏）
+     */
+    @Update("UPDATE group_tours SET show_on_user_site = #{showOnUserSite}, updated_at = NOW() WHERE group_tour_id = #{id}")
+    void updateUserSiteVisibility(@Param("id") Integer id, @Param("showOnUserSite") Integer showOnUserSite);
+    
+    /**
      * 根据ID删除团队游
      * @param id 团队游ID
      */
@@ -472,6 +482,18 @@ public interface GroupTourMapper {
             "departure_address AS departureAddress, guide_fee AS guideFee, guide_id AS guideId " +
             "FROM group_tours WHERE is_active = 1 ORDER BY id LIMIT 10")
     List<GroupTourDTO> findAllActive();
+    
+    /**
+     * 获取所有在用户端显示的跟团游产品（用于AI智能匹配）
+     * @return 跟团游列表
+     */
+    @Select("SELECT group_tour_id AS id, title AS name, description, price, discounted_price AS discountedPrice, " +
+            "duration, days, nights, rating, reviews_count AS reviewsCount, tour_code AS tourCode, " +
+            "departure_info AS departureInfo, group_size AS groupSize, language, " +
+            "image_url AS coverImage, banner_image AS bannerImage, is_active AS isActive, show_on_user_site AS showOnUserSite, location, category, " +
+            "departure_address AS departureAddress, guide_fee AS guideFee, guide_id AS guideId, small_group_price_difference AS smallGroupPriceDifference " +
+            "FROM group_tours WHERE show_on_user_site = 1 AND is_active = 1 ORDER BY group_tour_id")
+    List<GroupTourDTO> findAllDisplayedOnUserSite();
 
     // ===== Dashboard统计相关方法 =====
     

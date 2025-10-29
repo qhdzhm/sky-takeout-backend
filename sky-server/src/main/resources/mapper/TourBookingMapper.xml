@@ -110,6 +110,7 @@
             contact_person, contact_phone, hotel_level, include_hotel, room_type, hotel_room_count, 
             hotel_check_in_date, hotel_check_out_date, room_details,
             special_requests, itinerary_details, status, payment_status, total_price,
+            group_type, group_size_limit,
             created_at, updated_at, selected_optional_tours
         ) values(
             #{orderNumber}, #{tourId}, #{tourType}, #{userId}, #{agentId}, #{operatorId},
@@ -121,6 +122,7 @@
             #{contactPerson}, #{contactPhone}, #{hotelLevel}, #{includeHotel}, #{roomType}, #{hotelRoomCount}, 
             #{hotelCheckInDate}, #{hotelCheckOutDate}, #{roomDetails}, 
             #{specialRequests}, #{itineraryDetails}, #{status}, #{paymentStatus}, #{totalPrice},
+            #{groupType}, #{groupSizeLimit},
             #{createdAt}, #{updatedAt}, #{selectedOptionalTours}
         )
     </insert>

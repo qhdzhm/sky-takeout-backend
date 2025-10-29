@@ -23,18 +23,10 @@ public class HotelPriceDifference {
     
     /**
      * 单房差（每晚）
+     * 注：双床房价格 = dailySingleRoomSupplement × 2
+     *     三人房价格 = dailySingleRoomSupplement × 3
      */
     private BigDecimal dailySingleRoomSupplement;
-    
-    /**
-     * 酒店房间基础价格（每间每晚）- 双床房价格
-     */
-    private BigDecimal hotelRoomPrice;
-    
-    /**
-     * 三床房价格（每间每晚）
-     */
-    private BigDecimal tripleBedRoomPrice;
     
     private LocalDateTime createdAt;
     

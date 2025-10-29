@@ -50,6 +50,9 @@ public class AgentClientController {
     private UserService userService;
     
     @Autowired
+    private com.sky.service.AgentService agentService;
+    
+    @Autowired
     private JwtProperties jwtProperties;
     
     @Autowired
@@ -925,6 +928,57 @@ public class AgentClientController {
         } catch (Exception e) {
             log.error("获取代理商统计数据异常", e);
             return Result.error("获取代理商统计数据失败：" + e.getMessage());
+        }
+    }
+    
+    /**
+     * 代理商修改密码
+     * @param passwordChangeDTO 密码修改信息
+     * @return 修改结果
+     */
+    @PutMapping("/password")
+    public Result<String> updatePassword(@RequestBody com.sky.dto.PasswordChangeDTO passwordChangeDTO) {
+        try {
+            // 从BaseContext获取当前代理商ID或操作员ID
+            Long currentId = BaseContext.getCurrentId();
+            String userType = BaseContext.getCurrentUserType();
+            
+            log.info("代理商修改密码请求：currentId={}, userType={}", currentId, userType);
+            
+            if (currentId == null) {
+                log.warn("无法获取当前用户ID");
+                return Result.error("用户未登录或会话已过期");
+            }
+            
+            // 验证密码参数
+            if (passwordChangeDTO.getOldPassword() == null || passwordChangeDTO.getOldPassword().trim().isEmpty()) {
+                return Result.error("请输入当前密码");
+            }
+            if (passwordChangeDTO.getNewPassword() == null || passwordChangeDTO.getNewPassword().trim().isEmpty()) {
+                return Result.error("请输入新密码");
+            }
+            if (passwordChangeDTO.getNewPassword().length() < 6) {
+                return Result.error("新密码长度不能少于6位");
+            }
+            
+            // 判断是代理商主账号还是操作员
+            if ("agent".equals(userType)) {
+                // 代理商主账号修改密码
+                agentService.changePassword(currentId, passwordChangeDTO);
+                log.info("代理商主账号密码修改成功，agentId={}", currentId);
+            } else if ("agent_operator".equals(userType) || "operator".equals(userType)) {
+                // 操作员修改密码
+                agentOperatorService.changePassword(currentId, passwordChangeDTO);
+                log.info("操作员密码修改成功，operatorId={}", currentId);
+            } else {
+                log.warn("未知的用户类型：{}", userType);
+                return Result.error("无效的用户类型");
+            }
+            
+            return Result.success("密码修改成功");
+        } catch (Exception e) {
+            log.error("修改密码失败", e);
+            return Result.error("修改密码失败：" + e.getMessage());
         }
     }
 } 

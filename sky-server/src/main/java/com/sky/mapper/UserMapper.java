@@ -42,12 +42,39 @@ public interface UserMapper {
      * @param openid 微信OpenID
      * @return 用户对象
      */
-    @Select("select user_id as id, username, password, phone, role, user_type as userType, agent_id as agentId, " +
+    @Select("select user_id as id, username, password, phone, email, role, user_type as userType, agent_id as agentId, " +
             "created_at as createTime, updated_at as updateTime, IFNULL(status, 1) as status, first_name as firstName, last_name as lastName, " +
             "wx_openid as openid, wx_unionid as unionid, wx_nickname as wxNickname, wx_avatar as wxAvatar, wx_last_login as wxLastLogin, " +
+            "google_id as googleId, google_email as googleEmail, google_name as googleName, google_avatar as googleAvatar, google_last_login as googleLastLogin, " +
             "invite_code as inviteCode, referred_by as referredBy " +
             "from users where wx_openid = #{openid}")
     User getUserByOpenid(String openid);
+    
+    /**
+     * 根据Google ID查询用户
+     * @param googleId Google用户唯一标识
+     * @return 用户对象
+     */
+    @Select("select user_id as id, username, password, phone, email, role, user_type as userType, agent_id as agentId, " +
+            "created_at as createTime, updated_at as updateTime, IFNULL(status, 1) as status, first_name as firstName, last_name as lastName, " +
+            "wx_openid as openid, wx_unionid as unionid, wx_nickname as wxNickname, wx_avatar as wxAvatar, wx_last_login as wxLastLogin, " +
+            "google_id as googleId, google_email as googleEmail, google_name as googleName, google_avatar as googleAvatar, google_last_login as googleLastLogin, " +
+            "invite_code as inviteCode, referred_by as referredBy " +
+            "from users where google_id = #{googleId}")
+    User getUserByGoogleId(String googleId);
+    
+    /**
+     * 根据邮箱查询用户
+     * @param email 邮箱地址
+     * @return 用户对象
+     */
+    @Select("select user_id as id, username, password, phone, email, role, user_type as userType, agent_id as agentId, " +
+            "created_at as createTime, updated_at as updateTime, IFNULL(status, 1) as status, first_name as firstName, last_name as lastName, " +
+            "wx_openid as openid, wx_unionid as unionid, wx_nickname as wxNickname, wx_avatar as wxAvatar, wx_last_login as wxLastLogin, " +
+            "google_id as googleId, google_email as googleEmail, google_name as googleName, google_avatar as googleAvatar, google_last_login as googleLastLogin, " +
+            "invite_code as inviteCode, referred_by as referredBy " +
+            "from users where email = #{email}")
+    User getUserByEmail(String email);
     
     /**
      * 根据邀请码查询用户
@@ -66,10 +93,14 @@ public interface UserMapper {
      * @param user
      */
     @Insert("insert into users(username, password, phone, role, user_type, agent_id, created_at, first_name, last_name, email, " +
-            "wx_openid, wx_unionid, wx_nickname, wx_avatar, wx_last_login, invite_code, referred_by)"+
+            "wx_openid, wx_unionid, wx_nickname, wx_avatar, wx_last_login, " +
+            "google_id, google_email, google_name, google_avatar, google_last_login, " +
+            "invite_code, referred_by, status)"+
         " values"+
         "(#{username}, #{password}, #{phone}, #{role}, #{userType}, #{agentId}, now(), #{firstName}, #{lastName}, #{email}, " +
-        "#{openid}, #{unionid}, #{wxNickname}, #{wxAvatar}, #{wxLastLogin}, #{inviteCode}, #{referredBy})")
+        "#{openid}, #{unionid}, #{wxNickname}, #{wxAvatar}, #{wxLastLogin}, " +
+        "#{googleId}, #{googleEmail}, #{googleName}, #{googleAvatar}, #{googleLastLogin}, " +
+        "#{inviteCode}, #{referredBy}, #{status})")
     @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "user_id")
     void addUser(User user);
 
@@ -99,8 +130,16 @@ public interface UserMapper {
     @Update("update users set phone = #{phone}, user_type = #{userType}, agent_id = #{agentId}, first_name = #{firstName}, " +
             "last_name = #{lastName}, wx_openid = #{openid}, wx_unionid = #{unionid}, wx_nickname = #{wxNickname}, " +
             "wx_avatar = #{wxAvatar}, wx_last_login = #{wxLastLogin}, " +
+            "google_id = #{googleId}, google_email = #{googleEmail}, google_name = #{googleName}, " +
+            "google_avatar = #{googleAvatar}, google_last_login = #{googleLastLogin}, " +
             "updated_at = now() where user_id = #{id}")
     void updateById(User user);
+    
+    /**
+     * 更新用户信息（通用方法）
+     * @param user
+     */
+    void updateUser(User user);
     
     /**
      * 更新用户微信登录信息

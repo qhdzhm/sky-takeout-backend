@@ -51,7 +51,26 @@ public class AgentOperatorController {
         return Result.success();
     }
 
-    // 预留：重置密码接口（前端暂未使用），避免误用
+    @PutMapping("/operator/resetPassword")
+    @ApiOperation("重置操作员密码")
+    public Result<String> resetPassword(@RequestBody java.util.Map<String, Object> params) {
+        try {
+            Long operatorId = Long.valueOf(params.get("id").toString());
+            String newPassword = (String) params.get("newPassword");
+            
+            log.info("管理员重置操作员密码：operatorId={}", operatorId);
+            
+            if (newPassword == null || newPassword.trim().isEmpty()) {
+                return Result.error("新密码不能为空");
+            }
+            
+            agentOperatorService.resetPassword(operatorId, newPassword);
+            return Result.success("密码重置成功");
+        } catch (Exception e) {
+            log.error("重置操作员密码失败", e);
+            return Result.error("密码重置失败：" + e.getMessage());
+        }
+    }
 
     @DeleteMapping("/operator/{id}")
     @ApiOperation("删除操作员")

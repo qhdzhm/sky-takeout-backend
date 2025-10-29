@@ -120,4 +120,66 @@ public class AgentOperatorServiceImpl implements AgentOperatorService {
         agentOperatorMapper.deleteById(id);
         log.info("删除操作员成功: ID={}", id);
     }
+    
+    @Override
+    public void changePassword(Long operatorId, com.sky.dto.PasswordChangeDTO passwordChangeDTO) {
+        log.info("操作员修改密码：operatorId={}", operatorId);
+        
+        // 1. 检查操作员是否存在
+        AgentOperator operator = agentOperatorMapper.getById(operatorId);
+        if (operator == null) {
+            throw new BusinessException("操作员不存在");
+        }
+        
+        // 2. 验证旧密码
+        String oldEncryptedPassword = DigestUtils.md5DigestAsHex(passwordChangeDTO.getOldPassword().getBytes());
+        if (!oldEncryptedPassword.equals(operator.getPassword())) {
+            throw new BusinessException("当前密码错误");
+        }
+        
+        // 3. 验证新密码
+        if (passwordChangeDTO.getNewPassword() == null || passwordChangeDTO.getNewPassword().trim().isEmpty()) {
+            throw new BusinessException("新密码不能为空");
+        }
+        
+        if (passwordChangeDTO.getNewPassword().length() < 6) {
+            throw new BusinessException("密码长度不能少于6位");
+        }
+        
+        // 4. 加密新密码
+        String newEncryptedPassword = DigestUtils.md5DigestAsHex(passwordChangeDTO.getNewPassword().getBytes());
+        
+        // 5. 更新密码
+        agentOperatorMapper.updatePassword(operatorId, newEncryptedPassword, LocalDateTime.now());
+        
+        log.info("操作员密码修改成功: operatorId={}", operatorId);
+    }
+    
+    @Override
+    public void resetPassword(Long operatorId, String newPassword) {
+        log.info("重置操作员密码：operatorId={}", operatorId);
+        
+        // 1. 检查操作员是否存在
+        AgentOperator operator = agentOperatorMapper.getById(operatorId);
+        if (operator == null) {
+            throw new BusinessException("操作员不存在");
+        }
+        
+        // 2. 验证新密码
+        if (newPassword == null || newPassword.trim().isEmpty()) {
+            throw new BusinessException("新密码不能为空");
+        }
+        
+        if (newPassword.length() < 6) {
+            throw new BusinessException("密码长度不能少于6位");
+        }
+        
+        // 3. 加密密码
+        String encryptedPassword = DigestUtils.md5DigestAsHex(newPassword.getBytes());
+        
+        // 4. 更新密码
+        agentOperatorMapper.updatePassword(operatorId, encryptedPassword, LocalDateTime.now());
+        
+        log.info("操作员密码重置成功: operatorId={}", operatorId);
+    }
 } 

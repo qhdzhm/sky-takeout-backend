@@ -123,6 +123,7 @@
             GROUP_CONCAT(dti.description SEPARATOR '；') as inclusions
         FROM day_tours dt
         LEFT JOIN day_tour_inclusions dti ON dt.day_tour_id = dti.day_tour_id
+        WHERE dt.show_on_user_site = 1 AND dt.is_active = 1
         GROUP BY dt.day_tour_id
         ORDER BY dt.rating DESC, dt.day_tour_id DESC
         LIMIT #{limit}
@@ -146,6 +147,7 @@
             GROUP_CONCAT(ti.description SEPARATOR '；') as inclusions
         FROM group_tours gt
         LEFT JOIN tour_inclusions ti ON gt.group_tour_id = ti.group_tour_id
+        WHERE gt.show_on_user_site = 1 AND gt.is_active = 1
         GROUP BY gt.group_tour_id
         ORDER BY gt.rating DESC, gt.group_tour_id DESC
         LIMIT #{limit}
@@ -169,6 +171,7 @@
             GROUP_CONCAT(dti.description SEPARATOR '；') as inclusions
         FROM day_tours dt
         LEFT JOIN day_tour_inclusions dti ON dt.day_tour_id = dti.day_tour_id
+        WHERE dt.show_on_user_site = 1 AND dt.is_active = 1
         GROUP BY dt.day_tour_id
         ORDER BY dt.day_tour_id DESC
         LIMIT #{limit}
@@ -192,6 +195,7 @@
             GROUP_CONCAT(ti.description SEPARATOR '；') as inclusions
         FROM group_tours gt
         LEFT JOIN tour_inclusions ti ON gt.group_tour_id = ti.group_tour_id
+        WHERE gt.show_on_user_site = 1 AND gt.is_active = 1
         GROUP BY gt.group_tour_id
         ORDER BY gt.group_tour_id DESC
         LIMIT #{limit}
@@ -225,6 +229,7 @@
                 rating,
                 'day_tour' as tourType
             FROM day_tours
+            WHERE show_on_user_site = 1 AND is_active = 1
             
             UNION ALL
             
@@ -241,6 +246,7 @@
                 rating,
                 'group_tour' as tourType
             FROM group_tours
+            WHERE show_on_user_site = 1 AND is_active = 1
         ) as tour_data
         LEFT JOIN (
             -- 统计近N天订单数量

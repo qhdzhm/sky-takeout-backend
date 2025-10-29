@@ -133,13 +133,15 @@ public class EnhancedDiscountServiceImpl implements EnhancedDiscountService {
         log.info("获取代理商产品折扣率 - 代理商ID: {}, 产品类型: {}, 产品ID: {}", agentId, productType, productId);
         
         try {
+            // 查找产品特定折扣配置
             ProductAgentDiscount discount = productAgentDiscountMapper.findByAgentAndProduct(agentId, productType, productId);
             if (discount != null) {
                 log.info("找到产品特定折扣配置: {}", discount.getDiscountRate());
                 return discount.getDiscountRate();
             }
             
-            log.info("未找到产品特定折扣配置");
+            // 未找到产品折扣配置，返回null（使用原价）
+            log.info("未找到产品特定折扣配置，产品使用原价（不打折）");
             return null;
         } catch (Exception e) {
             log.error("获取代理商产品折扣率异常", e);

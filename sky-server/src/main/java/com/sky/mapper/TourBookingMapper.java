@@ -98,6 +98,15 @@ public interface TourBookingMapper {
      */
     @Update("UPDATE tour_bookings SET selected_optional_tours = #{selectedOptionalTours}, updated_at = NOW() WHERE booking_id = #{bookingId}")
     int updateSelectedOptionalTours(@Param("bookingId") Integer bookingId, @Param("selectedOptionalTours") String selectedOptionalTours);
+
+    /**
+     * 根据订单ID更新特殊要求
+     * @param bookingId 订单ID
+     * @param specialRequests 特殊要求
+     * @return 更新的记录数
+     */
+    @Update("UPDATE tour_bookings SET special_requests = #{specialRequests}, updated_at = NOW() WHERE booking_id = #{bookingId}")
+    int updateSpecialRequestsByBookingId(@Param("bookingId") Integer bookingId, @Param("specialRequests") String specialRequests);
     
     /**
      * 更新订单状态

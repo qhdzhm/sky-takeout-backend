@@ -27,6 +27,7 @@
             dt.guide_fee as guideFee,
             dt.guide_id as guideId,
             dt.cost_price as costPrice,
+            dt.small_group_price_difference as smallGroupPriceDifference,
             r.name as regionName
         FROM day_tours dt
         LEFT JOIN regions r ON dt.region_id = r.region_id
@@ -38,7 +39,8 @@
         SELECT 
             dt.day_tour_id as id, dt.day_tour_id as dayTourId, dt.name, dt.description, dt.price, dt.duration, dt.location, 
             dt.departure_address, dt.guide_fee, dt.rating,  
-            dt.region_id, dt.category, dt.image_url as coverImage, dt.banner_image as bannerImage, r.name as regionName
+            dt.region_id, dt.category, dt.image_url as coverImage, dt.banner_image as bannerImage, r.name as regionName,
+            dt.is_active as isActive, dt.show_on_user_site as showOnUserSite, dt.small_group_price_difference as smallGroupPriceDifference
         FROM day_tours dt
         LEFT JOIN regions r ON dt.region_id = r.region_id
         <where>
@@ -63,6 +65,9 @@
                     JOIN day_tour_themes t ON dtt.theme_id = t.theme_id
                     WHERE t.name = #{category}
                 )
+            </if>
+            <if test="showOnUserSite != null">
+                AND dt.show_on_user_site = #{showOnUserSite}
             </if>
         </where>
         <choose>
@@ -89,6 +94,7 @@
             WHERE day_tour_id IS NOT NULL
             GROUP BY day_tour_id
         ) rv ON dt.day_tour_id = rv.day_tour_id
+        WHERE dt.show_on_user_site = 1 AND dt.is_active = 1
         ORDER BY rv.avg_rating DESC, rv.review_count DESC, dt.day_tour_id DESC
         LIMIT #{limit}
     </select>
@@ -101,6 +107,7 @@
             dt.region_id, dt.category, dt.image_url as coverImage, dt.banner_image as bannerImage, r.name as regionName
         FROM day_tours dt
         LEFT JOIN regions r ON dt.region_id = r.region_id
+        WHERE dt.show_on_user_site = 1 AND dt.is_active = 1
         ORDER BY dt.day_tour_id DESC
         LIMIT #{limit}
     </select>
@@ -127,6 +134,7 @@
             <if test="guideFee != null">guide_fee = #{guideFee},</if>
             <if test="guideId != null">guide_id = #{guideId},</if>
             <if test="costPrice != null">cost_price = #{costPrice},</if>
+            <if test="smallGroupPriceDifference != null">small_group_price_difference = #{smallGroupPriceDifference},</if>
         </set>
         WHERE day_tour_id = #{dayTourId}
     </update>

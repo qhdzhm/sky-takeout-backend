@@ -34,6 +34,13 @@ public interface AgentCreditMapper {
      * @param agentCredit 信用额度记录
      */
     void update(AgentCredit agentCredit);
+    
+    /**
+     * 带乐观锁的更新信用额度记录（用于支付等关键操作）
+     * @param agentCredit 信用额度记录（必须包含version字段）
+     * @return 影响的行数（如果为0表示版本号冲突，更新失败）
+     */
+    int updateWithVersion(AgentCredit agentCredit);
 
     /**
      * 获取所有代理商信用额度记录

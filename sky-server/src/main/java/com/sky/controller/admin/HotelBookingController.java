@@ -142,10 +142,18 @@ public class HotelBookingController {
             @ApiParam(name = "checkInDate", value = "入住日期开始")
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate checkInDate,
             @ApiParam(name = "checkOutDate", value = "入住日期结束")
-            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate checkOutDate) {
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate checkOutDate,
+            @ApiParam(name = "bookingReference", value = "预订号")
+            @RequestParam(required = false) String bookingReference,
+            @ApiParam(name = "hotelName", value = "酒店名称")
+            @RequestParam(required = false) String hotelName,
+            @ApiParam(name = "createdAtStart", value = "下单时间开始")
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate createdAtStart,
+            @ApiParam(name = "createdAtEnd", value = "下单时间结束")
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate createdAtEnd) {
         log.info("分页查询酒店预订列表，页码：{}，每页记录数：{}", page, pageSize);
         PageResult pageResult = hotelBookingService.pageQuery(page, pageSize, status, guestName, guestPhone,
-                hotelId, hotelSpecialist, checkInDate, checkOutDate);
+                hotelId, hotelSpecialist, checkInDate, checkOutDate, bookingReference, hotelName, createdAtStart, createdAtEnd);
         return Result.success(pageResult);
     }
 

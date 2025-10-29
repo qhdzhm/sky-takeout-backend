@@ -382,6 +382,21 @@ public class GroupTourController {
     }
 
     /**
+     * 更新团队游用户端显示状态
+     * @param id 团队游ID
+     * @param params 包含showOnUserSite的参数
+     * @return 操作结果
+     */
+    @PutMapping("/{id}/user-site-visibility")
+    @ApiOperation("更新团队游用户端显示状态")
+    public Result<String> updateUserSiteVisibility(@PathVariable Integer id, @RequestBody Map<String, Integer> params) {
+        Integer showOnUserSite = params.get("showOnUserSite");
+        log.info("更新团队游用户端显示状态：id={}, showOnUserSite={}", id, showOnUserSite);
+        groupTourService.updateUserSiteVisibility(id, showOnUserSite);
+        return Result.success("操作成功");
+    }
+
+    /**
      * 获取主题列表
      * @return 主题列表
      */

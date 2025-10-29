@@ -112,6 +112,18 @@ public class DayTourController {
     }
 
     /**
+     * 更新一日游用户端显示状态
+     */
+    @PutMapping("/{id}/user-site-visibility")
+    @ApiOperation("更新一日游用户端显示状态")
+    public Result updateUserSiteVisibility(@PathVariable Integer id, @RequestBody Map<String, Integer> params) {
+        Integer showOnUserSite = params.get("showOnUserSite");
+        log.info("更新一日游用户端显示状态：id={}, showOnUserSite={}", id, showOnUserSite);
+        dayTourService.updateUserSiteVisibility(id, showOnUserSite);
+        return Result.success();
+    }
+
+    /**
      * 获取一日游亮点
      */
     @GetMapping("/highlights/{dayTourId}")

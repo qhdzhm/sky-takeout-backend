@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.PriceCalculationAuditLogMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.sky.entity.PriceCalculationAuditLog">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="agent_id" property="agentId"/>
+        <result column="user_type" property="userType"/>
+        <result column="session_id" property="sessionId"/>
+        <result column="tour_id" property="tourId"/>
+        <result column="tour_type" property="tourType"/>
+        <result column="input_params" property="inputParams"/>
+        <result column="calculated_price" property="calculatedPrice"/>
+        <result column="calculation_details" property="calculationDetails"/>
+        <result column="calculation_duration_ms" property="calculationDurationMs"/>
+        <result column="ip_address" property="ipAddress"/>
+        <result column="user_agent" property="userAgent"/>
+        <result column="request_url" property="requestUrl"/>
+        <result column="referer" property="referer"/>
+        <result column="status" property="status"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="is_suspicious" property="isSuspicious"/>
+        <result column="suspicious_reason" property="suspiciousReason"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <!-- 插入审计日志 -->
+    <insert id="insert" parameterType="com.sky.entity.PriceCalculationAuditLog" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO price_calculation_audit_logs (
+            user_id,
+            agent_id,
+            user_type,
+            session_id,
+            tour_id,
+            tour_type,
+            input_params,
+            calculated_price,
+            calculation_details,
+            calculation_duration_ms,
+            ip_address,
+            user_agent,
+            request_url,
+            referer,
+            status,
+            error_message,
+            is_suspicious,
+            suspicious_reason
+        ) VALUES (
+            #{userId},
+            #{agentId},
+            #{userType},
+            #{sessionId},
+            #{tourId},
+            #{tourType},
+            #{inputParams},
+            #{calculatedPrice},
+            #{calculationDetails},
+            #{calculationDurationMs},
+            #{ipAddress},
+            #{userAgent},
+            #{requestUrl},
+            #{referer},
+            #{status},
+            #{errorMessage},
+            #{isSuspicious},
+            #{suspiciousReason}
+        )
+    </insert>
+
+    <!-- 根据ID查询审计日志 -->
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT *
+        FROM price_calculation_audit_logs
+        WHERE id = #{id}
+    </select>
+
+    <!-- 查询用户的审计日志 -->
+    <select id="selectByUserId" resultMap="BaseResultMap">
+        SELECT *
+        FROM price_calculation_audit_logs
+        WHERE user_id = #{userId}
+          AND created_at BETWEEN #{startTime} AND #{endTime}
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 查询可疑的审计日志 -->
+    <select id="selectSuspicious" resultMap="BaseResultMap">
+        SELECT *
+        FROM price_calculation_audit_logs
+        WHERE is_suspicious = 1
+          AND created_at BETWEEN #{startTime} AND #{endTime}
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 统计用户在指定时间内的请求次数 -->
+    <select id="countByUserIdAndTime" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM price_calculation_audit_logs
+        WHERE user_id = #{userId}
+          AND created_at BETWEEN #{startTime} AND #{endTime}
+    </select>
+
+</mapper>
+
+
+
+
+
+
+

@@ -58,6 +58,13 @@ public class DayTourDTO implements Serializable {
     private BigDecimal guideFee;
     private Integer[] themeIds;
     private Integer[] suitableIds;
+    
+    // 状态字段
+    private Integer isActive; // 是否激活 (0-禁用, 1-启用)
+    private Integer showOnUserSite; // 是否在用户端显示 (0-隐藏, 1-显示)
+    
+    // 小团差价
+    private BigDecimal smallGroupPriceDifference; // 小团每人差价
 
     // 详情信息
     private List<String> highlights; // 亮点

@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.GroupTourDailyPriceMapper">
+
+    <resultMap id="BaseResultMap" type="com.sky.entity.GroupTourDailyPrice">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="group_tour_id" property="groupTourId" jdbcType="INTEGER"/>
+        <result column="price_date" property="priceDate" jdbcType="DATE"/>
+        <result column="daily_price" property="dailyPrice" jdbcType="DECIMAL"/>
+        <result column="notes" property="notes" jdbcType="VARCHAR"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <!-- 根据团队游ID和日期范围查询每日价格 -->
+    <select id="selectByTourIdAndDateRange" resultMap="BaseResultMap">
+        SELECT * FROM group_tour_daily_prices
+        WHERE group_tour_id = #{groupTourId}
+        <if test="startDate != null">
+            AND price_date &gt;= #{startDate}
+        </if>
+        <if test="endDate != null">
+            AND price_date &lt;= #{endDate}
+        </if>
+        ORDER BY price_date
+    </select>
+
+    <!-- 根据日期范围查询所有团队游的每日价格 -->
+    <select id="selectByDateRange" resultMap="BaseResultMap">
+        SELECT * FROM group_tour_daily_prices
+        WHERE 1=1
+        <if test="startDate != null">
+            AND price_date &gt;= #{startDate}
+        </if>
+        <if test="endDate != null">
+            AND price_date &lt;= #{endDate}
+        </if>
+        ORDER BY group_tour_id, price_date
+    </select>
+
+    <!-- 根据团队游ID和具体日期查询价格 -->
+    <select id="selectByTourIdAndDate" resultMap="BaseResultMap">
+        SELECT * FROM group_tour_daily_prices
+        WHERE group_tour_id = #{groupTourId}
+        AND price_date = #{priceDate}
+        LIMIT 1
+    </select>
+
+    <!-- 插入每日价格 -->
+    <insert id="insert" parameterType="com.sky.entity.GroupTourDailyPrice"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO group_tour_daily_prices (
+            group_tour_id,
+            price_date,
+            daily_price,
+            notes
+        ) VALUES (
+            #{groupTourId},
+            #{priceDate},
+            #{dailyPrice},
+            #{notes}
+        )
+    </insert>
+
+    <!-- 更新每日价格 -->
+    <update id="update" parameterType="com.sky.entity.GroupTourDailyPrice">
+        UPDATE group_tour_daily_prices
+        SET daily_price = #{dailyPrice},
+            notes = #{notes},
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 批量插入（使用 ON DUPLICATE KEY UPDATE） -->
+    <insert id="batchInsert">
+        INSERT INTO group_tour_daily_prices (
+            group_tour_id,
+            price_date,
+            daily_price,
+            notes
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+                #{item.groupTourId},
+                #{item.priceDate},
+                #{item.dailyPrice},
+                #{item.notes}
+            )
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            daily_price = VALUES(daily_price),
+            notes = VALUES(notes),
+            updated_at = NOW()
+    </insert>
+
+    <!-- 根据ID删除 -->
+    <delete id="deleteById">
+        DELETE FROM group_tour_daily_prices
+        WHERE id = #{id}
+    </delete>
+
+    <!-- 根据团队游ID和日期删除 -->
+    <delete id="deleteByTourIdAndDate">
+        DELETE FROM group_tour_daily_prices
+        WHERE group_tour_id = #{groupTourId}
+        AND price_date = #{priceDate}
+    </delete>
+
+</mapper>
+
+
+
+
+
+
+

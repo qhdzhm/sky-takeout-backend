@@ -1,40 +1,48 @@
 sky:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    host: localhost
-    port: 3306
-    database: happy_tassie_travel
-    username: root
-    password: abc123
+    host: ${DB_HOST:localhost}
+    port: ${DB_PORT:3306}
+    database: ${DB_NAME:happy_tassie_travel}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:abc123}
   alioss:
-    endpoint: oss-cn-hongkong.aliyuncs.com
-    bucket-name: happytassieholiday
+    endpoint: ${ALIYUN_OSS_ENDPOINT:oss-cn-hongkong.aliyuncs.com}
+    bucket-name: ${ALIYUN_OSS_BUCKET:happytassieholiday}
     access-key-id: ${ALIYUN_OSS_ACCESS_KEY_ID:your-access-key-id}
     access-key-secret: ${ALIYUN_OSS_ACCESS_KEY_SECRET:your-access-key-secret}
   redis:
-    host: localhost
-    port: 6379
-    database: 7
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    database: ${REDIS_DATABASE:7}
   wechat:
-    appid: wx6a4d9f9390fa4e49
-    secret: fd706c40e9a471ff19bd9cf947321398
+    appid: ${WECHAT_APPID:your-wechat-appid}
+    secret: ${WECHAT_SECRET:your-wechat-secret}
+
+# Google OAuth 配置
+google:
+  oauth:
+    client-id: ${GOOGLE_OAUTH_CLIENT_ID:your-google-client-id}
+    client-secret: ${GOOGLE_OAUTH_CLIENT_SECRET:your-google-client-secret}
+    redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:3001/auth/google/callback}
+    scope: openid email profile
   mail:
     enabled: true  # 启用邮件发送功能
     host: smtp.gmail.com
     port: 587
-    username: Tom.zhang@htas.com.au  # 需要配置真实邮箱
-    password: igdf bnrq nrga qxnn  # 需要配置真实密码
-    from: Tom.zhang@htas.com.au
+    username: ${GMAIL_USERNAME:your-email@gmail.com}
+    password: ${GMAIL_PASSWORD:your-gmail-app-password}
+    from: ${GMAIL_USERNAME:your-email@gmail.com}
   email:
-    encryption-key: "HappyTassieTravel2024EmailKey32"  # 员工邮箱密码加密密钥（32字节）
+    encryption-key: ${EMAIL_ENCRYPTION_KEY:your-32-char-encryption-key}
 
 # Spring Mail配置
 spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: Tom.zhang@htas.com.au
-    password: igdf bnrq nrga qxnn
+    username: ${GMAIL_USERNAME:your-email@gmail.com}
+    password: ${GMAIL_PASSWORD:your-gmail-app-password}
     properties:
       mail:
         smtp:
@@ -46,7 +54,7 @@ spring:
 # OpenWeatherMap 天气API配置
 weather:
   openweathermap:
-    api-key: ec19e77fd31ded1dd1880d1f64f49c91  # Active状态的API Key
+    api-key: ${WEATHER_API_KEY:your-weather-api-key}
     base-url: http://api.openweathermap.org/data/2.5
     enabled: true  # 启用天气功能
     cache-duration: 600  # 缓存10分钟（API建议不超过10分钟请求一次）
